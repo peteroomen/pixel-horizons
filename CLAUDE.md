@@ -30,11 +30,11 @@ A browser-based dual-loop roguelite: turn-based deckbuilder space combat fused w
 
 > **Update this section at the end of every session.**
 
-- **Current phase:** Phase 1 in progress. Slices 1.1 (scaffold) and 1.2 (sim skeleton) complete. Next: Slice 1.3 (data catalog + deck generation).
-- **Last session:** 2026-06-10 — Slice 1.2: seeded PRNG (`sim/rng.ts`, mulberry32 + named sub-streams, serializable state), versioned `RunState` + null-on-invalid deserialization (`sim/run-state.ts`), `SaveStore` over injected storage (`src/game/save.ts`), seed-in-URL parsing (`sim/seed-url.ts`). 41 tests green, no UI. ADR 003 (determinism & persistence). See `docs/work/2026-06-10-sim-skeleton.md`.
-- **All merged to main:** Scaffold (the one permitted direct-to-main commit). Everything else via PRs from here on.
-- **Open PRs:** Slice 1.2 — `feature/sim-skeleton`.
-- **Deferred:** Wiring seed-url/`SaveStore` into the page (lands with the first UI consumer); physical-phone check of production URL; sprite-motion smoothness by eye; `motion` installed but unused until the card-feel slice.
+- **Current phase:** Phase 1 in progress. Slices 1.1 (scaffold), 1.2 (sim skeleton), and 1.3 (data catalog + deck generation) complete. Next: Phase 2, Slice 2.1 (combat engine, sim only).
+- **Last session:** 2026-06-10 — Slice 1.3: data catalog in `src/game/data/` (4 hulls, 16 modules incl. 5 Clone Bay matrices, 30 cards with declarative `CardEffect` union), `generateDeck` in `sim/deck.ts`, canonical id scheme (`hull-*`/`mod-*`/`card-*`, no RunState change). Missile Pod + Autocannon invented and added to GDD §5.8 (user-approved). 61 tests green, no UI. See `docs/work/2026-06-10-data-catalog.md` and the Slice 2.1 handoff `docs/work/2026-06-10-handoff-slice-2.1.md`.
+- **All merged to main:** Scaffold, Slice 1.2 (PR #1).
+- **Open PRs:** Slice 1.3 — `feature/data-catalog`.
+- **Deferred:** Mk II deck generation + tier tracking in RunState (Workbench, 4.2); wiring hull starting modules into `createRunState` (first consumer: 2.1); wiring seed-url/`SaveStore` into the page (lands with the first UI consumer); physical-phone check of production URL; sprite-motion smoothness by eye; `motion` installed but unused until the card-feel slice.
 - **Known issues:** Node 22 required (`nvm use 22`) before `pnpm install`/`dev`/`git commit` — Husky/lint-staged break on Node 20. `next lint` removed in Next 16 — use `eslint src`. shadcn CLI fails on v5 components.json schema — write base components manually, port 8bit variants from Perihelion or fetch `https://8bitcn.com/r/{name}.json`. esbuild build script needs `onlyBuiltDependencies` in `pnpm-workspace.yaml` (done). `docs/` is in `.prettierignore` on purpose — don't reformat hand-written docs. Integer zoom is computed in _device_ pixels (see `src/renderer/pixel-scale.ts`) — don't "fix" it to CSS pixels. Vercel: only the canonical `pixel-horizons.vercel.app` is public; per-deployment URLs are behind Vercel Authentication (401 is expected).
 
 ---
@@ -144,6 +144,7 @@ Do not close the session without completing these steps:
 - [ ] Run `pnpm test` — sim core tests must pass
 - [ ] Commit with a conventional commit message and push the branch
 - [ ] Open a PR — even for small slices, always go through PR review
+- [ ] Write a handoff doc for the next slice at `docs/work/YYYY-MM-DD-handoff-{next-slice}.md` (state, pointers, gotchas — assume the reader starts cold)
 
 ---
 
