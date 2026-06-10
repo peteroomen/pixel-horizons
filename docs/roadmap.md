@@ -59,6 +59,7 @@
 - [ ] **6.3 Adaptive music** — WebAudio bus, mode crossfade, placeholder tracks.
 - [ ] **6.4 Mobile pass** — Touch control tuning, responsive layouts, performance on mid-range phones.
 - [ ] **6.5 Seeded/daily runs** — Seed display + share URL, daily seed mode.
+- [ ] **6.6 Card feel & juice pass** — Hand fan, hover-lift, play/discard/draw animations (Motion/FLIP), malfunction card-flip, screen shake, hit effects crossing DOM→Pixi. Baseline animations land with 2.2; this is the polish pass.
 
 ## Phase 7 — Platform
 

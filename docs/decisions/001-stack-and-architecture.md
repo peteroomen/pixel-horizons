@@ -13,6 +13,8 @@ Pixel Horizons is a web-first, mobile-friendly dual-loop roguelite: a turn-based
 
 **2. React/DOM renders all information-dense UI — including the card hand.** PixiJS renders the *world*: battle viewport, platformer level, map backdrop. Cards, workbench, deck viewer, shops, and HUD are DOM components. Rationale: cards are interactive, text-heavy UI — DOM gives free hit-testing, accessibility, text layout, and touch ergonomics. Drawing card UI in Pixi would re-implement all of that for no gain.
 
+DOM does NOT mean static: card feel is a first-class requirement (draw/fan/hover-lift/play/discard/malfunction-flip animations). Use **Motion** (framer-motion's successor) for layout/FLIP animations of the hand plus CSS transforms; effects that cross into the world (a card's laser hitting the enemy ship) are handed off to the Pixi layer via the same event callbacks. Budget a dedicated card-feel slice; deckbuilders live or die on this.
+
 **3. Deterministic, pure simulation core.** `src/game/sim/` (card combat, travel, economy, map-gen) and `src/game/surface/` (platformer logic) import nothing from React/Pixi/DOM. All randomness flows through one seeded PRNG; the seed lives in the URL.
 
 **4. Three top-level modes as a state machine** — MAP / SPACE / SURFACE — each pairing a Pixi scene with a React overlay set. Mode transitions go through `main.ts`; React learns about game events via callbacks only (never per-frame).

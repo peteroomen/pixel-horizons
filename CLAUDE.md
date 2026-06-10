@@ -9,7 +9,7 @@ This file is read automatically by Claude Code at the start of every session.
 
 A browser-based dual-loop roguelite: turn-based deckbuilder space combat fused with action-platformer planet mining runs. You build a ship from modules; the modules ARE your card deck in space and your clone's equipment on planets. Slay the Spire-style sector maps, FTL-style shields, a biological enemy (the Bloom) living in hyperspace lanes.
 
-**Stack:** Next.js 16 (App Router) · React 19 · TypeScript (strict) · PixiJS v8 (game rendering) · 8bitcn/ui + Tailwind CSS v4 (UI shell) · Vitest (sim core tests) · pnpm · Vercel deploy · Supabase (Phase 7 — auth + cloud saves).
+**Stack:** Next.js 16 (App Router) · React 19 · TypeScript (strict) · PixiJS v8 (game rendering) · 8bitcn/ui + Tailwind CSS v4 (UI shell) · Motion (card/UI animation) · Vitest (sim core tests) · pnpm · Vercel deploy · Supabase (Phase 7 — auth + cloud saves).
 
 **Ship small slices. One roadmap item = one plan = one branch = one PR = one session.**
 

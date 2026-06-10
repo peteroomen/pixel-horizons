@@ -11,12 +11,13 @@ No dedicated 2D artist. The game needs: procedural planets, multi-biome platform
 
 ### Art
 
-**1. Deep-Fold generator suite as the procedural backbone** (itch.io, free — donate + attribute in credits):
+**1. Deep-Fold generators as the procedural backbone** (itch.io, free — donate + attribute in credits):
 - **Pixel Planet Generator** — planet sprites (map view, orbit view, pod-descent backdrop)
 - **Pixel Space Background Generator** — space/hyperspace lane backdrops
-- **Spaceship Generator** — base hull sprites; module slots layered on top as our own sprite layers
 
-All three share one aesthetic, which solves space-mode cohesion outright.
+(Deep-Fold's Spaceship Generator was considered but rejected — its output is not pixel art and would break the aesthetic.)
+
+**1b. Ship sprites are hand-built modular layers in Aseprite:** one base hull silhouette per chassis (Scout/Gunship/Freighter/Tactical) + per-slot module overlay sprites, so installed modules are visibly composited on the ship (a GDD requirement anyway — generators couldn't have delivered the slot-overlay system regardless). Only 4 hulls + a module sprite set are needed; placeholder geometric versions first.
 
 **2. Palette lock.** One master palette for the entire game — **Resurrect 64** (Lospec) as the working choice: big enough for six biomes plus the mechanical-vs-organic faction contrast, widely used for exactly this look. Every asset — generator output, Kenney packs, hand-edits — is color-mapped through it. Palette consistency, more than drawing skill, is what makes mixed-source pixel art read as one game.
 
