@@ -190,6 +190,20 @@ export function currentIntent(state: CombatState): EnemyIntentDef {
   return getEnemy(state.enemyId).intents[state.intentIndex];
 }
 
+/**
+ * The rng commit-back contract (see module header): once a fight has ended, fold its
+ * results into the RunState so the next fight continues the combat stream instead of
+ * replaying it. Mutates `run` in place.
+ */
+export function applyCombatResult(run: RunState, state: CombatState): void {
+  if (state.outcome === 'ongoing') {
+    throw new Error('cannot apply combat result: combat is still ongoing');
+  }
+  run.rng.combat = state.rng;
+  run.hullHp = state.hullHp;
+  run.resources.scrap += state.scrapGained;
+}
+
 function applyEffect(state: CombatState, rng: Rng, effect: CardEffect): void {
   switch (effect.kind) {
     case 'damage': {

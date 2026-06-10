@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { BASELINE_AP, getCard, getEnemy, HAND_SIZE } from '../data';
 import type { CombatState } from './combat';
-import { createCombat, currentIntent, endTurn, playCard } from './combat';
+import { applyCombatResult, createCombat, currentIntent, endTurn, playCard } from './combat';
 import { generateDeck } from './deck';
 import { restoreRng } from './rng';
 import { createRunState } from './run-state';
@@ -414,5 +414,37 @@ describe('win / lose', () => {
     expect(state.enemyHp).toBe(0);
     expect(state.turn).toBeLessThanOrEqual(4);
     expect(state.hullHp).toBeGreaterThan(0);
+  });
+});
+
+describe('applyCombatResult', () => {
+  it('throws while the combat is still ongoing', () => {
+    const run = gunshipRun();
+    const state = createCombat(run, LAMPREY);
+    expect(() => applyCombatResult(run, state)).toThrow('still ongoing');
+  });
+
+  it('commits rng, hull HP, and scrap back to the RunState', () => {
+    const run = gunshipRun('commit-back');
+    const state = createCombat(run, LAMPREY);
+    autoplay(state);
+    expect(state.outcome).toBe('victory');
+    state.scrapGained = 3;
+    applyCombatResult(run, state);
+    expect(run.rng.combat).toEqual(state.rng);
+    expect(run.hullHp).toBe(state.hullHp);
+    expect(run.resources.scrap).toBe(3);
+  });
+
+  it('consecutive fights continue the combat stream instead of replaying it', () => {
+    const run = gunshipRun('stream');
+    const first = createCombat(run, LAMPREY);
+    const firstOpening = [...first.hand, ...first.drawPile];
+    autoplay(first);
+    applyCombatResult(run, first);
+    const second = createCombat(run, LAMPREY);
+    const secondOpening = [...second.hand, ...second.drawPile];
+    expect(secondOpening).not.toEqual(firstOpening);
+    expect(secondOpening.sort()).toEqual(firstOpening.sort());
   });
 });
