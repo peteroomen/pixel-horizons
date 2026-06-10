@@ -30,11 +30,11 @@ A browser-based dual-loop roguelite: turn-based deckbuilder space combat fused w
 
 > **Update this section at the end of every session.**
 
-- **Current phase:** Phase 1 in progress. Slice 1.1 (scaffold) complete. Next: Slice 1.2.
-- **Last session:** 2026-06-10 — Slice 1.1: full scaffold (Next 16 / React 19 / Tailwind v4 / 8bitcn / PixiJS v8 / Vitest / Husky), pixel-perfect 640×360 renderer with StrictMode-safe `GameCanvas`, deployed: **https://pixel-horizons.vercel.app** (GitHub-connected, PR preview deploys on). See `docs/work/2026-06-10-scaffold.md`.
+- **Current phase:** Phase 1 in progress. Slices 1.1 (scaffold) and 1.2 (sim skeleton) complete. Next: Slice 1.3 (data catalog + deck generation).
+- **Last session:** 2026-06-10 — Slice 1.2: seeded PRNG (`sim/rng.ts`, mulberry32 + named sub-streams, serializable state), versioned `RunState` + null-on-invalid deserialization (`sim/run-state.ts`), `SaveStore` over injected storage (`src/game/save.ts`), seed-in-URL parsing (`sim/seed-url.ts`). 41 tests green, no UI. ADR 003 (determinism & persistence). See `docs/work/2026-06-10-sim-skeleton.md`.
 - **All merged to main:** Scaffold (the one permitted direct-to-main commit). Everything else via PRs from here on.
-- **Open PRs:** None.
-- **Deferred:** Physical-phone check of production URL; sprite-motion smoothness by eye; `motion` installed but unused until the card-feel slice.
+- **Open PRs:** Slice 1.2 — `feature/sim-skeleton`.
+- **Deferred:** Wiring seed-url/`SaveStore` into the page (lands with the first UI consumer); physical-phone check of production URL; sprite-motion smoothness by eye; `motion` installed but unused until the card-feel slice.
 - **Known issues:** Node 22 required (`nvm use 22`) before `pnpm install`/`dev`/`git commit` — Husky/lint-staged break on Node 20. `next lint` removed in Next 16 — use `eslint src`. shadcn CLI fails on v5 components.json schema — write base components manually, port 8bit variants from Perihelion or fetch `https://8bitcn.com/r/{name}.json`. esbuild build script needs `onlyBuiltDependencies` in `pnpm-workspace.yaml` (done). `docs/` is in `.prettierignore` on purpose — don't reformat hand-written docs. Integer zoom is computed in _device_ pixels (see `src/renderer/pixel-scale.ts`) — don't "fix" it to CSS pixels. Vercel: only the canonical `pixel-horizons.vercel.app` is public; per-deployment URLs are behind Vercel Authentication (401 is expected).
 
 ---
