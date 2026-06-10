@@ -30,12 +30,12 @@ A browser-based dual-loop roguelite: turn-based deckbuilder space combat fused w
 
 > **Update this section at the end of every session.**
 
-- **Current phase:** Phase 0 complete (design). Phase 1 not started. Next: Slice 1.1 — scaffold.
-- **Last session:** 2026-06-10 — GDD v0.2 finalized, architecture decided (ADRs 001–002), roadmap written, repo initialized. No application code exists yet.
-- **All merged to main:** Nothing yet.
+- **Current phase:** Phase 1 in progress. Slice 1.1 (scaffold) complete. Next: Slice 1.2.
+- **Last session:** 2026-06-10 — Slice 1.1: full scaffold (Next 16 / React 19 / Tailwind v4 / 8bitcn / PixiJS v8 / Vitest / Husky), pixel-perfect 640×360 renderer with StrictMode-safe `GameCanvas`, deployed: **https://pixel-horizons.vercel.app** (GitHub-connected, PR preview deploys on). See `docs/work/2026-06-10-scaffold.md`.
+- **All merged to main:** Scaffold (the one permitted direct-to-main commit). Everything else via PRs from here on.
 - **Open PRs:** None.
-- **Deferred:** None.
-- **Known issues:** None yet. (Refer to breakout-roguelite and Perihelion CLAUDE.md known-issues sections — same stack, same workarounds likely apply: Node 22 for Husky/lint-staged, `eslint src` not `next lint`, 8bitcn/ui + shadcn CLI quirks, Vercel CLI env vars.)
+- **Deferred:** Physical-phone check of production URL; sprite-motion smoothness by eye; `motion` installed but unused until the card-feel slice.
+- **Known issues:** Node 22 required (`nvm use 22`) before `pnpm install`/`dev`/`git commit` — Husky/lint-staged break on Node 20. `next lint` removed in Next 16 — use `eslint src`. shadcn CLI fails on v5 components.json schema — write base components manually, port 8bit variants from Perihelion or fetch `https://8bitcn.com/r/{name}.json`. esbuild build script needs `onlyBuiltDependencies` in `pnpm-workspace.yaml` (done). `docs/` is in `.prettierignore` on purpose — don't reformat hand-written docs. Integer zoom is computed in _device_ pixels (see `src/renderer/pixel-scale.ts`) — don't "fix" it to CSS pixels. Vercel: only the canonical `pixel-horizons.vercel.app` is public; per-deployment URLs are behind Vercel Authentication (401 is expected).
 
 ---
 

@@ -1,0 +1,5 @@
+#!/bin/sh
+# git-common-dir resolves to the main repo .git dir regardless of worktree, so its
+# parent is always the main repo root where node_modules lives.
+MAIN_REPO=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+"$MAIN_REPO/node_modules/.bin/lint-staged"
