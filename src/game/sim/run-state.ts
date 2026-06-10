@@ -1,11 +1,10 @@
+import { getHull } from '../data';
 import type { RngState } from './rng';
 import { deriveRng } from './rng';
 
 /**
  * Single source of truth for a run. Plain JSON throughout — no class instances — so it
  * serializes losslessly for saves and shareable seeds.
- *
- * Hull/module ids are uninterpreted strings until the data catalog lands (Slice 1.3).
  */
 
 export const RUN_STATE_VERSION = 1;
@@ -49,7 +48,7 @@ export function createRunState(seed: string, hullId = 'hull-scout'): RunState {
     hullId,
     hullHp: STARTING_HULL_HP,
     resources: { scrap: 0, biominerals: 0, coreCrystals: 0, blueprints: 0 },
-    modules: [],
+    modules: [...getHull(hullId).startingModules],
     position: { sector: 1, nodeId: null },
     rng,
   };
