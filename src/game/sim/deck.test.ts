@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { getHull, getModule } from '../data';
-import { generateDeck } from './deck';
+import { generateCombatDeck, generateDeck } from './deck';
 
 function tally(cards: readonly string[]): Record<string, number> {
   const counts: Record<string, number> = {};
@@ -106,5 +106,22 @@ describe('generateDeck', () => {
     const deck = generateDeck(['mod-thruster']);
     deck.pop();
     expect(generateDeck(['mod-thruster']).length).toBe(3);
+  });
+});
+
+describe('generateCombatDeck', () => {
+  it('tags every card with the index of its contributing module', () => {
+    expect(generateCombatDeck(['mod-thruster', 'mod-light-laser'])).toEqual([
+      { cardId: 'card-burn', moduleIndex: 0 },
+      { cardId: 'card-burn', moduleIndex: 0 },
+      { cardId: 'card-afterburner', moduleIndex: 0 },
+      { cardId: 'card-laser-burst', moduleIndex: 1 },
+      { cardId: 'card-laser-burst', moduleIndex: 1 },
+    ]);
+  });
+
+  it('duplicate modules keep distinct indices — they are separate malfunction targets', () => {
+    const deck = generateCombatDeck(['mod-thruster', 'mod-thruster']);
+    expect(new Set(deck.map((card) => card.moduleIndex))).toEqual(new Set([0, 1]));
   });
 });

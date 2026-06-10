@@ -1,14 +1,26 @@
 import { describe, expect, it } from 'vitest';
 
-import { BASELINE_AP, getCard, getEnemy, HAND_SIZE } from '../data';
+import { BASELINE_AP, getEnemy, HAND_SIZE, MALFUNCTION_REPAIR_AP } from '../data';
 import type { CombatState } from './combat';
-import { applyCombatResult, createCombat, currentIntent, endTurn, playCard } from './combat';
+import {
+  applyCombatResult,
+  canUseInnate,
+  cardPlayCost,
+  createCombat,
+  currentIntent,
+  endTurn,
+  isCardMalfunctioning,
+  playCard,
+  activateInnate,
+} from './combat';
+import type { CombatCard } from './deck';
 import { generateDeck } from './deck';
 import { restoreRng } from './rng';
 import { createRunState } from './run-state';
 import type { RunState } from './run-state';
 
 const LAMPREY = 'enemy-lamprey';
+const PARASITE = 'enemy-parasite';
 
 function gunshipRun(seed = 'combat-test'): RunState {
   return createRunState(seed, 'hull-gunship');
@@ -18,10 +30,19 @@ function scoutRun(seed = 'combat-test'): RunState {
   return createRunState(seed, 'hull-scout');
 }
 
+/** Fabricates hand instances for scripted tests; module 0 unless a test flips it. */
+function hand(...cardIds: string[]): CombatCard[] {
+  return cardIds.map((cardId) => ({ cardId, moduleIndex: 0 }));
+}
+
+function ids(pile: readonly CombatCard[]): string[] {
+  return pile.map((card) => card.cardId);
+}
+
 function findInHand(state: CombatState, cardId: string): number {
-  const index = state.hand.indexOf(cardId);
+  const index = state.hand.findIndex((card) => card.cardId === cardId);
   if (index === -1) {
-    throw new Error(`${cardId} not in hand: ${state.hand.join(', ')}`);
+    throw new Error(`${cardId} not in hand: ${ids(state.hand).join(', ')}`);
   }
   return index;
 }
@@ -38,8 +59,10 @@ function autoplay(state: CombatState, maxTurns = 10): string[] {
     while (played && state.outcome === 'ongoing') {
       played = false;
       for (const cardId of damageCards) {
-        const index = state.hand.indexOf(cardId);
-        if (index !== -1 && getCard(cardId).apCost <= state.ap) {
+        const index = state.hand.findIndex(
+          (card) => card.cardId === cardId && cardPlayCost(state, card) <= state.ap,
+        );
+        if (index !== -1) {
           playCard(state, index);
           log.push(cardId);
           played = true;
@@ -72,8 +95,8 @@ describe('createCombat', () => {
     const deck = generateDeck(run.modules);
     expect(state.hand.length).toBe(HAND_SIZE);
     expect(state.drawPile.length).toBe(deck.length - HAND_SIZE);
-    expect([...state.hand, ...state.drawPile].sort()).toEqual([...deck].sort());
-    expect([...state.hand, ...state.drawPile]).not.toEqual(deck);
+    expect(ids([...state.hand, ...state.drawPile]).sort()).toEqual([...deck].sort());
+    expect(ids([...state.hand, ...state.drawPile])).not.toEqual(deck);
   });
 
   it('starts at baseline AP, turn 1, full enemy HP, ongoing', () => {
@@ -85,6 +108,28 @@ describe('createCombat', () => {
     expect(state.outcome).toBe('ongoing');
     expect(state.travelProgress).toBe(0);
     expect(state.scrapGained).toBe(0);
+    expect(state.malfunctioning).toEqual([]);
+    expect(state.innateUsedThisTurn).toBe(false);
+    expect(state.innateUsedThisCombat).toBe(false);
+  });
+
+  it('freezes the run module list and tags every card with its module', () => {
+    const run = scoutRun();
+    const state = createCombat(run, LAMPREY);
+    expect(state.modules).toEqual(run.modules);
+    expect(state.modules).not.toBe(run.modules);
+    for (const card of [...state.hand, ...state.drawPile]) {
+      expect(card.moduleIndex).toBeGreaterThanOrEqual(0);
+      expect(card.moduleIndex).toBeLessThan(run.modules.length);
+    }
+    // The two Scout thrusters are distinct malfunction targets: their identical
+    // card ids carry different module indices.
+    const burnOrigins = new Set(
+      [...state.hand, ...state.drawPile]
+        .filter((card) => card.cardId === 'card-burn')
+        .map((card) => card.moduleIndex),
+    );
+    expect(burnOrigins.size).toBe(2);
   });
 
   it('collects shield layers from module passives', () => {
@@ -138,36 +183,45 @@ describe('determinism (ADR 003)', () => {
     expect(state).toEqual(reference);
   });
 
+  it('malfunction targeting replays identically, random rolls included', () => {
+    const reference = createCombat(gunshipRun('parasite-seed'), PARASITE);
+    const log = autoplay(reference, 20);
+    const rerun = createCombat(gunshipRun('parasite-seed'), PARASITE);
+    replay(rerun, log);
+    expect(rerun).toEqual(reference);
+    expect(rerun.malfunctioning).toEqual(reference.malfunctioning);
+  });
+
   it('different seeds shuffle differently', () => {
     const a = createCombat(gunshipRun('seed-a'), LAMPREY);
     const b = createCombat(gunshipRun('seed-b'), LAMPREY);
-    expect([...a.hand, ...a.drawPile]).not.toEqual([...b.hand, ...b.drawPile]);
+    expect(ids([...a.hand, ...a.drawPile])).not.toEqual(ids([...b.hand, ...b.drawPile]));
   });
 });
 
 describe('playCard', () => {
   it('pays AP, applies damage, and discards the card', () => {
     const state = createCombat(gunshipRun(), LAMPREY);
-    state.hand = ['card-missile-salvo'];
+    state.hand = hand('card-missile-salvo');
     playCard(state, 0);
     expect(state.ap).toBe(BASELINE_AP - 2);
     expect(state.enemyHp).toBe(getEnemy(LAMPREY).maxHp - 8);
     expect(state.hand).toEqual([]);
-    expect(state.discardPile).toContain('card-missile-salvo');
+    expect(ids(state.discardPile)).toContain('card-missile-salvo');
   });
 
   it('exhausted cards go to the exhaust pile, not the discard pile', () => {
     const state = createCombat(gunshipRun(), LAMPREY);
-    state.hand = ['card-emergency-barrier'];
+    state.hand = hand('card-emergency-barrier');
     playCard(state, 0);
     expect(state.tempShieldLayers).toBe(1);
-    expect(state.exhaustPile).toEqual(['card-emergency-barrier']);
-    expect(state.discardPile).not.toContain('card-emergency-barrier');
+    expect(ids(state.exhaustPile)).toEqual(['card-emergency-barrier']);
+    expect(ids(state.discardPile)).not.toContain('card-emergency-barrier');
   });
 
   it('throws on insufficient AP, bad index, and after the fight ended', () => {
     const state = createCombat(gunshipRun(), LAMPREY);
-    state.hand = ['card-missile-salvo'];
+    state.hand = hand('card-missile-salvo');
     state.ap = 1;
     expect(() => playCard(state, 0)).toThrow('cannot afford');
     expect(() => playCard(state, 7)).toThrow('hand index');
@@ -179,7 +233,7 @@ describe('playCard', () => {
   it('wins the fight the moment enemy HP reaches 0', () => {
     const state = createCombat(gunshipRun(), LAMPREY);
     // (8 + 3) × 2 = 22 = exactly the Lamprey's HP.
-    state.hand = ['card-lock-on', 'card-overcharge', 'card-missile-salvo'];
+    state.hand = hand('card-lock-on', 'card-overcharge', 'card-missile-salvo');
     playCard(state, findInHand(state, 'card-lock-on'));
     playCard(state, findInHand(state, 'card-overcharge'));
     playCard(state, findInHand(state, 'card-missile-salvo'));
@@ -191,7 +245,7 @@ describe('playCard', () => {
 describe('card effects', () => {
   function fresh(cards: string[], ap = BASELINE_AP): CombatState {
     const state = createCombat(gunshipRun(), LAMPREY);
-    state.hand = [...cards];
+    state.hand = hand(...cards);
     state.ap = ap;
     return state;
   }
@@ -241,7 +295,7 @@ describe('card effects', () => {
     const state = fresh(['card-resource-ping']);
     playCard(state, 0);
     expect(state.scrapGained).toBe(1);
-    expect(state.exhaustPile).toEqual(['card-resource-ping']);
+    expect(ids(state.exhaustPile)).toEqual(['card-resource-ping']);
   });
 
   it('reveal-intent flags the telegraphed intent until end of turn', () => {
@@ -254,7 +308,177 @@ describe('card effects', () => {
 
   it('out-of-slice effects throw loudly with their target slice', () => {
     expect(() => playCard(fresh(['card-kinetic-shred']), 0)).toThrow('2.5');
-    expect(() => playCard(fresh(['card-repair-clone']), 0)).toThrow('2.3');
+  });
+});
+
+describe('malfunctions (GDD §5.6)', () => {
+  it('a module hit that reaches the hull also flips the targeted module', () => {
+    // Scout has no shields; Parasite opens with Burrow (3 dmg, highest-value).
+    // Scout module values: laser 2, phase-shifter 3, thruster 3, thruster 3, matrix 1
+    // — ties go to the lowest index, so the Phase Shifter (index 1) is hunted first.
+    const state = createCombat(scoutRun(), PARASITE);
+    endTurn(state);
+    expect(state.hullHp).toBe(97);
+    expect(state.malfunctioning).toEqual([1]);
+  });
+
+  it('a shield layer that absorbs the hit absorbs the malfunction too (§5.2)', () => {
+    const state = createCombat(gunshipRun(), PARASITE);
+    endTurn(state); // Burrow eaten by a Shield Generator layer
+    expect(state.hullHp).toBe(100);
+    expect(state.malfunctioning).toEqual([]);
+    expect(state.shields.filter((l) => l.turnsUntilUp > 0).length).toBe(1);
+  });
+
+  it('a piercing module hit bypasses shields and flips a module', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    state.intentIndex = 2; // Rend: 9 dmg, piercing, random module
+    endTurn(state);
+    expect(state.hullHp).toBe(91);
+    expect(state.malfunctioning.length).toBe(1);
+    expect(state.shields.map((l) => l.turnsUntilUp)).toEqual([0, 0]);
+  });
+
+  it('an untargetable or dodged hit malfunctions nothing', () => {
+    const state = createCombat(scoutRun(), PARASITE);
+    state.hand = hand('card-phase-walk');
+    playCard(state, 0);
+    endTurn(state);
+    expect(state.hullHp).toBe(100);
+    expect(state.malfunctioning).toEqual([]);
+  });
+
+  it('flipped cards cost the repair AP regardless of their printed cost', () => {
+    const state = createCombat(scoutRun(), PARASITE);
+    state.malfunctioning = [2]; // a Thruster
+    const afterburner: CombatCard = { cardId: 'card-afterburner', moduleIndex: 2 };
+    expect(isCardMalfunctioning(state, afterburner)).toBe(true);
+    expect(cardPlayCost(state, afterburner)).toBe(MALFUNCTION_REPAIR_AP);
+    state.hand = [afterburner];
+    state.ap = 1; // printed cost is 2 — unaffordable if it weren't flipped
+    playCard(state, 0);
+    expect(state.ap).toBe(0);
+  });
+
+  it('playing a flipped card repairs the module and applies no card effects', () => {
+    const state = createCombat(scoutRun(), PARASITE);
+    state.malfunctioning = [1]; // Phase Shifter
+    state.hand = [{ cardId: 'card-ghost-shift', moduleIndex: 1 }];
+    playCard(state, 0);
+    expect(state.malfunctioning).toEqual([]);
+    expect(state.modifiers.dodgeChance).toBe(0); // Ghost Shift's effect did NOT run
+    expect(state.ap).toBe(BASELINE_AP - MALFUNCTION_REPAIR_AP);
+    // The card returns to the discard pile, presenting as its normal form again.
+    expect(ids(state.discardPile)).toEqual(['card-ghost-shift']);
+    expect(isCardMalfunctioning(state, state.discardPile[0])).toBe(false);
+  });
+
+  it('only the hit module flips — its twin keeps its cards', () => {
+    const state = createCombat(scoutRun(), PARASITE);
+    state.malfunctioning = [2]; // first Thruster; the second is module index 3
+    const flipped: CombatCard = { cardId: 'card-burn', moduleIndex: 2 };
+    const twin: CombatCard = { cardId: 'card-burn', moduleIndex: 3 };
+    expect(isCardMalfunctioning(state, flipped)).toBe(true);
+    expect(isCardMalfunctioning(state, twin)).toBe(false);
+  });
+
+  it('an already-flipped module cannot flip twice — the hunt moves on', () => {
+    const state = createCombat(scoutRun(), PARASITE);
+    state.malfunctioning = [1];
+    endTurn(state); // Burrow: next-best operational module is the first Thruster
+    expect(state.malfunctioning).toEqual([1, 2]);
+  });
+
+  it('with every module down, a module hit is plain hull damage', () => {
+    const state = createCombat(scoutRun(), PARASITE);
+    state.malfunctioning = [0, 1, 2, 3, 4];
+    endTurn(state);
+    expect(state.hullHp).toBe(97);
+    expect(state.malfunctioning).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it('repair-all-modules (Repair Clone) clears every malfunction at once', () => {
+    const state = createCombat(scoutRun(), PARASITE);
+    state.malfunctioning = [1, 2, 3];
+    state.hand = hand('card-repair-clone');
+    playCard(state, 0);
+    expect(state.malfunctioning).toEqual([]);
+    expect(state.ap).toBe(BASELINE_AP - 2);
+  });
+});
+
+describe('hull innate abilities (GDD §4.1)', () => {
+  it('Point-Defense: 1 AP, 2 damage, once per turn, resets next turn', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    expect(canUseInnate(state)).toBe(true);
+    activateInnate(state);
+    expect(state.ap).toBe(BASELINE_AP - 1);
+    expect(state.enemyHp).toBe(getEnemy(LAMPREY).maxHp - 2);
+    expect(canUseInnate(state)).toBe(false);
+    expect(() => activateInnate(state)).toThrow('already used this turn');
+    endTurn(state);
+    expect(canUseInnate(state)).toBe(true);
+  });
+
+  it('Point-Defense throws when unaffordable and skips next-attack modifiers', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    state.ap = 0;
+    expect(canUseInnate(state)).toBe(false);
+    expect(() => activateInnate(state)).toThrow('cannot afford');
+    state.ap = 1;
+    state.modifiers.nextAttackBonus = 3;
+    state.modifiers.enemyVulnerable = 2;
+    activateInnate(state);
+    // Vulnerable applies per hit; a saved-up Lock-On is NOT eaten by the innate.
+    expect(state.enemyHp).toBe(getEnemy(LAMPREY).maxHp - 4);
+    expect(state.modifiers.nextAttackBonus).toBe(3);
+  });
+
+  it('Point-Defense can land the killing blow', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    state.enemyHp = 2;
+    activateInnate(state);
+    expect(state.enemyHp).toBe(0);
+    expect(state.outcome).toBe('victory');
+  });
+
+  it('Slipstream discards the chosen card and draws a replacement, free', () => {
+    const state = createCombat(scoutRun(), LAMPREY);
+    const discarded = state.hand[2];
+    activateInnate(state, 2);
+    expect(state.ap).toBe(BASELINE_AP);
+    expect(state.hand.length).toBe(HAND_SIZE);
+    expect(state.discardPile).toContainEqual(discarded);
+    expect(() => activateInnate(state, 0)).toThrow('already used this turn');
+  });
+
+  it('Slipstream requires a valid hand index', () => {
+    const state = createCombat(scoutRun(), LAMPREY);
+    expect(() => activateInnate(state)).toThrow('hand index');
+    expect(() => activateInnate(state, 99)).toThrow('hand index');
+  });
+
+  it('Auxiliary Router grants AP once per combat — no per-turn reset', () => {
+    const state = createCombat(createRunState('combat-test', 'hull-tactical'), LAMPREY);
+    activateInnate(state);
+    expect(state.ap).toBe(BASELINE_AP + 1);
+    expect(() => activateInnate(state)).toThrow('already used this combat');
+    endTurn(state);
+    expect(canUseInnate(state)).toBe(false);
+    expect(() => activateInnate(state)).toThrow('already used this combat');
+  });
+
+  it('passive innates (Salvage Rig) cannot be activated', () => {
+    const state = createCombat(createRunState('combat-test', 'hull-freighter'), LAMPREY);
+    expect(canUseInnate(state)).toBe(false);
+    expect(() => activateInnate(state)).toThrow('passive');
+  });
+
+  it('throws after the fight ended', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    state.outcome = 'victory';
+    expect(canUseInnate(state)).toBe(false);
+    expect(() => activateInnate(state)).toThrow('already ended');
   });
 });
 
@@ -291,14 +515,14 @@ describe('shields and the enemy phase', () => {
   it('restore-shield-layer brings a recharging layer back up', () => {
     const state = createCombat(gunshipRun(), LAMPREY);
     endTurn(state);
-    state.hand = ['card-reinforce'];
+    state.hand = hand('card-reinforce');
     playCard(state, 0);
     expect(state.shields.map((l) => l.turnsUntilUp).sort()).toEqual([0, 2]);
   });
 
   it('temp layers absorb before regular layers and never recharge', () => {
     const state = createCombat(gunshipRun(), LAMPREY);
-    state.hand = ['card-emergency-barrier'];
+    state.hand = hand('card-emergency-barrier');
     playCard(state, 0);
     endTurn(state); // Frenzy: hit 1 → temp layer, hit 2 → one regular layer
     expect(state.tempShieldLayers).toBe(0);
@@ -308,7 +532,7 @@ describe('shields and the enemy phase', () => {
 
   it('dodge rolls the combat stream per incoming hit, then expires', () => {
     const state = createCombat(scoutRun('dodge-seed'), LAMPREY);
-    state.hand = ['card-ghost-shift'];
+    state.hand = hand('card-ghost-shift');
     playCard(state, 0);
     expect(state.modifiers.dodgeChance).toBe(0.5);
 
@@ -323,7 +547,7 @@ describe('shields and the enemy phase', () => {
 
   it('untargetable blanks the enemy phase, then ticks away', () => {
     const state = createCombat(scoutRun(), LAMPREY);
-    state.hand = ['card-phase-walk'];
+    state.hand = hand('card-phase-walk');
     playCard(state, 0);
     endTurn(state);
     expect(state.hullHp).toBe(100);
@@ -348,28 +572,28 @@ describe('shields and the enemy phase', () => {
 describe('turn structure (GDD §5.5)', () => {
   it('discards unplayed cards and redraws to 5', () => {
     const state = createCombat(gunshipRun(), LAMPREY);
-    const unplayed = [...state.hand];
+    const unplayed = ids(state.hand);
     endTurn(state);
     expect(state.hand.length).toBe(HAND_SIZE);
     expect(state.turn).toBe(2);
     expect(state.ap).toBe(BASELINE_AP);
     for (const cardId of unplayed) {
-      expect(state.discardPile).toContain(cardId);
+      expect(ids(state.discardPile)).toContain(cardId);
     }
   });
 
   it('retain keeps the leftmost cards through the discard step', () => {
     const state = createCombat(gunshipRun(), LAMPREY);
-    state.hand = [
+    state.hand = hand(
       'card-desync-hull',
       'card-missile-salvo',
       'card-flak-volley',
       'card-cannon-burst',
       'card-reinforce',
-    ];
+    );
     playCard(state, 0); // Desync Hull: 0 AP, retain 1
     endTurn(state);
-    expect(state.hand[0]).toBe('card-missile-salvo');
+    expect(state.hand[0].cardId).toBe('card-missile-salvo');
     expect(state.hand.length).toBe(HAND_SIZE);
     expect(state.modifiers.retainCount).toBe(0);
   });
@@ -378,19 +602,19 @@ describe('turn structure (GDD §5.5)', () => {
     const state = createCombat(gunshipRun(), LAMPREY);
     state.hand = [];
     state.drawPile = [];
-    state.discardPile = ['card-burn', 'card-burn'];
-    state.exhaustPile = ['card-emergency-barrier'];
+    state.discardPile = hand('card-burn', 'card-burn');
+    state.exhaustPile = hand('card-emergency-barrier');
     endTurn(state);
-    expect([...state.hand].sort()).toEqual(['card-burn', 'card-burn']);
+    expect(ids(state.hand).sort()).toEqual(['card-burn', 'card-burn']);
     expect(state.discardPile).toEqual([]);
-    expect(state.exhaustPile).toEqual(['card-emergency-barrier']);
+    expect(ids(state.exhaustPile)).toEqual(['card-emergency-barrier']);
   });
 
   it('a deck too small for a full hand deals a short hand without error', () => {
     const run = scoutRun('tiny');
     run.modules = ['mod-standard-print-matrix'];
     const state = createCombat(run, LAMPREY);
-    expect(state.hand).toEqual(['card-telemetry-sync']);
+    expect(ids(state.hand)).toEqual(['card-telemetry-sync']);
     playCard(state, 0); // its draw effect finds no cards anywhere — a quiet no-op
     expect(state.hand).toEqual([]);
   });
@@ -436,15 +660,29 @@ describe('applyCombatResult', () => {
     expect(run.resources.scrap).toBe(3);
   });
 
+  it('Salvage Rig adds its scrap after a won encounter — and only a won one', () => {
+    const run = createRunState('salvage', 'hull-freighter');
+    const won = createCombat(run, LAMPREY);
+    won.outcome = 'victory';
+    won.scrapGained = 1;
+    applyCombatResult(run, won);
+    expect(run.resources.scrap).toBe(3);
+
+    const lost = createCombat(run, LAMPREY);
+    lost.outcome = 'defeat';
+    applyCombatResult(run, lost);
+    expect(run.resources.scrap).toBe(3);
+  });
+
   it('consecutive fights continue the combat stream instead of replaying it', () => {
     const run = gunshipRun('stream');
     const first = createCombat(run, LAMPREY);
-    const firstOpening = [...first.hand, ...first.drawPile];
+    const firstOpening = ids([...first.hand, ...first.drawPile]);
     autoplay(first);
     applyCombatResult(run, first);
     const second = createCombat(run, LAMPREY);
-    const secondOpening = [...second.hand, ...second.drawPile];
+    const secondOpening = ids([...second.hand, ...second.drawPile]);
     expect(secondOpening).not.toEqual(firstOpening);
-    expect(secondOpening.sort()).toEqual(firstOpening.sort());
+    expect([...secondOpening].sort()).toEqual([...firstOpening].sort());
   });
 });

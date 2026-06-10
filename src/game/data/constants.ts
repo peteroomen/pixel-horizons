@@ -8,3 +8,9 @@ export const BASELINE_AP = 3;
 
 /** Fixed hand size drawn each turn (GDD §5.5). */
 export const HAND_SIZE = 5;
+
+/**
+ * AP cost to play any Malfunction card, regardless of the card's printed cost
+ * (GDD §5.6 — "Damaged Flak Array — 1 AP: field-repair the Flak Array").
+ */
+export const MALFUNCTION_REPAIR_AP = 1;

@@ -128,10 +128,30 @@ describe('enemy catalog', () => {
     for (const enemy of ENEMY_DEFS) {
       for (const intent of enemy.intents) {
         expect(intent.amount, `${enemy.id} ${intent.name}`).toBeGreaterThan(0);
-        if (intent.hits !== undefined) {
+        if (intent.kind === 'attack' && intent.hits !== undefined) {
           expect(intent.hits, `${enemy.id} ${intent.name}`).toBeGreaterThanOrEqual(1);
         }
       }
+    }
+  });
+
+  it('the Parasite hunts modules (GDD §5.7)', () => {
+    const parasite = getEnemy('enemy-parasite');
+    const hunts = parasite.intents.filter((intent) => intent.kind === 'attack-module');
+    expect(hunts.length).toBeGreaterThanOrEqual(1);
+    for (const intent of hunts) {
+      expect(intent.targeting, intent.name).toBe('highest-value');
+    }
+  });
+});
+
+describe('innate abilities', () => {
+  it('passive frequency and passive effect kinds pair up — the engine relies on it', () => {
+    for (const hull of HULL_DEFS) {
+      const innate = hull.innateAbility;
+      expect(innate.uses === 'passive', `${hull.id} ${innate.id}`).toBe(
+        innate.effect.kind === 'scrap-on-victory',
+      );
     }
   });
 });

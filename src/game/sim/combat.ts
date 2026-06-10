@@ -1,6 +1,23 @@
-import { BASELINE_AP, getCard, getEnemy, getModule, HAND_SIZE } from '../data';
-import type { CardEffect, CardId, EnemyDef, EnemyId, EnemyIntentDef } from '../data';
-import { generateDeck } from './deck';
+import {
+  BASELINE_AP,
+  getCard,
+  getEnemy,
+  getHull,
+  getModule,
+  HAND_SIZE,
+  MALFUNCTION_REPAIR_AP,
+} from '../data';
+import type {
+  CardEffect,
+  EnemyDef,
+  EnemyId,
+  EnemyIntentDef,
+  HullId,
+  ModuleId,
+  ModuleTargeting,
+} from '../data';
+import { generateCombatDeck } from './deck';
+import type { CombatCard } from './deck';
 import { restoreRng } from './rng';
 import type { Rng, RngState } from './rng';
 import type { RunState } from './run-state';
@@ -16,6 +33,12 @@ import type { RunState } from './run-state';
  * does not mutate the RunState it reads; when a fight ends, the caller (2.2/2.4) commits
  * `CombatState.rng` back to `runState.rng.combat` — and hull HP / scrap likewise — so
  * consecutive fights continue the stream instead of replaying it.
+ *
+ * Malfunctions (GDD §5.6): module-level state in `malfunctioning`; a card *presents*
+ * as its Malfunction form iff its module index is listed there — flipping is derived,
+ * never stored, so the repaired card returning to the discard pile is already back to
+ * normal for free. Malfunctions live and die with the CombatState; persistence across
+ * encounters within a lane is 2.4's lane work.
  *
  * Invalid actions (bad hand index, unaffordable card, acting after the fight ended)
  * throw — same loud-failure policy as the data lookups; the UI's job is to never offer
@@ -53,17 +76,26 @@ export interface CombatState {
   enemyHp: number;
   /** Index into the enemy's intent list — the telegraphed action for its next phase. */
   intentIndex: number;
+  hullId: HullId;
   hullHp: number;
+  /** The run's module list frozen at combat start (refits take effect next combat, §5.3). */
+  modules: ModuleId[];
+  /** Indices into `modules` currently malfunctioning — their cards present flipped. */
+  malfunctioning: number[];
   shields: ShieldLayer[];
   /** One-shot layers (Emergency Barrier, Cargo Thrust) — absorbed first, never recharge. */
   tempShieldLayers: number;
   ap: number;
   apPerTurn: number;
+  /** Per-turn innate (Slipstream, Point-Defense) spent; resets each enemy phase. */
+  innateUsedThisTurn: boolean;
+  /** Per-combat innate (Auxiliary Router) spent; never resets. */
+  innateUsedThisCombat: boolean;
   turn: number;
-  drawPile: CardId[];
-  hand: CardId[];
-  discardPile: CardId[];
-  exhaustPile: CardId[];
+  drawPile: CombatCard[];
+  hand: CombatCard[];
+  discardPile: CombatCard[];
+  exhaustPile: CombatCard[];
   /** Bare counter until lanes consume it (2.4). */
   travelProgress: number;
   /** Accumulated here; applied to RunState resources by the caller when the fight ends. */
@@ -76,7 +108,7 @@ export interface CombatState {
 export function createCombat(run: RunState, enemyId: EnemyId): CombatState {
   const enemy = getEnemy(enemyId);
   const rng = restoreRng(run.rng.combat);
-  const drawPile = rng.shuffle(generateDeck(run.modules));
+  const drawPile = rng.shuffle(generateCombatDeck(run.modules));
   const shields = run.modules.flatMap((moduleId): ShieldLayer[] => {
     const passive = getModule(moduleId).tiers.mk1.passive;
     if (passive === undefined || passive.kind !== 'shield-layers') {
@@ -92,11 +124,16 @@ export function createCombat(run: RunState, enemyId: EnemyId): CombatState {
     enemyId,
     enemyHp: enemy.maxHp,
     intentIndex: enemy.pattern === 'random' ? rng.int(0, enemy.intents.length) : 0,
+    hullId: run.hullId,
     hullHp: run.hullHp,
+    modules: [...run.modules],
+    malfunctioning: [],
     shields,
     tempShieldLayers: 0,
     ap: BASELINE_AP,
     apPerTurn: BASELINE_AP,
+    innateUsedThisTurn: false,
+    innateUsedThisCombat: false,
     turn: 1,
     drawPile,
     hand: [],
@@ -121,6 +158,16 @@ export function createCombat(run: RunState, enemyId: EnemyId): CombatState {
   return state;
 }
 
+/** Whether this card instance currently presents as its Malfunction form (GDD §5.6). */
+export function isCardMalfunctioning(state: CombatState, card: CombatCard): boolean {
+  return state.malfunctioning.includes(card.moduleIndex);
+}
+
+/** The AP this card costs to play right now — the repair cost while flipped. */
+export function cardPlayCost(state: CombatState, card: CombatCard): number {
+  return isCardMalfunctioning(state, card) ? MALFUNCTION_REPAIR_AP : getCard(card.cardId).apCost;
+}
+
 export function playCard(state: CombatState, handIndex: number): void {
   if (state.outcome !== 'ongoing') {
     throw new Error('combat already ended');
@@ -128,23 +175,133 @@ export function playCard(state: CombatState, handIndex: number): void {
   if (!Number.isInteger(handIndex) || handIndex < 0 || handIndex >= state.hand.length) {
     throw new Error(`no card at hand index ${handIndex}`);
   }
-  const cardId = state.hand[handIndex];
-  const card = getCard(cardId);
-  if (card.apCost > state.ap) {
-    throw new Error(`cannot afford ${cardId}: costs ${card.apCost} AP, have ${state.ap}`);
+  const instance = state.hand[handIndex];
+  const cost = cardPlayCost(state, instance);
+  if (cost > state.ap) {
+    throw new Error(`cannot afford ${instance.cardId}: costs ${cost} AP, have ${state.ap}`);
   }
 
-  const rng = restoreRng(state.rng);
-  state.ap -= card.apCost;
+  state.ap -= cost;
   state.hand.splice(handIndex, 1);
+
+  if (isCardMalfunctioning(state, instance)) {
+    // Play-to-repair (§5.6): no card effects — the module comes back online and the
+    // card lands in the discard pile, presenting as its normal form again (derived).
+    state.malfunctioning = state.malfunctioning.filter((i) => i !== instance.moduleIndex);
+    state.discardPile.push(instance);
+    return;
+  }
+
+  const card = getCard(instance.cardId);
+  const rng = restoreRng(state.rng);
   for (const effect of card.effects) {
     applyEffect(state, rng, effect);
   }
-  (card.exhaust === true ? state.exhaustPile : state.discardPile).push(cardId);
+  (card.exhaust === true ? state.exhaustPile : state.discardPile).push(instance);
   state.rng = rng.getState();
 
   if (state.enemyHp <= 0) {
     state.outcome = 'victory';
+  }
+}
+
+/**
+ * Activates the hull's innate ability (GDD §4.1) — the guaranteed non-dead-hand
+ * action. `handIndex` is required only by discard-to-draw (Slipstream). Passive
+ * innates (Salvage Rig) are applied by the engine where their kind names, never here.
+ * (Named activate-, not use-: a bare `useX()` call trips react-hooks lint at callers.)
+ */
+export function activateInnate(state: CombatState, handIndex?: number): void {
+  if (state.outcome !== 'ongoing') {
+    throw new Error('combat already ended');
+  }
+  const innate = getHull(state.hullId).innateAbility;
+  if (innate.uses === 'passive') {
+    throw new Error(`${innate.id} is passive and cannot be activated`);
+  }
+  if (innate.uses === 'per-turn' && state.innateUsedThisTurn) {
+    throw new Error(`${innate.id} already used this turn`);
+  }
+  if (innate.uses === 'per-combat' && state.innateUsedThisCombat) {
+    throw new Error(`${innate.id} already used this combat`);
+  }
+
+  const effect = innate.effect;
+  switch (effect.kind) {
+    case 'damage': {
+      if (effect.apCost > state.ap) {
+        throw new Error(`cannot afford ${innate.id}: costs ${effect.apCost} AP, have ${state.ap}`);
+      }
+      state.ap -= effect.apCost;
+      // Deliberately skips next-attack modifiers — Point-Defense must not eat a
+      // Lock-On meant for a weapon card. Vulnerable applies to every hit as printed.
+      state.enemyHp = Math.max(
+        0,
+        state.enemyHp - (effect.amount + state.modifiers.enemyVulnerable),
+      );
+      break;
+    }
+    case 'discard-to-draw': {
+      if (
+        handIndex === undefined ||
+        !Number.isInteger(handIndex) ||
+        handIndex < 0 ||
+        handIndex >= state.hand.length
+      ) {
+        throw new Error(`no card at hand index ${String(handIndex)}`);
+      }
+      const rng = restoreRng(state.rng);
+      const [discarded] = state.hand.splice(handIndex, 1);
+      state.discardPile.push(discarded);
+      drawCards(state, rng, 1);
+      state.rng = rng.getState();
+      break;
+    }
+    case 'gain-ap':
+      state.ap += effect.amount;
+      break;
+    case 'scrap-on-victory':
+      // Unreachable while data pairs scrap-on-victory with uses: 'passive'.
+      throw new Error(`${innate.id} is passive and cannot be activated`);
+    default: {
+      const exhaustive: never = effect;
+      throw new Error(`unhandled innate effect: ${JSON.stringify(exhaustive)}`);
+    }
+  }
+
+  if (innate.uses === 'per-turn') {
+    state.innateUsedThisTurn = true;
+  } else {
+    state.innateUsedThisCombat = true;
+  }
+
+  if (state.enemyHp <= 0) {
+    state.outcome = 'victory';
+  }
+}
+
+/** Whether the innate button should be offered at all right now (mirrors useInnate's guards). */
+export function canUseInnate(state: CombatState): boolean {
+  if (state.outcome !== 'ongoing') {
+    return false;
+  }
+  const innate = getHull(state.hullId).innateAbility;
+  if (innate.uses === 'passive') {
+    return false;
+  }
+  if (innate.uses === 'per-turn' && state.innateUsedThisTurn) {
+    return false;
+  }
+  if (innate.uses === 'per-combat' && state.innateUsedThisCombat) {
+    return false;
+  }
+  switch (innate.effect.kind) {
+    case 'damage':
+      return innate.effect.apCost <= state.ap;
+    case 'discard-to-draw':
+      return state.hand.length > 0;
+    default:
+      return true;
   }
 }
 
@@ -181,6 +338,7 @@ export function endTurn(state: CombatState): void {
   rollNextIntent(state, rng, enemy);
   state.turn += 1;
   state.ap = state.apPerTurn;
+  state.innateUsedThisTurn = false;
   drawCards(state, rng, HAND_SIZE - state.hand.length);
   state.rng = rng.getState();
 }
@@ -193,7 +351,8 @@ export function currentIntent(state: CombatState): EnemyIntentDef {
 /**
  * The rng commit-back contract (see module header): once a fight has ended, fold its
  * results into the RunState so the next fight continues the combat stream instead of
- * replaying it. Mutates `run` in place.
+ * replaying it. Mutates `run` in place. Passive victory innates (Salvage Rig) land
+ * here — "after every won encounter" is exactly this moment.
  */
 export function applyCombatResult(run: RunState, state: CombatState): void {
   if (state.outcome === 'ongoing') {
@@ -202,6 +361,10 @@ export function applyCombatResult(run: RunState, state: CombatState): void {
   run.rng.combat = state.rng;
   run.hullHp = state.hullHp;
   run.resources.scrap += state.scrapGained;
+  const innate = getHull(run.hullId).innateAbility;
+  if (state.outcome === 'victory' && innate.effect.kind === 'scrap-on-victory') {
+    run.resources.scrap += innate.effect.amount;
+  }
 }
 
 function applyEffect(state: CombatState, rng: Rng, effect: CardEffect): void {
@@ -265,7 +428,9 @@ function applyEffect(state: CombatState, rng: Rng, effect: CardEffect): void {
     case 'strip-armor':
       throw new Error('strip-armor is not implemented until Slice 2.5 (Carapace armor)');
     case 'repair-all-modules':
-      throw new Error('repair-all-modules is not implemented until Slice 2.3 (malfunctions)');
+      // Repair Clone (§4.2) — the alternative to playing each Malfunction card.
+      state.malfunctioning = [];
+      break;
     default: {
       const exhaustive: never = effect;
       throw new Error(`unhandled card effect: ${JSON.stringify(exhaustive)}`);
@@ -282,15 +447,28 @@ function resolveEnemyIntent(state: CombatState, rng: Rng, intent: EnemyIntentDef
       }
       break;
     }
+    case 'attack-module':
+      resolveIncomingHit(state, rng, intent.amount, intent.piercing === true, intent.targeting);
+      break;
+    default: {
+      const exhaustive: never = intent;
+      throw new Error(`unhandled enemy intent: ${JSON.stringify(exhaustive)}`);
+    }
   }
 }
 
 /**
- * One incoming hit against the ship. The single funnel for all enemy damage so that
- * module-hit absorption (2.3) extends here without reshaping callers — a layer that
- * absorbs a hit absorbs everything riding on it (GDD §5.2).
+ * One incoming hit against the ship — the single funnel for all enemy damage. A hit
+ * that is dodged or absorbed by a layer absorbs everything riding on it, including
+ * the malfunction (GDD §5.2); only a hit that reaches the hull marks a module.
  */
-function resolveIncomingHit(state: CombatState, rng: Rng, amount: number, piercing: boolean): void {
+function resolveIncomingHit(
+  state: CombatState,
+  rng: Rng,
+  amount: number,
+  piercing: boolean,
+  moduleTargeting?: ModuleTargeting,
+): void {
   if (state.modifiers.untargetableTurns > 0) {
     return;
   }
@@ -309,6 +487,37 @@ function resolveIncomingHit(state: CombatState, rng: Rng, amount: number, pierci
     }
   }
   state.hullHp = Math.max(0, state.hullHp - amount);
+  if (moduleTargeting !== undefined) {
+    const target = pickTargetModule(state, rng, moduleTargeting);
+    if (target !== null) {
+      state.malfunctioning.push(target);
+    }
+  }
+}
+
+/**
+ * Picks the module a landed hit malfunctions, among operational modules only — an
+ * already-flipped module can't flip twice (§5.2: one damage state). All down → null
+ * (plain hull damage). 'highest-value' = most Mk I cards, ties to the lowest index —
+ * deterministic, no RNG; 'random' rolls the combat stream.
+ */
+function pickTargetModule(state: CombatState, rng: Rng, targeting: ModuleTargeting): number | null {
+  const operational = state.modules
+    .map((_, index) => index)
+    .filter((index) => !state.malfunctioning.includes(index));
+  if (operational.length === 0) {
+    return null;
+  }
+  if (targeting === 'random') {
+    return operational[rng.int(0, operational.length)];
+  }
+  return operational.reduce((best, index) =>
+    moduleValue(state.modules[index]) > moduleValue(state.modules[best]) ? index : best,
+  );
+}
+
+function moduleValue(moduleId: ModuleId): number {
+  return getModule(moduleId).tiers.mk1.cards.length;
 }
 
 function rollNextIntent(state: CombatState, rng: Rng, enemy: EnemyDef): void {

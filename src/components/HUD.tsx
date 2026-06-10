@@ -6,14 +6,18 @@ import { Button } from '@/components/ui/8bit/button';
 interface HUDProps {
   view: CombatView;
   onEndTurn: () => void;
+  /** Plain innates fire directly; card-targeted ones (Slipstream) toggle arming instead. */
+  onInnate: () => void;
+  innateArmed: boolean;
 }
 
 /**
- * Combat HUD (GDD §5.2): hull HP, shield layers with recharge countdowns, AP, enemy
- * HP, intent telegraph (hidden until Deep Scan reveals it), turn and pile counts.
- * Pure presentation — every number arrives in the CombatView.
+ * Combat HUD (GDD §5.2): hull HP, shield layers with recharge countdowns, AP,
+ * malfunctioning-module warnings, hull innate button, enemy HP, intent telegraph
+ * (hidden until Deep Scan reveals it), turn and pile counts. Pure presentation —
+ * every number arrives in the CombatView.
  */
-export default function HUD({ view, onEndTurn }: HUDProps) {
+export default function HUD({ view, onEndTurn, onInnate, innateArmed }: HUDProps) {
   return (
     <>
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2 sm:p-4">
@@ -46,13 +50,20 @@ export default function HUD({ view, onEndTurn }: HUDProps) {
           </div>
           <div className="flex items-center gap-1">
             <span className="text-white/60">AP</span>
-            {Array.from({ length: view.apPerTurn }, (_, i) => (
+            {Array.from({ length: Math.max(view.apPerTurn, view.ap) }, (_, i) => (
               <span
                 key={i}
                 className={`inline-block size-3 ${i < view.ap ? 'bg-[#e94560]' : 'border border-white/40'}`}
               />
             ))}
           </div>
+          {view.modules
+            .filter((module) => module.malfunctioning)
+            .map((module, i) => (
+              <div key={i} className="text-[9px] text-[#ffd166] sm:text-[10px]">
+                ⚠ {module.name.toUpperCase()} OFFLINE
+              </div>
+            ))}
         </div>
 
         <div className="retro space-y-1 text-right text-[10px] text-white sm:text-xs">
@@ -71,6 +82,8 @@ export default function HUD({ view, onEndTurn }: HUDProps) {
                 {view.intent.name} {view.intent.amount}
                 {view.intent.hits > 1 ? `×${view.intent.hits}` : ''}
                 {view.intent.piercing ? ' PIERCE' : ''}
+                {view.intent.targetsModule === 'highest-value' ? ' → BEST MODULE' : ''}
+                {view.intent.targetsModule === 'random' ? ' → RANDOM MODULE' : ''}
               </span>
             )}
           </div>
@@ -85,16 +98,33 @@ export default function HUD({ view, onEndTurn }: HUDProps) {
           </div>
           {view.travelProgress > 0 && <div>TRAVEL +{view.travelProgress}</div>}
           {view.scrapGained > 0 && <div>SCRAP +{view.scrapGained}</div>}
+          {view.innate.passive && <div>{view.innate.name.toUpperCase()} · PASSIVE</div>}
         </div>
-        <Button
-          className="pointer-events-auto"
-          font="retro"
-          size="sm"
-          disabled={view.outcome !== 'ongoing'}
-          onClick={onEndTurn}
-        >
-          End Turn
-        </Button>
+        <div className="flex flex-col items-end gap-3 sm:flex-row sm:items-end sm:gap-2">
+          {!view.innate.passive && (
+            <Button
+              className={`pointer-events-auto text-[9px] sm:text-[0.8rem] ${innateArmed ? 'ring-2 ring-[#4fc3f7]' : ''}`}
+              font="retro"
+              size="sm"
+              variant="secondary"
+              disabled={!view.innate.usable}
+              title={view.innate.description}
+              onClick={onInnate}
+            >
+              {innateArmed ? 'Pick a card…' : view.innate.name}
+              {view.innate.apCost > 0 ? ` (${view.innate.apCost} AP)` : ''}
+            </Button>
+          )}
+          <Button
+            className="pointer-events-auto"
+            font="retro"
+            size="sm"
+            disabled={view.outcome !== 'ongoing'}
+            onClick={onEndTurn}
+          >
+            End Turn
+          </Button>
+        </div>
       </div>
     </>
   );
