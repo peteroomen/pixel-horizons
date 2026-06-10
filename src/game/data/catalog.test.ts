@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { CARD_DEFS, HULL_DEFS, MODULE_DEFS, getCard, getHull, getModule } from './index';
+import {
+  CARD_DEFS,
+  ENEMY_DEFS,
+  HULL_DEFS,
+  MODULE_DEFS,
+  getCard,
+  getEnemy,
+  getHull,
+  getModule,
+} from './index';
 import type { ModuleTier } from './types';
 
 function moduleTiers(): { moduleId: string; tierName: string; tier: ModuleTier }[] {
@@ -17,6 +26,7 @@ describe('catalog ids', () => {
       ...CARD_DEFS.map((c) => c.id),
       ...MODULE_DEFS.map((m) => m.id),
       ...HULL_DEFS.map((h) => h.id),
+      ...ENEMY_DEFS.map((e) => e.id),
     ];
     expect(new Set(ids).size).toBe(ids.length);
   });
@@ -31,12 +41,16 @@ describe('catalog ids', () => {
     for (const hull of HULL_DEFS) {
       expect(hull.id).toMatch(/^hull-[a-z0-9-]+$/);
     }
+    for (const enemy of ENEMY_DEFS) {
+      expect(enemy.id).toMatch(/^enemy-[a-z0-9-]+$/);
+    }
   });
 
   it('lookups throw on unknown ids', () => {
     expect(() => getCard('card-nope')).toThrow('card-nope');
     expect(() => getModule('mod-nope')).toThrow('mod-nope');
     expect(() => getHull('hull-nope')).toThrow('hull-nope');
+    expect(() => getEnemy('enemy-nope')).toThrow('enemy-nope');
   });
 });
 
@@ -98,6 +112,26 @@ describe('hull catalog', () => {
   it('every hull starts with the Standard Print Matrix (GDD §4.1)', () => {
     for (const hull of HULL_DEFS) {
       expect(hull.startingModules, hull.id).toContain('mod-standard-print-matrix');
+    }
+  });
+});
+
+describe('enemy catalog', () => {
+  it('every enemy has positive HP and at least one intent', () => {
+    for (const enemy of ENEMY_DEFS) {
+      expect(enemy.maxHp, enemy.id).toBeGreaterThan(0);
+      expect(enemy.intents.length, enemy.id).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('every intent has positive numbers', () => {
+    for (const enemy of ENEMY_DEFS) {
+      for (const intent of enemy.intents) {
+        expect(intent.amount, `${enemy.id} ${intent.name}`).toBeGreaterThan(0);
+        if (intent.hits !== undefined) {
+          expect(intent.hits, `${enemy.id} ${intent.name}`).toBeGreaterThanOrEqual(1);
+        }
+      }
     }
   });
 });

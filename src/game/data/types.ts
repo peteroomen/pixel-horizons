@@ -68,6 +68,31 @@ export interface ModuleDef {
   };
 }
 
+export type EnemyId = string;
+
+/**
+ * One telegraphed enemy action. A union of one for now — open for later archetypes:
+ * module targeting (2.3), travel anchoring (2.4), infestation injection (2.5).
+ */
+export type EnemyIntentDef = {
+  kind: 'attack';
+  name: string;
+  amount: number;
+  /** Hits resolve one at a time — each interacts with shield layers separately (GDD §5.2). */
+  hits?: number;
+  piercing?: boolean;
+};
+
+export interface EnemyDef {
+  id: EnemyId;
+  name: string;
+  archetype: string;
+  maxHp: number;
+  /** 'cycle' walks intents in order; 'random' picks each turn via the combat RNG stream. */
+  pattern: 'cycle' | 'random';
+  intents: EnemyIntentDef[];
+}
+
 export interface InnateAbility {
   id: string;
   name: string;

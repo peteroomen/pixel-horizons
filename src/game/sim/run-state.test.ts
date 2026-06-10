@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { getHull, HULL_DEFS } from '../data';
 import {
   createRunState,
   deserializeRunState,
@@ -19,8 +20,23 @@ describe('createRunState', () => {
     expect(state.version).toBe(RUN_STATE_VERSION);
     expect(state.hullHp).toBe(STARTING_HULL_HP);
     expect(state.resources).toEqual({ scrap: 0, biominerals: 0, coreCrystals: 0, blueprints: 0 });
-    expect(state.modules).toEqual([]);
     expect(state.position).toEqual({ sector: 1, nodeId: null });
+  });
+
+  it("installs the hull's starting modules for every hull", () => {
+    for (const hull of HULL_DEFS) {
+      const state = createRunState('alpha', hull.id);
+      expect(state.modules, hull.id).toEqual(hull.startingModules);
+    }
+  });
+
+  it('copies the starting modules instead of sharing the catalog array', () => {
+    const state = createRunState('alpha');
+    expect(state.modules).not.toBe(getHull('hull-scout').startingModules);
+  });
+
+  it('throws on an unknown hull id', () => {
+    expect(() => createRunState('alpha', 'hull-nope')).toThrow('hull-nope');
   });
 
   it('seeds an independent rng state per stream', () => {
