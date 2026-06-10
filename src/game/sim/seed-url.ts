@@ -16,8 +16,9 @@ export function parseSeedParam(search: string): string | null {
   return SEED_PATTERN.test(seed) ? seed : null;
 }
 
-export function seedToSearchParam(seed: string): string {
-  const params = new URLSearchParams();
+/** Preserves unrelated params in `currentSearch` (e.g. the dev `?hull=` knob). */
+export function seedToSearchParam(seed: string, currentSearch = ''): string {
+  const params = new URLSearchParams(currentSearch);
   params.set(SEED_PARAM, seed);
   return `?${params.toString()}`;
 }

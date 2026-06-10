@@ -41,4 +41,9 @@ describe('seedToSearchParam', () => {
     const seed = newSeed();
     expect(parseSeedParam(seedToSearchParam(seed))).toBe(seed);
   });
+
+  it('preserves unrelated params from the current search', () => {
+    expect(seedToSearchParam('abc', '?hull=hull-scout')).toBe('?hull=hull-scout&seed=abc');
+    expect(seedToSearchParam('abc', '?seed=old&hull=hull-scout')).toBe('?seed=abc&hull=hull-scout');
+  });
 });

@@ -5,8 +5,16 @@ import { createSpaceRenderer } from '@/renderer/space-renderer';
 import type { SpaceRenderer } from '@/renderer/space-renderer';
 import { buildCombatView } from './combat-view';
 import type { CombatView } from './combat-view';
-import { getCard } from './data';
-import { applyCombatResult, createCombat, endTurn, playCard } from './sim/combat';
+import { ENEMY_DEFS, getHull } from './data';
+import {
+  applyCombatResult,
+  canUseInnate,
+  cardPlayCost,
+  createCombat,
+  endTurn,
+  playCard,
+  activateInnate,
+} from './sim/combat';
 import type { CombatState } from './sim/combat';
 import { createRunState } from './sim/run-state';
 import type { RunState } from './sim/run-state';
@@ -22,7 +30,14 @@ import { parseSeedParam, seedToSearchParam } from './sim/seed-url';
  * and must be a quiet no-op.
  */
 
-export type { CardView, CombatView, RevealedIntent, ShieldLayerView } from './combat-view';
+export type {
+  CardView,
+  CombatView,
+  InnateView,
+  ModuleView,
+  RevealedIntent,
+  ShieldLayerView,
+} from './combat-view';
 
 export interface GameCallbacks {
   onCombatUpdate(view: CombatView): void;
@@ -32,6 +47,8 @@ export interface GameCallbacks {
 export interface GameHandle {
   readonly seed: string;
   playCard(handIndex: number): void;
+  /** Hull innate ability; handIndex only for card-targeted innates (Slipstream). */
+  useInnate(handIndex?: number): void;
   endTurn(): void;
   /** Victory only: commits the result to the run (hull damage persists, RNG stream advances) and starts the next fight. */
   nextFight(): void;
@@ -40,9 +57,24 @@ export interface GameHandle {
   destroy(): void;
 }
 
-const FIRST_ENEMY = 'enemy-lamprey';
 /** Weapon-rich starting deck — the winnable first playable fight. Hull select is Phase 5. */
 const DEFAULT_HULL = 'hull-gunship';
+
+/**
+ * Dev/test knob until hull select lands (Phase 5): `?hull=hull-scout` etc. exercises
+ * the other innate abilities in the browser. Unknown values fall back quietly.
+ */
+function resolveHull(): string {
+  const param = new URLSearchParams(window.location.search).get('hull');
+  if (param === null) {
+    return DEFAULT_HULL;
+  }
+  try {
+    return getHull(param).id;
+  } catch {
+    return DEFAULT_HULL;
+  }
+}
 
 /**
  * The session seed: a valid `?seed=` in the URL wins; otherwise a fresh seed is
@@ -53,7 +85,7 @@ const DEFAULT_HULL = 'hull-gunship';
 function resolveSeed(): string {
   const fromUrl = parseSeedParam(window.location.search);
   const seed = fromUrl ?? generateSeed();
-  window.history.replaceState(null, '', seedToSearchParam(seed));
+  window.history.replaceState(null, '', seedToSearchParam(seed, window.location.search));
   return seed;
 }
 
@@ -80,8 +112,12 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
 
   const renderer: SpaceRenderer = createSpaceRenderer(app);
 
-  let run: RunState = createRunState(seed, DEFAULT_HULL);
-  let combat: CombatState = createCombat(run, FIRST_ENEMY);
+  const hullId = resolveHull();
+  // Placeholder encounter order until lanes/map-gen pick enemies (2.4): fights walk
+  // the roster so every enemy is reachable in the browser.
+  let enemyIndex = 0;
+  let run: RunState = createRunState(seed, hullId);
+  let combat: CombatState = createCombat(run, ENEMY_DEFS[enemyIndex].id);
 
   const emit = (): void => {
     const view = buildCombatView(combat);
@@ -108,9 +144,20 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     seed,
     playCard(handIndex: number): void {
       if (combat.outcome !== 'ongoing') return;
-      const cardId = combat.hand[handIndex];
-      if (cardId === undefined || getCard(cardId).apCost > combat.ap) return;
+      const card = combat.hand[handIndex];
+      if (card === undefined || cardPlayCost(combat, card) > combat.ap) return;
       playCard(combat, handIndex);
+      emit();
+    },
+    useInnate(handIndex?: number): void {
+      if (!canUseInnate(combat)) return;
+      const innate = getHull(combat.hullId).innateAbility;
+      if (innate.effect.kind === 'discard-to-draw') {
+        if (handIndex === undefined || combat.hand[handIndex] === undefined) return;
+        activateInnate(combat, handIndex);
+      } else {
+        activateInnate(combat);
+      }
       emit();
     },
     endTurn(): void {
@@ -121,13 +168,15 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     nextFight(): void {
       if (combat.outcome !== 'victory') return;
       applyCombatResult(run, combat);
-      combat = createCombat(run, FIRST_ENEMY);
+      enemyIndex = (enemyIndex + 1) % ENEMY_DEFS.length;
+      combat = createCombat(run, ENEMY_DEFS[enemyIndex].id);
       emit();
     },
     restartRun(): void {
       if (combat.outcome !== 'defeat') return;
-      run = createRunState(seed, DEFAULT_HULL);
-      combat = createCombat(run, FIRST_ENEMY);
+      enemyIndex = 0;
+      run = createRunState(seed, hullId);
+      combat = createCombat(run, ENEMY_DEFS[enemyIndex].id);
       emit();
     },
     destroy(): void {

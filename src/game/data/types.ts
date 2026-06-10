@@ -71,17 +71,32 @@ export interface ModuleDef {
 export type EnemyId = string;
 
 /**
- * One telegraphed enemy action. A union of one for now — open for later archetypes:
- * module targeting (2.3), travel anchoring (2.4), infestation injection (2.5).
+ * One telegraphed enemy action — open for later archetypes: travel anchoring (2.4),
+ * infestation injection (2.5).
  */
-export type EnemyIntentDef = {
-  kind: 'attack';
-  name: string;
-  amount: number;
-  /** Hits resolve one at a time — each interacts with shield layers separately (GDD §5.2). */
-  hits?: number;
-  piercing?: boolean;
-};
+export type ModuleTargeting = 'highest-value' | 'random';
+
+export type EnemyIntentDef =
+  | {
+      kind: 'attack';
+      name: string;
+      amount: number;
+      /** Hits resolve one at a time — each interacts with shield layers separately (GDD §5.2). */
+      hits?: number;
+      piercing?: boolean;
+    }
+  | {
+      /**
+       * A hull hit that also malfunctions a module (GDD §5.2/§5.6). A shield layer that
+       * absorbs the hit absorbs the malfunction too. 'highest-value' hunts the
+       * operational module contributing the most cards; 'random' rolls the combat stream.
+       */
+      kind: 'attack-module';
+      name: string;
+      amount: number;
+      piercing?: boolean;
+      targeting: ModuleTargeting;
+    };
 
 export interface EnemyDef {
   id: EnemyId;
@@ -93,10 +108,24 @@ export interface EnemyDef {
   intents: EnemyIntentDef[];
 }
 
+/**
+ * Hull innate abilities are interpreted data, like card effects (GDD §4.1): they
+ * guarantee a non-dead hand even when every module is malfunctioning. 'passive'
+ * effects are never activated through useInnate — the engine applies them at the
+ * moment named by their kind.
+ */
+export type InnateEffect =
+  | { kind: 'damage'; apCost: number; amount: number }
+  | { kind: 'discard-to-draw' }
+  | { kind: 'gain-ap'; amount: number }
+  | { kind: 'scrap-on-victory'; amount: number };
+
 export interface InnateAbility {
   id: string;
   name: string;
   description: string;
+  uses: 'per-turn' | 'per-combat' | 'passive';
+  effect: InnateEffect;
 }
 
 export interface HullDef {

@@ -1,7 +1,7 @@
-import { getCard, getEnemy } from './data';
-import type { CardEffect } from './data';
+import { getCard, getEnemy, getHull, getModule, MALFUNCTION_REPAIR_AP } from './data';
+import type { CardEffect, ModuleTargeting } from './data';
 import type { CombatOutcome, CombatState } from './sim/combat';
-import { currentIntent } from './sim/combat';
+import { canUseInnate, cardPlayCost, currentIntent, isCardMalfunctioning } from './sim/combat';
 import { STARTING_HULL_HP } from './sim/run-state';
 
 /**
@@ -20,6 +20,8 @@ export interface CardView {
   text: string;
   exhaust: boolean;
   affordable: boolean;
+  /** Flipped to its Malfunction form — playing it field-repairs the module (GDD §5.6). */
+  malfunction: boolean;
 }
 
 export interface ShieldLayerView {
@@ -28,11 +30,30 @@ export interface ShieldLayerView {
   turnsUntilUp: number;
 }
 
+export interface ModuleView {
+  name: string;
+  malfunctioning: boolean;
+}
+
+export interface InnateView {
+  name: string;
+  description: string;
+  /** 0 for innates that cost no AP (Slipstream, Auxiliary Router). */
+  apCost: number;
+  usable: boolean;
+  /** Discard-to-draw needs a card picked — the UI arms the innate, then takes a card tap. */
+  requiresCardTarget: boolean;
+  /** Passive innates (Salvage Rig) render as a label, never a button. */
+  passive: boolean;
+}
+
 export interface RevealedIntent {
   name: string;
   amount: number;
   hits: number;
   piercing: boolean;
+  /** Non-null when the hit also hunts a module (GDD §5.6). */
+  targetsModule: ModuleTargeting | null;
 }
 
 export interface CombatView {
@@ -43,6 +64,8 @@ export interface CombatView {
   hullMaxHp: number;
   shields: ShieldLayerView[];
   tempShieldLayers: number;
+  modules: ModuleView[];
+  innate: InnateView;
   enemyName: string;
   enemyHp: number;
   enemyMaxHp: number;
@@ -59,6 +82,7 @@ export interface CombatView {
 export function buildCombatView(state: CombatState): CombatView {
   const enemy = getEnemy(state.enemyId);
   const intent = currentIntent(state);
+  const innate = getHull(state.hullId).innateAbility;
   return {
     turn: state.turn,
     ap: state.ap,
@@ -70,6 +94,18 @@ export function buildCombatView(state: CombatState): CombatView {
       turnsUntilUp: layer.turnsUntilUp,
     })),
     tempShieldLayers: state.tempShieldLayers,
+    modules: state.modules.map((moduleId, index) => ({
+      name: getModule(moduleId).name,
+      malfunctioning: state.malfunctioning.includes(index),
+    })),
+    innate: {
+      name: innate.name,
+      description: innate.description,
+      apCost: innate.effect.kind === 'damage' ? innate.effect.apCost : 0,
+      usable: canUseInnate(state),
+      requiresCardTarget: innate.effect.kind === 'discard-to-draw',
+      passive: innate.uses === 'passive',
+    },
     enemyName: enemy.name,
     enemyHp: state.enemyHp,
     enemyMaxHp: enemy.maxHp,
@@ -77,20 +113,37 @@ export function buildCombatView(state: CombatState): CombatView {
       ? {
           name: intent.name,
           amount: intent.amount,
-          hits: intent.hits ?? 1,
+          hits: intent.kind === 'attack' ? (intent.hits ?? 1) : 1,
           piercing: intent.piercing === true,
+          targetsModule: intent.kind === 'attack-module' ? intent.targeting : null,
         }
       : null,
-    hand: state.hand.map((cardId, index) => {
-      const card = getCard(cardId);
+    hand: state.hand.map((instance, index) => {
+      if (isCardMalfunctioning(state, instance)) {
+        const moduleDef = getModule(state.modules[instance.moduleIndex]);
+        return {
+          key: `${instance.cardId}@${index}`,
+          id: instance.cardId,
+          name: `Damaged ${moduleDef.name}`,
+          apCost: MALFUNCTION_REPAIR_AP,
+          // The name already says which module — short text keeps flipped cards from
+          // growing taller than the rest of the hand on phone widths.
+          text: 'Field-repair',
+          exhaust: false,
+          affordable: state.outcome === 'ongoing' && MALFUNCTION_REPAIR_AP <= state.ap,
+          malfunction: true,
+        };
+      }
+      const card = getCard(instance.cardId);
       return {
-        key: `${cardId}@${index}`,
-        id: cardId,
+        key: `${instance.cardId}@${index}`,
+        id: instance.cardId,
         name: card.name,
         apCost: card.apCost,
         text: card.effects.map(describeEffect).join(' · '),
         exhaust: card.exhaust === true,
-        affordable: state.outcome === 'ongoing' && card.apCost <= state.ap,
+        affordable: state.outcome === 'ongoing' && cardPlayCost(state, instance) <= state.ap,
+        malfunction: false,
       };
     }),
     drawCount: state.drawPile.length,
