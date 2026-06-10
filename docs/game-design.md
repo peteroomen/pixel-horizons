@@ -210,6 +210,8 @@ Single source of truth for example modules. All numbers tunable.
 | **Flak Array** | Weapon | 2× Flak Volley (2 AP, 6 dmg, piercing), 1× Tracer Lock (1 AP, target takes +2 dmg) | 2× Heavy Flak (2 AP, 10 dmg, piercing), 1× Kinetic Shred (1 AP, strip armor) | — | Passive: +3 temp shield at combat start |
 | **Kinetic Railgun** | Weapon | 1× Railgun Shot (3 AP, 20 dmg, pierces shields), 1× Charge Capacitor (1 AP, next attack +5 dmg) | TBD | Orbital Strike Beacon (45s cooldown, vaporizes terrain/enemies) | TBD |
 | **Mining Laser** | Weapon | 1× Slag Shot (1 AP, 3 dmg) | 2× Slag Shot (1 AP, 4 dmg) | Enhanced Mining (2× yield) | Enhanced Mining + Deposit Scanner |
+| **Missile Pod** | Weapon | 1× Missile Salvo (2 AP, 8 dmg), 1× Lock-On (1 AP, next attack +3 dmg) | TBD | — | TBD |
+| **Autocannon** | Weapon | 2× Cannon Burst (1 AP, 3 dmg ×2 hits) | TBD | — | TBD |
 | **Phase Shifter** | Utility | 2× Ghost Shift (1 AP, 50% dodge), 1× Desync Hull (0 AP, retain 1 card) | + 1× Phase Walk (1 AP, untargetable 1 turn) | Phase Dash (blink through walls) | + Phase Vision (see through walls briefly) |
 | **Shield Generator** | Utility | 2 shield layers (2-turn recharge); 2× Reinforce (1 AP, restore 1 layer), 1× Emergency Barrier (0 AP, +1 temp layer, exhaust) | 3 layers; improved cards TBD | Shield Bubble item (absorbs 1 hit, 30s cooldown) | TBD |
 | **Cargo Scanner** | Utility | 1× Deep Scan (1 AP, reveal enemy intent next turn) | TBD | Resource Scanner (highlights hidden deposits) | TBD |
