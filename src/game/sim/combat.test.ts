@@ -4,15 +4,19 @@ import { BASELINE_AP, getEnemy, HAND_SIZE, MALFUNCTION_REPAIR_AP } from '../data
 import type { CombatState } from './combat';
 import {
   applyCombatResult,
+  canPayToll,
   canUseInnate,
   cardPlayCost,
   createCombat,
   currentIntent,
   endTurn,
   isCardMalfunctioning,
+  isTravelAnchored,
+  payToll,
   playCard,
   activateInnate,
 } from './combat';
+import type { LaneContext } from './combat';
 import type { CombatCard } from './deck';
 import { generateDeck } from './deck';
 import { restoreRng } from './rng';
@@ -21,6 +25,7 @@ import type { RunState } from './run-state';
 
 const LAMPREY = 'enemy-lamprey';
 const PARASITE = 'enemy-parasite';
+const ANCHORMAW = 'enemy-anchormaw';
 
 function gunshipRun(seed = 'combat-test'): RunState {
   return createRunState(seed, 'hull-gunship');
@@ -684,5 +689,111 @@ describe('applyCombatResult', () => {
     const secondOpening = ids([...second.hand, ...second.drawPile]);
     expect(secondOpening).not.toEqual(firstOpening);
     expect([...secondOpening].sort()).toEqual([...firstOpening].sort());
+  });
+});
+
+describe('lanes and travel', () => {
+  function laneCtx(
+    distance: number,
+    progressAtStart = 0,
+    malfunctioning: number[] = [],
+  ): LaneContext {
+    return { distance, progressAtStart, malfunctioning };
+  }
+
+  it('carries the lane snapshot and earlier malfunctions into the fight', () => {
+    const state = createCombat(gunshipRun(), LAMPREY, laneCtx(9, 2, [1]));
+    expect(state.lane).toEqual({ distance: 9, progressAtStart: 2 });
+    expect(state.malfunctioning).toEqual([1]);
+  });
+
+  it('a survived full turn is a turn of travel', () => {
+    const state = createCombat(gunshipRun(), LAMPREY, laneCtx(9));
+    endTurn(state);
+    expect(state.travelProgress).toBe(1);
+  });
+
+  it('fights outside a lane never tick travel or escape', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    endTurn(state);
+    expect(state.travelProgress).toBe(0);
+    expect(state.lane).toBeNull();
+  });
+
+  it('an engine card reaching the destination escapes mid-turn — the enemy never acts', () => {
+    const state = createCombat(gunshipRun(), LAMPREY, laneCtx(8, 4));
+    state.hand = hand('card-afterburner');
+    playCard(state, 0);
+    expect(state.outcome).toBe('escaped');
+    expect(state.hullHp).toBe(100);
+    expect(() => endTurn(state)).toThrow('already ended');
+  });
+
+  it('the passive tick can arrive too — after the enemy phase', () => {
+    const state = createCombat(gunshipRun(), LAMPREY, laneCtx(5, 4));
+    const turnBefore = state.turn;
+    endTurn(state);
+    expect(state.outcome).toBe('escaped');
+    expect(state.turn).toBe(turnBefore);
+  });
+
+  it('an anchor enemy halts the passive tick and travel effects while it lives', () => {
+    const state = createCombat(gunshipRun(), ANCHORMAW, laneCtx(9));
+    expect(isTravelAnchored(state)).toBe(true);
+    state.hand = hand('card-burn');
+    playCard(state, 0);
+    expect(state.travelProgress).toBe(0);
+    endTurn(state);
+    expect(state.travelProgress).toBe(0);
+    state.enemyHp = 0;
+    expect(isTravelAnchored(state)).toBe(false);
+  });
+
+  it('paying the toll escapes and lands as a negative scrap delta', () => {
+    const run = gunshipRun();
+    run.resources.scrap = 7;
+    const state = createCombat(run, ANCHORMAW, laneCtx(9));
+    expect(state.scrapAtStart).toBe(7);
+    expect(canPayToll(state)).toBe(true);
+    payToll(state);
+    expect(state.outcome).toBe('escaped');
+    expect(state.scrapGained).toBe(-5);
+    applyCombatResult(run, state);
+    expect(run.resources.scrap).toBe(2);
+  });
+
+  it('toll affordability counts scrap gained during the fight', () => {
+    const run = gunshipRun();
+    run.resources.scrap = 4;
+    const state = createCombat(run, ANCHORMAW, laneCtx(9));
+    expect(canPayToll(state)).toBe(false);
+    expect(() => payToll(state)).toThrow('cannot afford');
+    state.scrapGained = 1;
+    expect(canPayToll(state)).toBe(true);
+  });
+
+  it('payToll throws against an enemy that does not anchor the lane', () => {
+    const state = createCombat(gunshipRun(), LAMPREY, laneCtx(9));
+    expect(canPayToll(state)).toBe(false);
+    expect(() => payToll(state)).toThrow('does not anchor');
+  });
+
+  it('escape grants no victory rewards — Salvage Rig stays silent', () => {
+    const run = createRunState('escape-no-reward', 'hull-freighter');
+    const state = createCombat(run, LAMPREY, laneCtx(1));
+    endTurn(state);
+    expect(state.outcome).toBe('escaped');
+    applyCombatResult(run, state);
+    expect(run.resources.scrap).toBe(0);
+  });
+
+  it('a lane fight survives a JSON round-trip', () => {
+    let state = createCombat(gunshipRun(), ANCHORMAW, laneCtx(9, 3, [0]));
+    state = JSON.parse(JSON.stringify(state)) as CombatState;
+    expect(state.lane).toEqual({ distance: 9, progressAtStart: 3 });
+    expect(state.malfunctioning).toEqual([0]);
+    expect(isTravelAnchored(state)).toBe(true);
+    endTurn(state);
+    expect(state.travelProgress).toBe(0);
   });
 });

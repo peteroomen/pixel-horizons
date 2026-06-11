@@ -8,6 +8,20 @@ import HUD from '@/components/HUD';
 import { Button } from '@/components/ui/8bit/button';
 import type { CombatView, GameHandle } from '@/game/main';
 
+const OUTCOME_COLOR: Record<string, string> = {
+  victory: 'text-[#4fc3f7]',
+  escaped: 'text-[#ffd166]',
+  defeat: 'text-[#e94560]',
+};
+
+/** 'escaped' covers both ways a fight ends without a kill — lane progress tells which. */
+function outcomeLabel(view: CombatView): string {
+  if (view.outcome === 'victory') return 'VICTORY';
+  if (view.outcome === 'defeat') return 'DEFEAT';
+  const arrived = view.travel !== null && view.travel.progress >= view.travel.distance;
+  return arrived ? 'ARRIVED' : 'TOLL PAID';
+}
+
 export default function Home() {
   const [view, setView] = useState<CombatView | null>(null);
   // Card-targeted innate (Slipstream) armed: the next card tap discards instead of plays.
@@ -44,6 +58,7 @@ export default function Home() {
             onEndTurn={() => handleRef.current?.endTurn()}
             onInnate={onInnate}
             innateArmed={innateArmed}
+            onPayToll={() => handleRef.current?.payToll()}
           />
           <div className="absolute inset-x-0 bottom-2 flex justify-center sm:bottom-4">
             <CombatHand
@@ -56,20 +71,16 @@ export default function Home() {
 
           {view.outcome !== 'ongoing' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-black/70">
-              <span
-                className={`retro text-3xl sm:text-5xl ${
-                  view.outcome === 'victory' ? 'text-[#4fc3f7]' : 'text-[#e94560]'
-                }`}
-              >
-                {view.outcome === 'victory' ? 'VICTORY' : 'DEFEAT'}
+              <span className={`retro text-3xl sm:text-5xl ${OUTCOME_COLOR[view.outcome]}`}>
+                {outcomeLabel(view)}
               </span>
-              {view.outcome === 'victory' ? (
-                <Button font="retro" onClick={() => handleRef.current?.nextFight()}>
-                  Fight Again
-                </Button>
-              ) : (
+              {view.outcome === 'defeat' ? (
                 <Button font="retro" onClick={() => handleRef.current?.restartRun()}>
                   New Run
+                </Button>
+              ) : (
+                <Button font="retro" onClick={() => handleRef.current?.continueTravel()}>
+                  Continue
                 </Button>
               )}
             </div>

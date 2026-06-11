@@ -106,6 +106,12 @@ export interface EnemyDef {
   /** 'cycle' walks intents in order; 'random' picks each turn via the combat RNG stream. */
   pattern: 'cycle' | 'random';
   intents: EnemyIntentDef[];
+  /**
+   * Blockade archetypes (GDD §5.7): a trait, not an intent — the latch is permanent
+   * encounter state. Travel progress is halted while this enemy lives; paying the
+   * Scrap toll ends the encounter without victory rewards.
+   */
+  anchor?: { tollScrap: number };
 }
 
 /**

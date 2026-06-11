@@ -5,13 +5,16 @@ import { createSpaceRenderer } from '@/renderer/space-renderer';
 import type { SpaceRenderer } from '@/renderer/space-renderer';
 import { buildCombatView } from './combat-view';
 import type { CombatView } from './combat-view';
-import { ENEMY_DEFS, getHull } from './data';
+import { getEnemy, getHull } from './data';
+import type { EnemyId } from './data';
 import {
   applyCombatResult,
+  canPayToll,
   canUseInnate,
   cardPlayCost,
   createCombat,
   endTurn,
+  payToll,
   playCard,
   activateInnate,
 } from './sim/combat';
@@ -19,6 +22,8 @@ import type { CombatState } from './sim/combat';
 import { createRunState } from './sim/run-state';
 import type { RunState } from './sim/run-state';
 import { parseSeedParam, seedToSearchParam } from './sim/seed-url';
+import { advanceLane, createLane } from './sim/travel';
+import type { LaneState } from './sim/travel';
 
 /**
  * The React↔game boundary (ADR 001). React components import this module and nothing
@@ -50,8 +55,14 @@ export interface GameHandle {
   /** Hull innate ability; handIndex only for card-targeted innates (Slipstream). */
   useInnate(handIndex?: number): void;
   endTurn(): void;
-  /** Victory only: commits the result to the run (hull damage persists, RNG stream advances) and starts the next fight. */
-  nextFight(): void;
+  /** Pays the anchor enemy's Scrap toll — the blockade lets you pass (GDD §5.7). */
+  payToll(): void;
+  /**
+   * After victory or escape: commits the result to the run, carries malfunctions and
+   * travel progress into the lane, and travels on — next encounter, or arrival and a
+   * fresh lane (systems reset).
+   */
+  continueTravel(): void;
   /** Fresh run from the same seed — the post-defeat restart. */
   restartRun(): void;
   destroy(): void;
@@ -73,6 +84,23 @@ function resolveHull(): string {
     return getHull(param).id;
   } catch {
     return DEFAULT_HULL;
+  }
+}
+
+/**
+ * Dev/test knob until the sector map drives encounters (4.1): `?enemy=enemy-anchormaw`
+ * forces every lane encounter to one enemy — lane picks are random, and each enemy
+ * must be reachable on demand for manual testing. Unknown values fall back quietly.
+ */
+function resolveEnemyPool(): readonly EnemyId[] | undefined {
+  const param = new URLSearchParams(window.location.search).get('enemy');
+  if (param === null) {
+    return undefined;
+  }
+  try {
+    return [getEnemy(param).id];
+  } catch {
+    return undefined;
   }
 }
 
@@ -113,11 +141,29 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const renderer: SpaceRenderer = createSpaceRenderer(app);
 
   const hullId = resolveHull();
-  // Placeholder encounter order until lanes/map-gen pick enemies (2.4): fights walk
-  // the roster so every enemy is reachable in the browser.
-  let enemyIndex = 0;
+  const enemyPool = resolveEnemyPool();
   let run: RunState = createRunState(seed, hullId);
-  let combat: CombatState = createCombat(run, ENEMY_DEFS[enemyIndex].id);
+  let lane: LaneState = createLane(run, enemyPool);
+
+  // Travels to the next fight; on arrival the lane ends — systems reset (malfunctions
+  // gone with it) — and a fresh lane begins. A new lane always has an encounter ahead,
+  // so the loop terminates. Real arrival lands on a map node in 4.1; until then lanes
+  // chain directly.
+  const nextEncounter = (): CombatState => {
+    for (;;) {
+      const step = advanceLane(lane);
+      if (step.kind === 'encounter') {
+        return createCombat(run, step.enemyId, {
+          distance: lane.distance,
+          progressAtStart: lane.progress,
+          malfunctioning: lane.malfunctioning,
+        });
+      }
+      lane = createLane(run, enemyPool);
+    }
+  };
+
+  let combat: CombatState = nextEncounter();
 
   const emit = (): void => {
     const view = buildCombatView(combat);
@@ -165,18 +211,24 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       endTurn(combat);
       emit();
     },
-    nextFight(): void {
-      if (combat.outcome !== 'victory') return;
+    payToll(): void {
+      if (!canPayToll(combat)) return;
+      payToll(combat);
+      emit();
+    },
+    continueTravel(): void {
+      if (combat.outcome !== 'victory' && combat.outcome !== 'escaped') return;
       applyCombatResult(run, combat);
-      enemyIndex = (enemyIndex + 1) % ENEMY_DEFS.length;
-      combat = createCombat(run, ENEMY_DEFS[enemyIndex].id);
+      lane.progress = Math.min(lane.distance, lane.progress + combat.travelProgress);
+      lane.malfunctioning = [...combat.malfunctioning];
+      combat = nextEncounter();
       emit();
     },
     restartRun(): void {
       if (combat.outcome !== 'defeat') return;
-      enemyIndex = 0;
       run = createRunState(seed, hullId);
-      combat = createCombat(run, ENEMY_DEFS[enemyIndex].id);
+      lane = createLane(run, enemyPool);
+      combat = nextEncounter();
       emit();
     },
     destroy(): void {

@@ -37,8 +37,14 @@ import type { RunState } from './run-state';
  * Malfunctions (GDD §5.6): module-level state in `malfunctioning`; a card *presents*
  * as its Malfunction form iff its module index is listed there — flipping is derived,
  * never stored, so the repaired card returning to the discard pile is already back to
- * normal for free. Malfunctions live and die with the CombatState; persistence across
- * encounters within a lane is 2.4's lane work.
+ * normal for free. Within a lane they persist between fights: `createCombat` carries
+ * them in through the LaneContext and the orchestrator copies them back out; arrival
+ * clears them (systems reset).
+ *
+ * Lanes (GDD §5.1): a fight created with a LaneContext gains travel — +1 progress per
+ * survived turn plus engine card effects — and ends as 'escaped' the moment total lane
+ * progress reaches the distance. Anchor enemies (§5.7) halt all travel while alive;
+ * `payToll` is the other way past them.
  *
  * Invalid actions (bad hand index, unaffordable card, acting after the fight ended)
  * throw — same loud-failure policy as the data lookups; the UI's job is to never offer
@@ -69,7 +75,19 @@ export interface CombatModifiers {
   intentRevealed: boolean;
 }
 
-export type CombatOutcome = 'ongoing' | 'victory' | 'defeat';
+/** 'escaped' = the encounter ended without a kill: arrival in realspace or a paid toll. */
+export type CombatOutcome = 'ongoing' | 'victory' | 'defeat' | 'escaped';
+
+/**
+ * The lane snapshot a fight needs, frozen at combat start like `modules` — combat
+ * never mutates the lane struct itself; the orchestrator commits results back.
+ */
+export interface LaneContext {
+  distance: number;
+  progressAtStart: number;
+  /** Module indices still malfunctioning from earlier fights in this lane (GDD §5.6). */
+  malfunctioning: number[];
+}
 
 export interface CombatState {
   enemyId: EnemyId;
@@ -96,8 +114,12 @@ export interface CombatState {
   hand: CombatCard[];
   discardPile: CombatCard[];
   exhaustPile: CombatCard[];
-  /** Bare counter until lanes consume it (2.4). */
+  /** Turns of travel gained this fight: +1 per survived turn plus engine card effects. */
   travelProgress: number;
+  /** Null = fight outside a lane (tests): no passive tick, no escape-by-arrival. */
+  lane: { distance: number; progressAtStart: number } | null;
+  /** Run scrap frozen at combat start — toll affordability is `scrapAtStart + scrapGained`. */
+  scrapAtStart: number;
   /** Accumulated here; applied to RunState resources by the caller when the fight ends. */
   scrapGained: number;
   modifiers: CombatModifiers;
@@ -105,7 +127,7 @@ export interface CombatState {
   outcome: CombatOutcome;
 }
 
-export function createCombat(run: RunState, enemyId: EnemyId): CombatState {
+export function createCombat(run: RunState, enemyId: EnemyId, lane?: LaneContext): CombatState {
   const enemy = getEnemy(enemyId);
   const rng = restoreRng(run.rng.combat);
   const drawPile = rng.shuffle(generateCombatDeck(run.modules));
@@ -127,7 +149,7 @@ export function createCombat(run: RunState, enemyId: EnemyId): CombatState {
     hullId: run.hullId,
     hullHp: run.hullHp,
     modules: [...run.modules],
-    malfunctioning: [],
+    malfunctioning: lane === undefined ? [] : [...lane.malfunctioning],
     shields,
     tempShieldLayers: 0,
     ap: BASELINE_AP,
@@ -140,6 +162,11 @@ export function createCombat(run: RunState, enemyId: EnemyId): CombatState {
     discardPile: [],
     exhaustPile: [],
     travelProgress: 0,
+    lane:
+      lane === undefined
+        ? null
+        : { distance: lane.distance, progressAtStart: lane.progressAtStart },
+    scrapAtStart: run.resources.scrap,
     scrapGained: 0,
     modifiers: {
       nextAttackBonus: 0,
@@ -161,6 +188,56 @@ export function createCombat(run: RunState, enemyId: EnemyId): CombatState {
 /** Whether this card instance currently presents as its Malfunction form (GDD §5.6). */
 export function isCardMalfunctioning(state: CombatState, card: CombatCard): boolean {
   return state.malfunctioning.includes(card.moduleIndex);
+}
+
+/**
+ * Travel is halted while an anchor enemy lives (GDD §5.7) — the passive tick and
+ * `travel` card effects do nothing. Engine cards stay playable; learning they're
+ * wasted against a Blockade is the counterplay signal.
+ */
+export function isTravelAnchored(state: CombatState): boolean {
+  return getEnemy(state.enemyId).anchor !== undefined && state.enemyHp > 0;
+}
+
+/** Arrival ends everything (GDD §5.1): drop to realspace, encounter over, no kill rewards. */
+function checkArrival(state: CombatState): void {
+  if (
+    state.lane !== null &&
+    state.lane.progressAtStart + state.travelProgress >= state.lane.distance
+  ) {
+    state.outcome = 'escaped';
+  }
+}
+
+/**
+ * Pays the Anchormaw's Scrap toll (GDD §5.7) — the blockade lets you pass: the
+ * encounter ends as 'escaped', no victory rewards, and the toll lands as a negative
+ * `scrapGained` delta for `applyCombatResult` to commit.
+ */
+export function payToll(state: CombatState): void {
+  if (state.outcome !== 'ongoing') {
+    throw new Error('combat already ended');
+  }
+  const anchor = getEnemy(state.enemyId).anchor;
+  if (anchor === undefined) {
+    throw new Error(`${state.enemyId} does not anchor the lane`);
+  }
+  if (anchor.tollScrap > state.scrapAtStart + state.scrapGained) {
+    throw new Error(
+      `cannot afford toll: costs ${anchor.tollScrap} scrap, have ${state.scrapAtStart + state.scrapGained}`,
+    );
+  }
+  state.scrapGained -= anchor.tollScrap;
+  state.outcome = 'escaped';
+}
+
+/** Whether the toll button should be offered at all right now (mirrors payToll's guards). */
+export function canPayToll(state: CombatState): boolean {
+  if (state.outcome !== 'ongoing') {
+    return false;
+  }
+  const anchor = getEnemy(state.enemyId).anchor;
+  return anchor !== undefined && anchor.tollScrap <= state.scrapAtStart + state.scrapGained;
 }
 
 /** The AP this card costs to play right now — the repair cost while flipped. */
@@ -200,7 +277,8 @@ export function playCard(state: CombatState, handIndex: number): void {
   (card.exhaust === true ? state.exhaustPile : state.discardPile).push(instance);
   state.rng = rng.getState();
 
-  if (state.enemyHp <= 0) {
+  // An engine card may have ended the fight by arrival mid-play — escape stands.
+  if (state.outcome === 'ongoing' && state.enemyHp <= 0) {
     state.outcome = 'victory';
   }
 }
@@ -329,6 +407,16 @@ export function endTurn(state: CombatState): void {
     layer.turnsUntilUp -= 1;
   }
 
+  // A survived full turn is a turn of travel (GDD §5.1) — halted while anchored.
+  if (state.lane !== null && !isTravelAnchored(state)) {
+    state.travelProgress += 1;
+    checkArrival(state);
+    if (state.outcome !== 'ongoing') {
+      state.rng = rng.getState();
+      return;
+    }
+  }
+
   state.modifiers.dodgeChance = 0;
   state.modifiers.intentRevealed = false;
   if (state.modifiers.untargetableTurns > 0) {
@@ -383,7 +471,12 @@ function applyEffect(state: CombatState, rng: Rng, effect: CardEffect): void {
       break;
     }
     case 'travel':
-      state.travelProgress += effect.amount;
+      if (!isTravelAnchored(state)) {
+        state.travelProgress += effect.amount;
+        // Card-driven arrival ends the fight mid-turn — the enemy never gets its
+        // phase. That immediacy is the escape payoff of engine cards (GDD §5.1).
+        checkArrival(state);
+      }
       break;
     case 'restore-shield-layer':
       for (let i = 0; i < effect.count; i++) {

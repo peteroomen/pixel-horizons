@@ -31,4 +31,17 @@ export const ENEMY_DEFS: readonly EnemyDef[] = [
       { kind: 'attack-module', name: 'Gnaw', amount: 4, targeting: 'highest-value' },
     ],
   },
+  {
+    id: 'enemy-anchormaw',
+    name: 'Anchormaw',
+    archetype: 'Blockade',
+    maxHp: 26,
+    pattern: 'cycle',
+    anchor: { tollScrap: 5 },
+    intents: [
+      { kind: 'attack', name: 'Constrict', amount: 5 },
+      { kind: 'attack', name: 'Maw Slam', amount: 4, hits: 2 },
+      { kind: 'attack', name: 'Drag Under', amount: 7 },
+    ],
+  },
 ];
