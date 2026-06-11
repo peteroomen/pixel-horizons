@@ -167,3 +167,42 @@ describe('buildCombatView', () => {
     expect(view.discardCount).toBe(1);
   });
 });
+
+describe('lane and anchor projection', () => {
+  it('shows lane-absolute travel and null outside a lane', () => {
+    const bare = buildCombatView(gunshipCombat());
+    expect(bare.travel).toBeNull();
+
+    const state = createCombat(createRunState('lane-view', 'hull-gunship'), LAMPREY, {
+      distance: 9,
+      progressAtStart: 2,
+      malfunctioning: [],
+    });
+    endTurn(state);
+    const view = buildCombatView(state);
+    expect(view.travel).toEqual({ progress: 3, distance: 9 });
+  });
+
+  it('surfaces the anchor with toll cost and affordability', () => {
+    const run = createRunState('anchor-view', 'hull-gunship');
+    const state = createCombat(run, 'enemy-anchormaw', {
+      distance: 9,
+      progressAtStart: 0,
+      malfunctioning: [],
+    });
+    const broke = buildCombatView(state);
+    expect(broke.anchor).toEqual({ tollScrap: 5, payable: false });
+
+    state.scrapGained = 6;
+    const funded = buildCombatView(state);
+    expect(funded.anchor).toEqual({ tollScrap: 5, payable: true });
+    expect(funded.scrap).toBe(6);
+
+    state.enemyHp = 0;
+    expect(buildCombatView(state).anchor).toBeNull();
+  });
+
+  it('non-anchor enemies project no anchor', () => {
+    expect(buildCombatView(gunshipCombat()).anchor).toBeNull();
+  });
+});

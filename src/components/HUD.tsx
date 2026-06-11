@@ -9,6 +9,7 @@ interface HUDProps {
   /** Plain innates fire directly; card-targeted ones (Slipstream) toggle arming instead. */
   onInnate: () => void;
   innateArmed: boolean;
+  onPayToll: () => void;
 }
 
 /**
@@ -17,7 +18,7 @@ interface HUDProps {
  * (hidden until Deep Scan reveals it), turn and pile counts. Pure presentation —
  * every number arrives in the CombatView.
  */
-export default function HUD({ view, onEndTurn, onInnate, innateArmed }: HUDProps) {
+export default function HUD({ view, onEndTurn, onInnate, innateArmed, onPayToll }: HUDProps) {
   return (
     <>
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2 sm:p-4">
@@ -64,6 +65,9 @@ export default function HUD({ view, onEndTurn, onInnate, innateArmed }: HUDProps
                 ⚠ {module.name.toUpperCase()} OFFLINE
               </div>
             ))}
+          {view.anchor !== null && (
+            <div className="text-[9px] text-[#e94560] sm:text-[10px]">⚓ TRAVEL HALTED</div>
+          )}
         </div>
 
         <div className="retro space-y-1 text-right text-[10px] text-white sm:text-xs">
@@ -96,11 +100,27 @@ export default function HUD({ view, onEndTurn, onInnate, innateArmed }: HUDProps
           <div>
             DRAW {view.drawCount} · DISCARD {view.discardCount}
           </div>
-          {view.travelProgress > 0 && <div>TRAVEL +{view.travelProgress}</div>}
-          {view.scrapGained > 0 && <div>SCRAP +{view.scrapGained}</div>}
+          {view.travel !== null && (
+            <div>
+              TRAVEL {view.travel.progress}/{view.travel.distance}
+            </div>
+          )}
+          <div>SCRAP {view.scrap}</div>
           {view.innate.passive && <div>{view.innate.name.toUpperCase()} · PASSIVE</div>}
         </div>
         <div className="flex flex-col items-end gap-3 sm:flex-row sm:items-end sm:gap-2">
+          {view.anchor !== null && (
+            <Button
+              className="pointer-events-auto text-[9px] sm:text-[0.8rem]"
+              font="retro"
+              size="sm"
+              variant="secondary"
+              disabled={!view.anchor.payable}
+              onClick={onPayToll}
+            >
+              Pay Toll ({view.anchor.tollScrap} Scrap)
+            </Button>
+          )}
           {!view.innate.passive && (
             <Button
               className={`pointer-events-auto text-[9px] sm:text-[0.8rem] ${innateArmed ? 'ring-2 ring-[#4fc3f7]' : ''}`}

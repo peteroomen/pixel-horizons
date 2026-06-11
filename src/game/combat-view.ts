@@ -1,7 +1,13 @@
 import { getCard, getEnemy, getHull, getModule, MALFUNCTION_REPAIR_AP } from './data';
 import type { CardEffect, ModuleTargeting } from './data';
 import type { CombatOutcome, CombatState } from './sim/combat';
-import { canUseInnate, cardPlayCost, currentIntent, isCardMalfunctioning } from './sim/combat';
+import {
+  canPayToll,
+  canUseInnate,
+  cardPlayCost,
+  currentIntent,
+  isCardMalfunctioning,
+} from './sim/combat';
 import { STARTING_HULL_HP } from './sim/run-state';
 
 /**
@@ -74,7 +80,15 @@ export interface CombatView {
   hand: CardView[];
   drawCount: number;
   discardCount: number;
-  travelProgress: number;
+  /** Lane-absolute progress so the display doesn't reset per fight; null outside a lane. */
+  travel: { progress: number; distance: number } | null;
+  /**
+   * Non-null while an anchor enemy holds the lane (GDD §5.7). Always visible — the
+   * latch is archetype state, not intent info; a halt you can't see is a stat drain.
+   */
+  anchor: { tollScrap: number; payable: boolean } | null;
+  /** Run scrap as of right now (start-of-fight stock plus this fight's gains). */
+  scrap: number;
   scrapGained: number;
   outcome: CombatOutcome;
 }
@@ -148,7 +162,21 @@ export function buildCombatView(state: CombatState): CombatView {
     }),
     drawCount: state.drawPile.length,
     discardCount: state.discardPile.length,
-    travelProgress: state.travelProgress,
+    travel:
+      state.lane === null
+        ? null
+        : {
+            progress: Math.min(
+              state.lane.distance,
+              state.lane.progressAtStart + state.travelProgress,
+            ),
+            distance: state.lane.distance,
+          },
+    anchor:
+      enemy.anchor !== undefined && state.enemyHp > 0
+        ? { tollScrap: enemy.anchor.tollScrap, payable: canPayToll(state) }
+        : null,
+    scrap: state.scrapAtStart + state.scrapGained,
     scrapGained: state.scrapGained,
     outcome: state.outcome,
   };
