@@ -1,6 +1,6 @@
 'use client';
 
-import type { CombatView } from '@/game/main';
+import type { CombatView, IntentDetail, IntentView } from '@/game/main';
 import { Button } from '@/components/ui/8bit/button';
 
 interface HUDProps {
@@ -14,9 +14,10 @@ interface HUDProps {
 
 /**
  * Combat HUD (GDD §5.2): hull HP, shield layers with recharge countdowns, AP,
- * malfunctioning-module warnings, hull innate button, enemy HP, intent telegraph
- * (hidden until Deep Scan reveals it), turn and pile counts. Pure presentation —
- * every number arrives in the CombatView.
+ * malfunctioning-module warnings, hull innate button, enemy HP + armor, intent
+ * telegraph (kind and name always shown; numbers only while Deep Scan's reveal is
+ * active), turn and pile counts. Pure presentation — every number arrives in the
+ * CombatView.
  */
 export default function HUD({ view, onEndTurn, onInnate, innateArmed, onPayToll }: HUDProps) {
   return (
@@ -77,19 +78,13 @@ export default function HUD({ view, onEndTurn, onInnate, innateArmed, onPayToll 
           <div className="flex justify-end">
             <Bar value={view.enemyHp} max={view.enemyMaxHp} color="#e94560" />
           </div>
+          {view.enemyArmor > 0 && (
+            <div className="text-[9px] text-[#ffd166] sm:text-[10px]">
+              ⛨ ARMOR {view.enemyArmor}
+            </div>
+          )}
           <div className="text-white/60">
-            INTENT:{' '}
-            {view.intent === null ? (
-              <span className="text-white/40">???</span>
-            ) : (
-              <span className="text-[#e94560]">
-                {view.intent.name} {view.intent.amount}
-                {view.intent.hits > 1 ? `×${view.intent.hits}` : ''}
-                {view.intent.piercing ? ' PIERCE' : ''}
-                {view.intent.targetsModule === 'highest-value' ? ' → BEST MODULE' : ''}
-                {view.intent.targetsModule === 'random' ? ' → RANDOM MODULE' : ''}
-              </span>
-            )}
+            INTENT: <span className="text-[#e94560]">{intentText(view.intent)}</span>
           </div>
         </div>
       </div>
@@ -148,6 +143,31 @@ export default function HUD({ view, onEndTurn, onInnate, innateArmed, onPayToll 
       </div>
     </>
   );
+}
+
+const INTENT_KIND_LABELS: Record<IntentView['kind'], string> = {
+  attack: 'ATTACK',
+  'attack-module': 'MODULE HIT',
+  inject: 'INJECT',
+};
+
+/** Kind + name always; exact numbers only while Deep Scan's reveal is active. */
+function intentText(intent: IntentView): string {
+  const base = `${INTENT_KIND_LABELS[intent.kind]} — ${intent.name}`;
+  return intent.detail === null ? base : `${base}${intentDetailText(intent.detail)}`;
+}
+
+function intentDetailText(detail: IntentDetail): string {
+  switch (detail.kind) {
+    case 'attack':
+      return ` ${detail.amount}${detail.hits > 1 ? `×${detail.hits}` : ''}${detail.piercing ? ' PIERCE' : ''}`;
+    case 'attack-module':
+      return ` ${detail.amount}${detail.piercing ? ' PIERCE' : ''}${
+        detail.targeting === 'highest-value' ? ' → BEST MODULE' : ' → RANDOM MODULE'
+      }`;
+    case 'inject':
+      return ` ×${detail.count} ${detail.cardName}`;
+  }
 }
 
 function Bar({ value, max, color }: { value: number; max: number; color: string }) {

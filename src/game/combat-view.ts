@@ -1,5 +1,5 @@
 import { getCard, getEnemy, getHull, getModule, MALFUNCTION_REPAIR_AP } from './data';
-import type { CardEffect, ModuleTargeting } from './data';
+import type { CardDef, CardEffect, EnemyIntentDef, ModuleTargeting, OnDrawEffect } from './data';
 import type { CombatOutcome, CombatState } from './sim/combat';
 import {
   canPayToll,
@@ -28,6 +28,8 @@ export interface CardView {
   affordable: boolean;
   /** Flipped to its Malfunction form — playing it field-repairs the module (GDD §5.6). */
   malfunction: boolean;
+  /** Infestation hand-clog (GDD §5.6) — renders inert, tapping does nothing. */
+  unplayable: boolean;
 }
 
 export interface ShieldLayerView {
@@ -53,13 +55,21 @@ export interface InnateView {
   passive: boolean;
 }
 
-export interface RevealedIntent {
+/** Exact numbers behind Deep Scan — discriminated per intent kind. */
+export type IntentDetail =
+  | { kind: 'attack'; amount: number; hits: number; piercing: boolean }
+  | { kind: 'attack-module'; amount: number; piercing: boolean; targeting: ModuleTargeting }
+  | { kind: 'inject'; cardName: string; count: number };
+
+/**
+ * The telegraphed next enemy action (2.5 design call): the *shape* — kind and name —
+ * is always visible, StS-style; `detail` carries the numbers and is non-null only
+ * while Deep Scan's reveal is active. Free numbers would dead-card Deep Scan.
+ */
+export interface IntentView {
+  kind: EnemyIntentDef['kind'];
   name: string;
-  amount: number;
-  hits: number;
-  piercing: boolean;
-  /** Non-null when the hit also hunts a module (GDD §5.6). */
-  targetsModule: ModuleTargeting | null;
+  detail: IntentDetail | null;
 }
 
 export interface CombatView {
@@ -75,8 +85,9 @@ export interface CombatView {
   enemyName: string;
   enemyHp: number;
   enemyMaxHp: number;
-  /** Null until Deep Scan reveals it — showing intents for free would dead-card Deep Scan. */
-  intent: RevealedIntent | null;
+  /** Bulwark armor pool currently up (GDD §5.7); 0 for unarmored enemies. */
+  enemyArmor: number;
+  intent: IntentView;
   hand: CardView[];
   drawCount: number;
   discardCount: number;
@@ -123,17 +134,15 @@ export function buildCombatView(state: CombatState): CombatView {
     enemyName: enemy.name,
     enemyHp: state.enemyHp,
     enemyMaxHp: enemy.maxHp,
-    intent: state.modifiers.intentRevealed
-      ? {
-          name: intent.name,
-          amount: intent.amount,
-          hits: intent.kind === 'attack' ? (intent.hits ?? 1) : 1,
-          piercing: intent.piercing === true,
-          targetsModule: intent.kind === 'attack-module' ? intent.targeting : null,
-        }
-      : null,
+    enemyArmor: state.enemyArmor,
+    intent: {
+      kind: intent.kind,
+      name: intent.name,
+      detail: state.modifiers.intentRevealed ? describeIntentDetail(intent) : null,
+    },
     hand: state.hand.map((instance, index) => {
-      if (isCardMalfunctioning(state, instance)) {
+      // A null moduleIndex (injected Infestation) can never present as malfunctioning.
+      if (isCardMalfunctioning(state, instance) && instance.moduleIndex !== null) {
         const moduleDef = getModule(state.modules[instance.moduleIndex]);
         return {
           key: `${instance.cardId}@${index}`,
@@ -146,18 +155,22 @@ export function buildCombatView(state: CombatState): CombatView {
           exhaust: false,
           affordable: state.outcome === 'ongoing' && MALFUNCTION_REPAIR_AP <= state.ap,
           malfunction: true,
+          unplayable: false,
         };
       }
       const card = getCard(instance.cardId);
+      const unplayable = card.unplayable === true;
       return {
         key: `${instance.cardId}@${index}`,
         id: instance.cardId,
         name: card.name,
         apCost: card.apCost,
-        text: card.effects.map(describeEffect).join(' · '),
+        text: describeCardText(card),
         exhaust: card.exhaust === true,
-        affordable: state.outcome === 'ongoing' && cardPlayCost(state, instance) <= state.ap,
+        affordable:
+          !unplayable && state.outcome === 'ongoing' && cardPlayCost(state, instance) <= state.ap,
         malfunction: false,
+        unplayable,
       };
     }),
     drawCount: state.drawPile.length,
@@ -180,6 +193,50 @@ export function buildCombatView(state: CombatState): CombatView {
     scrapGained: state.scrapGained,
     outcome: state.outcome,
   };
+}
+
+function describeIntentDetail(intent: EnemyIntentDef): IntentDetail {
+  switch (intent.kind) {
+    case 'attack':
+      return {
+        kind: 'attack',
+        amount: intent.amount,
+        hits: intent.hits ?? 1,
+        piercing: intent.piercing === true,
+      };
+    case 'attack-module':
+      return {
+        kind: 'attack-module',
+        amount: intent.amount,
+        piercing: intent.piercing === true,
+        targeting: intent.targeting,
+      };
+    case 'inject':
+      return { kind: 'inject', cardName: getCard(intent.cardId).name, count: intent.count };
+    default: {
+      const exhaustive: never = intent;
+      throw new Error(`unhandled enemy intent: ${JSON.stringify(exhaustive)}`);
+    }
+  }
+}
+
+function describeCardText(card: CardDef): string {
+  const parts = card.unplayable === true ? ['Unplayable'] : [];
+  parts.push(...(card.onDraw ?? []).map(describeOnDraw), ...card.effects.map(describeEffect));
+  return parts.join(' · ');
+}
+
+function describeOnDraw(effect: OnDrawEffect): string {
+  switch (effect.kind) {
+    case 'lose-shield-layer':
+      return effect.count === 1
+        ? 'Drawn: −1 shield layer'
+        : `Drawn: −${effect.count} shield layers`;
+    default: {
+      const exhaustive: never = effect.kind;
+      throw new Error(`unhandled on-draw effect: ${JSON.stringify(exhaustive)}`);
+    }
+  }
 }
 
 function describeEffect(effect: CardEffect): string {

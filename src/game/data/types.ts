@@ -28,12 +28,23 @@ export type CardEffect =
   | { kind: 'retain-cards'; count: number }
   | { kind: 'repair-all-modules' };
 
+/**
+ * Effects that fire as a card enters the hand (Infestations, GDD §5.6). A separate,
+ * deliberately tiny union — not CardEffect — because drawCards runs inside endTurn
+ * *and* mid-card `draw` effects: members must never draw (recursion) and must not
+ * consume RNG (re-entrancy).
+ */
+export type OnDrawEffect = { kind: 'lose-shield-layer'; count: number };
+
 export interface CardDef {
   id: CardId;
   name: string;
   apCost: number;
   effects: CardEffect[];
   exhaust?: boolean;
+  /** Hand-clog (Infestations, GDD §5.6): playCard throws, the UI never offers it. */
+  unplayable?: true;
+  onDraw?: OnDrawEffect[];
 }
 
 export type ModuleSlot = 'weapon' | 'utility' | 'engine' | 'clone-bay';
@@ -96,6 +107,17 @@ export type EnemyIntentDef =
       amount: number;
       piercing?: boolean;
       targeting: ModuleTargeting;
+    }
+  | {
+      /**
+       * Scrambler archetypes (GDD §5.6/§5.7): inserts `count` copies of an Infestation
+       * card at random draw-pile positions. Not a hit — dodge, untargetable, and
+       * shields don't interact; blocking it with defenses would erase the archetype.
+       */
+      kind: 'inject';
+      name: string;
+      cardId: CardId;
+      count: number;
     };
 
 export interface EnemyDef {
@@ -112,6 +134,12 @@ export interface EnemyDef {
    * Scrap toll ends the encounter without victory rewards.
    */
   anchor?: { tollScrap: number };
+  /**
+   * Bulwark archetypes (GDD §5.7): a damage pool absorbing non-piercing hits before
+   * HP, regrowing `regen` (capped at `amount`) at the end of each enemy phase —
+   * sustained damage within one turn breaks through, chip across turns is eaten.
+   */
+  armor?: { amount: number; regen: number };
 }
 
 /**

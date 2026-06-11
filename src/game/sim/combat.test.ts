@@ -11,6 +11,7 @@ import {
   currentIntent,
   endTurn,
   isCardMalfunctioning,
+  isCardPlayable,
   isTravelAnchored,
   payToll,
   playCard,
@@ -26,6 +27,8 @@ import type { RunState } from './run-state';
 const LAMPREY = 'enemy-lamprey';
 const PARASITE = 'enemy-parasite';
 const ANCHORMAW = 'enemy-anchormaw';
+const CARAPACE = 'enemy-carapace';
+const SPORECASTER = 'enemy-sporecaster';
 
 function gunshipRun(seed = 'combat-test'): RunState {
   return createRunState(seed, 'hull-gunship');
@@ -309,10 +312,6 @@ describe('card effects', () => {
     expect(state.modifiers.intentRevealed).toBe(true);
     endTurn(state);
     expect(state.modifiers.intentRevealed).toBe(false);
-  });
-
-  it('out-of-slice effects throw loudly with their target slice', () => {
-    expect(() => playCard(fresh(['card-kinetic-shred']), 0)).toThrow('2.5');
   });
 });
 
@@ -795,5 +794,150 @@ describe('lanes and travel', () => {
     expect(isTravelAnchored(state)).toBe(true);
     endTurn(state);
     expect(state.travelProgress).toBe(0);
+  });
+});
+
+describe('Carapace armor (GDD §5.7)', () => {
+  function carapaceFight(cards: string[], ap = BASELINE_AP): CombatState {
+    const state = createCombat(gunshipRun(), CARAPACE);
+    state.hand = hand(...cards);
+    state.ap = ap;
+    return state;
+  }
+
+  it('starts with the armor pool up; unarmored enemies start at 0', () => {
+    expect(carapaceFight([]).enemyArmor).toBe(5);
+    expect(createCombat(gunshipRun(), LAMPREY).enemyArmor).toBe(0);
+  });
+
+  it('damage fully absorbed by armor leaves HP untouched', () => {
+    const state = carapaceFight(['card-laser-burst']);
+    playCard(state, 0); // 4 into armor 5
+    expect(state.enemyArmor).toBe(1);
+    expect(state.enemyHp).toBe(getEnemy(CARAPACE).maxHp);
+  });
+
+  it('sustained damage within one turn breaks through the pool', () => {
+    const state = carapaceFight(['card-missile-salvo', 'card-laser-burst']);
+    playCard(state, 0); // 8: armor 5 absorbs, 3 reaches HP
+    expect(state.enemyArmor).toBe(0);
+    playCard(state, 0); // armor already down — full 4 lands
+    expect(state.enemyHp).toBe(getEnemy(CARAPACE).maxHp - 7);
+  });
+
+  it('piercing bypasses armor entirely', () => {
+    const state = carapaceFight(['card-flak-volley']);
+    playCard(state, 0); // 6 piercing
+    expect(state.enemyArmor).toBe(5);
+    expect(state.enemyHp).toBe(getEnemy(CARAPACE).maxHp - 6);
+  });
+
+  it('strip-armor zeroes the pool so follow-up damage lands clean', () => {
+    const state = carapaceFight(['card-kinetic-shred', 'card-missile-salvo']);
+    playCard(state, 0);
+    expect(state.enemyArmor).toBe(0);
+    playCard(state, 0);
+    expect(state.enemyHp).toBe(getEnemy(CARAPACE).maxHp - 8);
+  });
+
+  it('armor regrows after the enemy phase, capped at its max', () => {
+    const state = carapaceFight(['card-missile-salvo']);
+    playCard(state, 0);
+    expect(state.enemyArmor).toBe(0);
+    endTurn(state);
+    expect(state.enemyArmor).toBe(2);
+    endTurn(state);
+    endTurn(state); // 2 → 4 → capped at 5
+    expect(state.enemyArmor).toBe(5);
+  });
+
+  it('the damage innate respects armor too', () => {
+    const state = createCombat(gunshipRun(), CARAPACE);
+    activateInnate(state); // Point-Defense: 2 damage
+    expect(state.enemyArmor).toBe(3);
+    expect(state.enemyHp).toBe(getEnemy(CARAPACE).maxHp);
+  });
+
+  it('vulnerable is added to the printed total before armor absorbs', () => {
+    const state = carapaceFight(['card-tracer-lock', 'card-missile-salvo']);
+    playCard(state, 0); // +2 per hit
+    playCard(state, 0); // 8 + 2 = 10: armor eats 5, HP takes 5
+    expect(state.enemyHp).toBe(getEnemy(CARAPACE).maxHp - 5);
+  });
+});
+
+describe('Infestations (GDD §5.6)', () => {
+  const SPORE = 'card-spore-cluster';
+
+  function sporeCard(): CombatCard {
+    return { cardId: SPORE, moduleIndex: null };
+  }
+
+  it('inject inserts the cards into the draw pile with no module', () => {
+    const state = createCombat(gunshipRun(), SPORECASTER);
+    expect(currentIntent(state).kind).toBe('inject');
+    endTurn(state); // Spore Burst ×2
+    const everywhere = [...state.drawPile, ...state.hand, ...state.discardPile];
+    const spores = everywhere.filter((card) => card.cardId === SPORE);
+    expect(spores.length).toBe(2);
+    for (const spore of spores) {
+      expect(spore.moduleIndex).toBeNull();
+    }
+  });
+
+  it('injection is deterministic — same seed, same positions', () => {
+    const a = createCombat(gunshipRun('spore-seed'), SPORECASTER);
+    const b = createCombat(gunshipRun('spore-seed'), SPORECASTER);
+    endTurn(a);
+    endTurn(b);
+    expect(ids(a.drawPile)).toEqual(ids(b.drawPile));
+    expect(ids(a.hand)).toEqual(ids(b.hand));
+  });
+
+  it('a mid-fight JSON round-trip preserves infestations and continues identically', () => {
+    const state = createCombat(gunshipRun(), SPORECASTER);
+    endTurn(state);
+    const copy = JSON.parse(JSON.stringify(state)) as CombatState;
+    endTurn(state);
+    endTurn(copy);
+    expect(ids(copy.drawPile)).toEqual(ids(state.drawPile));
+    expect(ids(copy.hand)).toEqual(ids(state.hand));
+  });
+
+  it('unplayable cards throw on play', () => {
+    const state = createCombat(gunshipRun(), SPORECASTER);
+    state.hand = [sporeCard()];
+    expect(isCardPlayable(sporeCard())).toBe(false);
+    expect(() => playCard(state, 0)).toThrow('unplayable');
+  });
+
+  it('an injected card can never present as a Malfunction', () => {
+    const state = createCombat(gunshipRun(), SPORECASTER);
+    state.malfunctioning = [0, 1];
+    expect(isCardMalfunctioning(state, sporeCard())).toBe(false);
+  });
+
+  it('Spore Cluster drops a shield layer as it is drawn — mid-card draws included', () => {
+    const state = createCombat(gunshipRun(), SPORECASTER);
+    state.drawPile.unshift(sporeCard());
+    state.hand = hand('card-telemetry-sync');
+    playCard(state, 0); // draw 1 → the spore enters the hand
+    expect(ids(state.hand)).toEqual([SPORE]);
+    expect(state.shields.filter((layer) => layer.turnsUntilUp > 0).length).toBe(1);
+  });
+
+  it('on-draw eats temp layers first; no shields at all means no effect', () => {
+    const state = createCombat(gunshipRun(), SPORECASTER);
+    state.tempShieldLayers = 1;
+    state.drawPile.unshift(sporeCard());
+    state.hand = hand('card-telemetry-sync');
+    playCard(state, 0);
+    expect(state.tempShieldLayers).toBe(0);
+    expect(state.shields.every((layer) => layer.turnsUntilUp === 0)).toBe(true);
+
+    const scout = createCombat(scoutRun(), SPORECASTER); // no shield module
+    scout.drawPile.unshift(sporeCard());
+    scout.hand = hand('card-telemetry-sync');
+    expect(() => playCard(scout, 0)).not.toThrow();
   });
 });

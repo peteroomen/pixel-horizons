@@ -170,6 +170,17 @@ export const CARD_DEFS: readonly CardDef[] = [
     ],
   },
 
+  // Infestations (GDD §5.6) — injected by enemies mid-fight, never in a module's
+  // card list; they exist only inside one CombatState and vanish with it.
+  {
+    id: 'card-spore-cluster',
+    name: 'Spore Cluster',
+    apCost: 0,
+    effects: [],
+    unplayable: true,
+    onDraw: [{ kind: 'lose-shield-layer', count: 1 }],
+  },
+
   // Clone Bay matrices
   {
     id: 'card-telemetry-sync',
