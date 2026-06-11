@@ -12,6 +12,7 @@ import {
   canPayToll,
   canUseInnate,
   cardPlayCost,
+  isCardPlayable,
   createCombat,
   endTurn,
   payToll,
@@ -39,8 +40,9 @@ export type {
   CardView,
   CombatView,
   InnateView,
+  IntentDetail,
+  IntentView,
   ModuleView,
-  RevealedIntent,
   ShieldLayerView,
 } from './combat-view';
 
@@ -191,7 +193,8 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     playCard(handIndex: number): void {
       if (combat.outcome !== 'ongoing') return;
       const card = combat.hand[handIndex];
-      if (card === undefined || cardPlayCost(combat, card) > combat.ap) return;
+      if (card === undefined || !isCardPlayable(card) || cardPlayCost(combat, card) > combat.ap)
+        return;
       playCard(combat, handIndex);
       emit();
     },

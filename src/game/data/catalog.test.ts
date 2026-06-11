@@ -70,8 +70,15 @@ describe('module catalog', () => {
     }
   });
 
-  it('every card is referenced by at least one module', () => {
+  it('every card is referenced by a module or injected by an enemy', () => {
     const referenced = new Set(moduleTiers().flatMap(({ tier }) => tier.cards));
+    for (const enemy of ENEMY_DEFS) {
+      for (const intent of enemy.intents) {
+        if (intent.kind === 'inject') {
+          referenced.add(intent.cardId);
+        }
+      }
+    }
     for (const card of CARD_DEFS) {
       expect(referenced.has(card.id), `orphan card ${card.id}`).toBe(true);
     }
@@ -127,12 +134,41 @@ describe('enemy catalog', () => {
   it('every intent has positive numbers', () => {
     for (const enemy of ENEMY_DEFS) {
       for (const intent of enemy.intents) {
+        if (intent.kind === 'inject') {
+          expect(intent.count, `${enemy.id} ${intent.name}`).toBeGreaterThan(0);
+          continue;
+        }
         expect(intent.amount, `${enemy.id} ${intent.name}`).toBeGreaterThan(0);
         if (intent.kind === 'attack' && intent.hits !== undefined) {
           expect(intent.hits, `${enemy.id} ${intent.name}`).toBeGreaterThanOrEqual(1);
         }
       }
     }
+  });
+
+  it('inject intents reference existing unplayable cards no module provides', () => {
+    const moduleCards = new Set(moduleTiers().flatMap(({ tier }) => tier.cards));
+    for (const enemy of ENEMY_DEFS) {
+      for (const intent of enemy.intents) {
+        if (intent.kind !== 'inject') {
+          continue;
+        }
+        const card = getCard(intent.cardId);
+        expect(card.unplayable, `${enemy.id} injects ${intent.cardId}`).toBe(true);
+        expect(moduleCards.has(card.id), `${intent.cardId} must not be in a module`).toBe(false);
+      }
+    }
+  });
+
+  it('armor pools are positive and regenerate (GDD §5.7)', () => {
+    for (const enemy of ENEMY_DEFS) {
+      if (enemy.armor === undefined) {
+        continue;
+      }
+      expect(enemy.armor.amount, enemy.id).toBeGreaterThan(0);
+      expect(enemy.armor.regen, enemy.id).toBeGreaterThan(0);
+    }
+    expect(getEnemy('enemy-carapace').armor).toBeDefined();
   });
 
   it('the Parasite hunts modules (GDD §5.7)', () => {

@@ -8,6 +8,7 @@ import { createRunState, STARTING_HULL_HP } from './sim/run-state';
 
 const LAMPREY = 'enemy-lamprey';
 const PARASITE = 'enemy-parasite';
+const SPORECASTER = 'enemy-sporecaster';
 
 function gunshipCombat(seed = 'view-test') {
   return createCombat(createRunState(seed, 'hull-gunship'), LAMPREY);
@@ -123,29 +124,64 @@ describe('buildCombatView', () => {
     expect(innate.usable).toBe(false);
   });
 
-  it('hides the intent until Deep Scan reveals it', () => {
+  it('always telegraphs the intent kind and name; numbers wait for Deep Scan', () => {
     const state = gunshipCombat();
-    expect(buildCombatView(state).intent).toBeNull();
-    state.modifiers.intentRevealed = true;
     expect(buildCombatView(state).intent).toEqual({
+      kind: 'attack',
       name: 'Feeding Frenzy',
+      detail: null,
+    });
+    state.modifiers.intentRevealed = true;
+    expect(buildCombatView(state).intent.detail).toEqual({
+      kind: 'attack',
       amount: 4,
       hits: 2,
       piercing: false,
-      targetsModule: null,
     });
   });
 
   it('reveals module-hunting intents with their targeting', () => {
     const state = createCombat(createRunState('view-test', 'hull-gunship'), PARASITE);
+    expect(buildCombatView(state).intent.kind).toBe('attack-module');
     state.modifiers.intentRevealed = true;
-    expect(buildCombatView(state).intent).toEqual({
-      name: 'Burrow',
+    expect(buildCombatView(state).intent.detail).toEqual({
+      kind: 'attack-module',
       amount: 3,
-      hits: 1,
       piercing: false,
-      targetsModule: 'highest-value',
+      targeting: 'highest-value',
     });
+  });
+
+  it('reveals inject intents with the card name and count', () => {
+    const state = createCombat(createRunState('view-test', 'hull-gunship'), SPORECASTER);
+    expect(buildCombatView(state).intent).toEqual({
+      kind: 'inject',
+      name: 'Spore Burst',
+      detail: null,
+    });
+    state.modifiers.intentRevealed = true;
+    expect(buildCombatView(state).intent.detail).toEqual({
+      kind: 'inject',
+      cardName: 'Spore Cluster',
+      count: 2,
+    });
+  });
+
+  it('projects the enemy armor pool', () => {
+    const carapace = createCombat(createRunState('view-test', 'hull-gunship'), 'enemy-carapace');
+    expect(buildCombatView(carapace).enemyArmor).toBe(5);
+    expect(buildCombatView(gunshipCombat()).enemyArmor).toBe(0);
+  });
+
+  it('renders injected Infestations as unplayable', () => {
+    const state = createCombat(createRunState('view-test', 'hull-gunship'), SPORECASTER);
+    state.hand = [{ cardId: 'card-spore-cluster', moduleIndex: null }];
+    const [card] = buildCombatView(state).hand;
+    expect(card.name).toBe('Spore Cluster');
+    expect(card.unplayable).toBe(true);
+    expect(card.affordable).toBe(false);
+    expect(card.malfunction).toBe(false);
+    expect(card.text).toBe('Unplayable · Drawn: −1 shield layer');
   });
 
   it('reflects shield recharge after a layer absorbs a hit', () => {

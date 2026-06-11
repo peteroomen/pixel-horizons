@@ -5,10 +5,13 @@ import type { CardId, ModuleId } from '../data';
  * One card instance in a combat deck. `moduleIndex` indexes the run's module list —
  * not a ModuleId, because duplicate modules (Scout: 2× Thruster) are distinct
  * malfunction targets and only the index tells their card copies apart (GDD §5.6).
+ * Null = the card came from no module (enemy-injected Infestations): it can never
+ * present as a Malfunction, and a numeric sentinel would silently re-enter the
+ * malfunction-membership logic — null can't.
  */
 export interface CombatCard {
   cardId: CardId;
-  moduleIndex: number;
+  moduleIndex: number | null;
 }
 
 /**

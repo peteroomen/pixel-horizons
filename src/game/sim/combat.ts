@@ -92,6 +92,11 @@ export interface LaneContext {
 export interface CombatState {
   enemyId: EnemyId;
   enemyHp: number;
+  /**
+   * Bulwark armor pool (GDD §5.7): absorbs non-piercing damage before HP, regrows at
+   * the end of each enemy phase. 0 for enemies without armor.
+   */
+  enemyArmor: number;
   /** Index into the enemy's intent list — the telegraphed action for its next phase. */
   intentIndex: number;
   hullId: HullId;
@@ -145,6 +150,7 @@ export function createCombat(run: RunState, enemyId: EnemyId, lane?: LaneContext
   const state: CombatState = {
     enemyId,
     enemyHp: enemy.maxHp,
+    enemyArmor: enemy.armor?.amount ?? 0,
     intentIndex: enemy.pattern === 'random' ? rng.int(0, enemy.intents.length) : 0,
     hullId: run.hullId,
     hullHp: run.hullHp,
@@ -187,7 +193,7 @@ export function createCombat(run: RunState, enemyId: EnemyId, lane?: LaneContext
 
 /** Whether this card instance currently presents as its Malfunction form (GDD §5.6). */
 export function isCardMalfunctioning(state: CombatState, card: CombatCard): boolean {
-  return state.malfunctioning.includes(card.moduleIndex);
+  return card.moduleIndex !== null && state.malfunctioning.includes(card.moduleIndex);
 }
 
 /**
@@ -245,6 +251,11 @@ export function cardPlayCost(state: CombatState, card: CombatCard): number {
   return isCardMalfunctioning(state, card) ? MALFUNCTION_REPAIR_AP : getCard(card.cardId).apCost;
 }
 
+/** Unplayable cards (Infestations, §5.6) clog the hand until the discard step. */
+export function isCardPlayable(card: CombatCard): boolean {
+  return getCard(card.cardId).unplayable !== true;
+}
+
 export function playCard(state: CombatState, handIndex: number): void {
   if (state.outcome !== 'ongoing') {
     throw new Error('combat already ended');
@@ -253,6 +264,9 @@ export function playCard(state: CombatState, handIndex: number): void {
     throw new Error(`no card at hand index ${handIndex}`);
   }
   const instance = state.hand[handIndex];
+  if (!isCardPlayable(instance)) {
+    throw new Error(`${instance.cardId} is unplayable`);
+  }
   const cost = cardPlayCost(state, instance);
   if (cost > state.ap) {
     throw new Error(`cannot afford ${instance.cardId}: costs ${cost} AP, have ${state.ap}`);
@@ -313,10 +327,7 @@ export function activateInnate(state: CombatState, handIndex?: number): void {
       state.ap -= effect.apCost;
       // Deliberately skips next-attack modifiers — Point-Defense must not eat a
       // Lock-On meant for a weapon card. Vulnerable applies to every hit as printed.
-      state.enemyHp = Math.max(
-        0,
-        state.enemyHp - (effect.amount + state.modifiers.enemyVulnerable),
-      );
+      dealDamageToEnemy(state, effect.amount + state.modifiers.enemyVulnerable, false);
       break;
     }
     case 'discard-to-draw': {
@@ -407,6 +418,13 @@ export function endTurn(state: CombatState): void {
     layer.turnsUntilUp -= 1;
   }
 
+  // Organic armor regrows after the enemy phase (GDD §5.7): chip damage spread
+  // across turns is eaten; sustained damage within one turn breaks through.
+  const armor = enemy.armor;
+  if (armor !== undefined) {
+    state.enemyArmor = Math.min(armor.amount, state.enemyArmor + armor.regen);
+  }
+
   // A survived full turn is a turn of travel (GDD §5.1) — halted while anchored.
   if (state.lane !== null && !isTravelAnchored(state)) {
     state.travelProgress += 1;
@@ -465,9 +483,7 @@ function applyEffect(state: CombatState, rng: Rng, effect: CardEffect): void {
       state.modifiers.nextAttackBonus = 0;
       state.modifiers.nextAttackMultiplier = 1;
       const total = (effect.amount + bonus) * multiplier + state.modifiers.enemyVulnerable;
-      // effect.piercing is recorded but currently indistinguishable from plain damage:
-      // no enemy has shield layers or armor until 2.5.
-      state.enemyHp = Math.max(0, state.enemyHp - total);
+      dealDamageToEnemy(state, total, effect.piercing === true);
       break;
     }
     case 'travel':
@@ -519,7 +535,9 @@ function applyEffect(state: CombatState, rng: Rng, effect: CardEffect): void {
       state.modifiers.retainCount += effect.count;
       break;
     case 'strip-armor':
-      throw new Error('strip-armor is not implemented until Slice 2.5 (Carapace armor)');
+      // Gone for the rest of the turn — regen brings it back after the enemy phase.
+      state.enemyArmor = 0;
+      break;
     case 'repair-all-modules':
       // Repair Clone (§4.2) — the alternative to playing each Malfunction card.
       state.malfunctioning = [];
@@ -529,6 +547,21 @@ function applyEffect(state: CombatState, rng: Rng, effect: CardEffect): void {
       throw new Error(`unhandled card effect: ${JSON.stringify(exhaustive)}`);
     }
   }
+}
+
+/**
+ * One outgoing hit against the enemy — the single funnel for all player damage
+ * (cards and damage innates), mirroring resolveIncomingHit. Armor (GDD §5.7)
+ * absorbs non-piercing damage before HP; piercing bypasses it entirely.
+ */
+function dealDamageToEnemy(state: CombatState, amount: number, piercing: boolean): void {
+  let remaining = amount;
+  if (!piercing) {
+    const absorbed = Math.min(state.enemyArmor, remaining);
+    state.enemyArmor -= absorbed;
+    remaining -= absorbed;
+  }
+  state.enemyHp = Math.max(0, state.enemyHp - remaining);
 }
 
 function resolveEnemyIntent(state: CombatState, rng: Rng, intent: EnemyIntentDef): void {
@@ -542,6 +575,14 @@ function resolveEnemyIntent(state: CombatState, rng: Rng, intent: EnemyIntentDef
     }
     case 'attack-module':
       resolveIncomingHit(state, rng, intent.amount, intent.piercing === true, intent.targeting);
+      break;
+    case 'inject':
+      // "Into your deck" (§5.6): random draw-pile positions on the combat stream.
+      // Not a hit — dodge, untargetable, and shields don't interact.
+      for (let i = 0; i < intent.count; i++) {
+        const position = rng.int(0, state.drawPile.length + 1);
+        state.drawPile.splice(position, 0, { cardId: intent.cardId, moduleIndex: null });
+      }
       break;
     default: {
       const exhaustive: never = intent;
@@ -634,5 +675,39 @@ function drawCards(state: CombatState, rng: Rng, count: number): void {
       return;
     }
     state.hand.push(next);
+    applyOnDrawEffects(state, next);
+  }
+}
+
+/**
+ * Fires a card's on-draw effects as it enters the hand (Infestations, GDD §5.6).
+ * drawCards runs inside endTurn and mid-card `draw` effects, so the OnDrawEffect
+ * union is kept draw-free and RNG-free by construction (see data/types.ts).
+ */
+function applyOnDrawEffects(state: CombatState, card: CombatCard): void {
+  const onDraw = getCard(card.cardId).onDraw;
+  if (onDraw === undefined) {
+    return;
+  }
+  for (const effect of onDraw) {
+    switch (effect.kind) {
+      case 'lose-shield-layer':
+        for (let i = 0; i < effect.count; i++) {
+          if (state.tempShieldLayers > 0) {
+            state.tempShieldLayers -= 1;
+            continue;
+          }
+          const layer = state.shields.find((l) => l.turnsUntilUp === 0);
+          if (layer === undefined) {
+            break;
+          }
+          layer.turnsUntilUp = layer.rechargeTurns;
+        }
+        break;
+      default: {
+        const exhaustive: never = effect.kind;
+        throw new Error(`unhandled on-draw effect: ${JSON.stringify(exhaustive)}`);
+      }
+    }
   }
 }
