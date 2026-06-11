@@ -9,6 +9,7 @@ interface GameCanvasProps {
   onCombatUpdate: (view: CombatView) => void;
   onReady: (handle: GameHandle) => void;
   onScaleChange?: (zoom: number) => void;
+  onModeChange?: (mode: 'combat' | 'surface') => void;
 }
 
 /**
@@ -17,13 +18,18 @@ interface GameCanvasProps {
  * up before init resolves, the handle is destroyed instead of surfaced, so there is
  * never a duplicate canvas or a leaked WebGL context.
  */
-export default function GameCanvas({ onCombatUpdate, onReady, onScaleChange }: GameCanvasProps) {
+export default function GameCanvas({
+  onCombatUpdate,
+  onReady,
+  onScaleChange,
+  onModeChange,
+}: GameCanvasProps) {
   const hostRef = useRef<HTMLDivElement>(null);
-  const callbacksRef = useRef({ onCombatUpdate, onReady, onScaleChange });
+  const callbacksRef = useRef({ onCombatUpdate, onReady, onScaleChange, onModeChange });
 
   useEffect(() => {
-    callbacksRef.current = { onCombatUpdate, onReady, onScaleChange };
-  }, [onCombatUpdate, onReady, onScaleChange]);
+    callbacksRef.current = { onCombatUpdate, onReady, onScaleChange, onModeChange };
+  }, [onCombatUpdate, onReady, onScaleChange, onModeChange]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -36,6 +42,7 @@ export default function GameCanvas({ onCombatUpdate, onReady, onScaleChange }: G
       const candidate = await initGame(host, {
         onCombatUpdate: (view) => callbacksRef.current.onCombatUpdate(view),
         onScaleChange: (zoom) => callbacksRef.current.onScaleChange?.(zoom),
+        onModeChange: (mode) => callbacksRef.current.onModeChange?.(mode),
       });
       if (cancelled) {
         candidate.destroy();

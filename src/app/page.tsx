@@ -5,6 +5,7 @@ import { useCallback, useRef, useState } from 'react';
 import CombatHand from '@/components/CombatHand';
 import GameCanvas from '@/components/GameCanvas';
 import HUD from '@/components/HUD';
+import TouchControls from '@/components/TouchControls';
 import { Button } from '@/components/ui/8bit/button';
 import type { CombatView, GameHandle } from '@/game/main';
 
@@ -26,6 +27,7 @@ export default function Home() {
   const [view, setView] = useState<CombatView | null>(null);
   // Card-targeted innate (Slipstream) armed: the next card tap discards instead of plays.
   const [innateArmed, setInnateArmed] = useState(false);
+  const [mode, setMode] = useState<'combat' | 'surface' | null>(null);
   const handleRef = useRef<GameHandle | null>(null);
 
   const onCombatUpdate = useCallback((next: CombatView) => {
@@ -35,6 +37,10 @@ export default function Home() {
 
   const onReady = useCallback((handle: GameHandle) => {
     handleRef.current = handle;
+  }, []);
+
+  const onModeChange = useCallback((m: 'combat' | 'surface') => {
+    setMode(m);
   }, []);
 
   // Plain innates fire immediately; card-targeted ones (Slipstream) toggle arming.
@@ -49,9 +55,17 @@ export default function Home() {
 
   return (
     <main className="fixed inset-0 touch-none select-none bg-[#050508]">
-      <GameCanvas onCombatUpdate={onCombatUpdate} onReady={onReady} />
+      <GameCanvas onCombatUpdate={onCombatUpdate} onReady={onReady} onModeChange={onModeChange} />
 
-      {view !== null && (
+      {/* Surface mode: touch controls overlay only */}
+      {mode === 'surface' && (
+        <TouchControls
+          onInput={(action, pressed) => handleRef.current?.surfaceInput(action, pressed)}
+        />
+      )}
+
+      {/* Combat mode: HUD, card hand, outcome overlays */}
+      {mode === 'combat' && view !== null && (
         <>
           <HUD
             view={view}

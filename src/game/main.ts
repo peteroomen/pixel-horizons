@@ -1,23 +1,27 @@
 import { Application, TextureSource } from 'pixi.js';
 
+import { ROCKY_TEST_LEVEL } from '@/game/data/levels';
+import { FIXED_DT_MS, MAX_FRAME_MS } from '@/game/data/surface';
 import { computeScale, VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from '@/renderer/pixel-scale';
 import { createSpaceRenderer } from '@/renderer/space-renderer';
 import type { SpaceRenderer } from '@/renderer/space-renderer';
+import { createSurfaceRenderer } from '@/renderer/surface-renderer';
+import type { SurfaceRenderer } from '@/renderer/surface-renderer';
 import { buildCombatView } from './combat-view';
 import type { CombatView } from './combat-view';
 import { getEnemy, getHull } from './data';
 import type { EnemyId } from './data';
 import {
+  activateInnate,
   applyCombatResult,
   canPayToll,
   canUseInnate,
   cardPlayCost,
-  isCardPlayable,
   createCombat,
   endTurn,
+  isCardPlayable,
   payToll,
   playCard,
-  activateInnate,
 } from './sim/combat';
 import type { CombatState } from './sim/combat';
 import { createRunState } from './sim/run-state';
@@ -25,6 +29,9 @@ import type { RunState } from './sim/run-state';
 import { parseSeedParam, seedToSearchParam } from './sim/seed-url';
 import { advanceLane, createLane } from './sim/travel';
 import type { LaneState } from './sim/travel';
+import type { InputState } from './surface/clone';
+import { createSurface, updateSurface } from './surface/surface';
+import type { SurfaceState } from './surface/surface';
 
 /**
  * The React↔game boundary (ADR 001). React components import this module and nothing
@@ -49,10 +56,14 @@ export type {
 export interface GameCallbacks {
   onCombatUpdate(view: CombatView): void;
   onScaleChange?(zoom: number): void;
+  /** Fired once after init with the resolved game mode. */
+  onModeChange?(mode: 'combat' | 'surface'): void;
 }
 
 export interface GameHandle {
   readonly seed: string;
+  /** Which mode was resolved at init time. */
+  readonly mode: 'combat' | 'surface';
   playCard(handIndex: number): void;
   /** Hull innate ability; handIndex only for card-targeted innates (Slipstream). */
   useInnate(handIndex?: number): void;
@@ -67,6 +78,11 @@ export interface GameHandle {
   continueTravel(): void;
   /** Fresh run from the same seed — the post-defeat restart. */
   restartRun(): void;
+  /**
+   * Surface mode input: called by TouchControls on pointer events.
+   * No-op in combat mode.
+   */
+  surfaceInput(action: 'left' | 'right' | 'jump' | 'attack', pressed: boolean): void;
   destroy(): void;
 }
 
@@ -107,6 +123,15 @@ function resolveEnemyPool(): readonly EnemyId[] | undefined {
 }
 
 /**
+ * Dev/test knob until the sector map drives mode entry (4.1): `?mode=surface`
+ * activates the platformer. Unknown values fall back to 'combat'.
+ */
+function resolveMode(): 'combat' | 'surface' {
+  const param = new URLSearchParams(window.location.search).get('mode');
+  return param === 'surface' ? 'surface' : 'combat';
+}
+
+/**
  * The session seed: a valid `?seed=` in the URL wins; otherwise a fresh seed is
  * generated from platform entropy and written back into the URL so every run is
  * shareable/reproducible. Entropy is allowed here at the edge — inside the sim all
@@ -127,6 +152,8 @@ function generateSeed(): string {
 
 export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Promise<GameHandle> {
   const seed = resolveSeed();
+  const gameMode = resolveMode();
+
   TextureSource.defaultOptions.scaleMode = 'nearest';
   const app = new Application();
   await app.init({
@@ -140,6 +167,84 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   });
   host.appendChild(app.canvas);
 
+  const applyScale = (): void => {
+    const rect = host.getBoundingClientRect();
+    const scale = computeScale(rect.width, rect.height, window.devicePixelRatio);
+    app.renderer.resize(scale.backingWidth, scale.backingHeight);
+    app.stage.scale.set(scale.zoom);
+    app.canvas.style.width = `${scale.cssWidth}px`;
+    app.canvas.style.height = `${scale.cssHeight}px`;
+    callbacks.onScaleChange?.(scale.zoom);
+  };
+  applyScale();
+  const observer = new ResizeObserver(applyScale);
+  observer.observe(host);
+
+  // ── Surface mode ──────────────────────────────────────────────────────────
+  if (gameMode === 'surface') {
+    const surfaceState: SurfaceState = createSurface(ROCKY_TEST_LEVEL);
+    const surfaceRenderer: SurfaceRenderer = createSurfaceRenderer(app);
+
+    // Held-key snapshot owned by main.ts; rising-edge detection is in clone.ts
+    const input: InputState = { left: false, right: false, jump: false, attack: false };
+
+    // Keyboard listeners — removed in destroy()
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.repeat) return;
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = true;
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true;
+      if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') input.jump = true;
+      if (e.code === 'KeyX' || e.code === 'KeyJ') input.attack = true;
+    };
+    const onKeyUp = (e: KeyboardEvent): void => {
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
+      if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') input.jump = false;
+      if (e.code === 'KeyX' || e.code === 'KeyJ') input.attack = false;
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+
+    // Fixed-timestep accumulator loop (ADR 004)
+    let acc = 0;
+    const tickFn = (ticker: { deltaMS: number }): void => {
+      acc += Math.min(ticker.deltaMS, MAX_FRAME_MS);
+      while (acc >= FIXED_DT_MS) {
+        updateSurface(surfaceState, input, FIXED_DT_MS);
+        acc -= FIXED_DT_MS;
+      }
+      surfaceRenderer.sync(surfaceState);
+    };
+    app.ticker.add(tickFn);
+
+    // Notify React once so it switches to surface UI (no HUD, no hand)
+    callbacks.onModeChange?.('surface');
+
+    return {
+      seed,
+      mode: 'surface',
+      // Combat commands are no-ops in surface mode
+      playCard(): void {},
+      useInnate(): void {},
+      endTurn(): void {},
+      payToll(): void {},
+      continueTravel(): void {},
+      restartRun(): void {},
+      surfaceInput(action, pressed): void {
+        input[action] = pressed;
+      },
+      destroy(): void {
+        app.ticker.remove(tickFn);
+        window.removeEventListener('keydown', onKeyDown);
+        window.removeEventListener('keyup', onKeyUp);
+        observer.disconnect();
+        surfaceRenderer.destroy();
+        app.destroy(true, { children: true, texture: true });
+      },
+    };
+  }
+
+  // ── Combat mode ───────────────────────────────────────────────────────────
   const renderer: SpaceRenderer = createSpaceRenderer(app);
 
   const hullId = resolveHull();
@@ -173,23 +278,12 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     callbacks.onCombatUpdate(view);
   };
 
-  const applyScale = (): void => {
-    const rect = host.getBoundingClientRect();
-    const scale = computeScale(rect.width, rect.height, window.devicePixelRatio);
-    app.renderer.resize(scale.backingWidth, scale.backingHeight);
-    app.stage.scale.set(scale.zoom);
-    app.canvas.style.width = `${scale.cssWidth}px`;
-    app.canvas.style.height = `${scale.cssHeight}px`;
-    callbacks.onScaleChange?.(scale.zoom);
-  };
-  applyScale();
-  const observer = new ResizeObserver(applyScale);
-  observer.observe(host);
-
   emit();
+  callbacks.onModeChange?.('combat');
 
   return {
     seed,
+    mode: 'combat',
     playCard(handIndex: number): void {
       if (combat.outcome !== 'ongoing') return;
       const card = combat.hand[handIndex];
@@ -233,6 +327,9 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       lane = createLane(run, enemyPool);
       combat = nextEncounter();
       emit();
+    },
+    surfaceInput(): void {
+      // No-op in combat mode
     },
     destroy(): void {
       observer.disconnect();
