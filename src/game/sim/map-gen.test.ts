@@ -73,7 +73,8 @@ describe('generateSectorMap', () => {
         expect(column.length).toBeGreaterThanOrEqual(MAP_COLUMN_NODES_MIN);
         expect(column.length).toBeLessThanOrEqual(MAP_COLUMN_NODES_MAX);
         for (const node of column) {
-          expect(['planet', 'combat', 'cache']).toContain(node.type);
+          // Nodes are realspace destinations — combat exists only on lanes
+          expect(['planet', 'cache']).toContain(node.type);
         }
       }
     }

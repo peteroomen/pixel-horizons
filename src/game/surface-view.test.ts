@@ -32,6 +32,20 @@ describe('buildSurfaceView', () => {
     expect(view.podWarning).toBe(false);
   });
 
+  it('canLaunch flips when the clone stands on the pod (and the view emits)', () => {
+    const state = createSurface(POD_LEVEL);
+    const a = buildSurfaceView(state);
+    expect(a.canLaunch).toBe(false);
+
+    state.clone.body.x = 40; // inside the pod AABB
+    const b = buildSurfaceView(state);
+    expect(b.canLaunch).toBe(true);
+    expect(surfaceViewEquals(a, b)).toBe(false);
+
+    state.outcome = 'abandoned';
+    expect(buildSurfaceView(state).canLaunch).toBe(false);
+  });
+
   it('copies Resources — mutating the view does not touch sim state', () => {
     const state = createSurface(POD_LEVEL);
     const view = buildSurfaceView(state);

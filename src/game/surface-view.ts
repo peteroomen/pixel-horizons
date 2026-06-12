@@ -1,6 +1,7 @@
 import { POD_WARNING_MS } from '@/game/data/surface';
 import type { Resources } from '@/game/sim/run-state';
 import { backpackUsed } from './surface/mining';
+import { canLaunchPod } from './surface/surface';
 import type { SurfaceOutcome, SurfaceState } from './surface/surface';
 
 export interface SurfaceItemView {
@@ -27,6 +28,8 @@ export interface SurfaceView {
   backpackUsed: number;
   backpackCapacity: number;
   deposited: Resources;
+  /** Clone is standing on the pod — the LAUNCH button is offered (GDD §6.2). */
+  canLaunch: boolean;
   outcome: SurfaceOutcome;
   /** Backpack contents lost at a stranded launch — for the result overlay. Null otherwise. */
   lostBackpack: Resources | null;
@@ -52,6 +55,7 @@ export function buildSurfaceView(state: SurfaceState): SurfaceView {
     backpackUsed: backpackUsed(clone.backpack),
     backpackCapacity: loadout.backpackCapacity,
     deposited: pod === null ? { ...ZERO_RESOURCES } : { ...pod.deposited },
+    canLaunch: canLaunchPod(state),
     outcome: state.outcome,
     lostBackpack: state.lostBackpack === null ? null : { ...state.lostBackpack },
     items: loadout.items.map((item) => ({
@@ -93,6 +97,7 @@ export function surfaceViewEquals(a: SurfaceView, b: SurfaceView): boolean {
     a.podWarning === b.podWarning &&
     a.backpackUsed === b.backpackUsed &&
     a.backpackCapacity === b.backpackCapacity &&
+    a.canLaunch === b.canLaunch &&
     a.outcome === b.outcome &&
     resourcesEqual(a.backpack, b.backpack) &&
     resourcesEqual(a.deposited, b.deposited) &&

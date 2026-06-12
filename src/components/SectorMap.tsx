@@ -10,7 +10,6 @@ interface SectorMapProps {
 const NODE_LABEL: Record<MapNodeView['type'], string> = {
   start: 'START',
   planet: 'PLANET',
-  combat: 'COMBAT',
   cache: 'CACHE',
   gate: 'GATE',
 };

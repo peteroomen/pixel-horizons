@@ -32,16 +32,13 @@ export const MAP_MIDDLE_COLUMNS = 4;
 export const MAP_COLUMN_NODES_MIN = 2;
 export const MAP_COLUMN_NODES_MAX = 3;
 
-/** Relative weights for middle-column node types. */
-export const MAP_NODE_WEIGHTS = { planet: 4, combat: 4, cache: 2 } as const;
+/**
+ * Relative weights for middle-column node types. Nodes are realspace
+ * destinations — combat happens only on lanes (GDD §2/§5.1); shop/event
+ * node types join the table in 4.3/4.4.
+ */
+export const MAP_NODE_WEIGHTS = { planet: 4, cache: 2 } as const;
 
 /** Scrap band for cache nodes — a free find, placeholder for events/shops (4.3/4.4). */
 export const CACHE_SCRAP_MIN = 5;
 export const CACHE_SCRAP_MAX = 10;
-
-/**
- * The forced encounter at a combat node (GDD §7.2), run as a short lane so the
- * whole encounter machinery (escape-by-arrival included) applies. Elite
- * variants arrive in 5.1.
- */
-export const NODE_COMBAT_LANE = { distance: 6, encounterCount: 1 } as const;

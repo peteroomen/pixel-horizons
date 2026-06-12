@@ -5,7 +5,7 @@ import { createSurfaceRenderer } from '@/renderer/surface-renderer';
 import type { SurfaceRenderer } from '@/renderer/surface-renderer';
 import type { InputState } from '../surface/clone';
 import type { SurfaceLoadout } from '../surface/items';
-import { createSurface, updateSurface } from '../surface/surface';
+import { abandonSurface, createSurface, launchPod, updateSurface } from '../surface/surface';
 import type { SurfaceState } from '../surface/surface';
 import { buildSurfaceView, surfaceViewEquals } from '../surface-view';
 import type { SurfaceView } from '../surface-view';
@@ -32,6 +32,10 @@ export interface SurfaceModeCallbacks {
 
 export interface SurfaceMode {
   input(action: SurfaceAction, pressed: boolean): void;
+  /** Manual early launch — no-op unless the clone is on the pod. */
+  launchPod(): void;
+  /** Recall the clone to orbit — the always-available soft-lock escape valve. */
+  abandon(): void;
   /** Read-only access for the orchestrator (banking deposits on exit). */
   state(): SurfaceState;
   destroy(): void;
@@ -98,6 +102,14 @@ export function startSurfaceMode(
   return {
     input(action, pressed): void {
       input[action] = pressed;
+    },
+    launchPod(): void {
+      launchPod(surfaceState);
+      emit();
+    },
+    abandon(): void {
+      abandonSurface(surfaceState);
+      emit();
     },
     state(): SurfaceState {
       return surfaceState;

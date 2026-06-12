@@ -65,7 +65,24 @@ export default function Home() {
   const [phase, setPhase] = useState<GamePhase | null>(null);
   const [surfaceView, setSurfaceView] = useState<SurfaceView | null>(null);
   const [mapView, setMapView] = useState<MapView | null>(null);
+  const [abandonArmed, setAbandonArmed] = useState(false);
   const handleRef = useRef<GameHandle | null>(null);
+  const abandonTimerRef = useRef<number | null>(null);
+
+  // Abandon costs the backpack — a misclick shouldn't. First tap arms, second confirms.
+  const onAbandon = () => {
+    if (abandonTimerRef.current !== null) {
+      window.clearTimeout(abandonTimerRef.current);
+      abandonTimerRef.current = null;
+    }
+    if (!abandonArmed) {
+      setAbandonArmed(true);
+      abandonTimerRef.current = window.setTimeout(() => setAbandonArmed(false), 2500);
+      return;
+    }
+    setAbandonArmed(false);
+    handleRef.current?.abandonSurface();
+  };
 
   const onCombatUpdate = useCallback((next: CombatView) => {
     setView(next);
@@ -78,6 +95,7 @@ export default function Home() {
 
   const onPhaseChange = useCallback((next: GamePhase) => {
     setPhase(next);
+    setAbandonArmed(false);
   }, []);
 
   const onSurfaceUpdate = useCallback((next: SurfaceView) => {
@@ -124,7 +142,7 @@ export default function Home() {
         <SectorMap view={mapView} onSelect={(id) => handleRef.current?.selectNode(id)} />
       )}
 
-      {/* Surface: HUD + touch controls + launch result */}
+      {/* Surface: HUD + touch controls + launch/abandon + launch result */}
       {phase === 'surface' && (
         <>
           {surfaceView !== null && <SurfaceHUD view={surfaceView} />}
@@ -133,14 +151,41 @@ export default function Home() {
             onInput={(action, pressed) => handleRef.current?.surfaceInput(action, pressed)}
           />
 
+          {surfaceView !== null && surfaceView.outcome === 'ongoing' && (
+            <div className="pointer-events-none absolute inset-x-0 top-2 flex flex-col items-center gap-2 sm:top-4">
+              {/* Early return (GDD §6.2): mined out? Walk to the pod and leave. */}
+              {surfaceView.canLaunch && (
+                <FoundryButton variant="primary" onClick={() => handleRef.current?.launchPod()}>
+                  Launch Pod
+                </FoundryButton>
+              )}
+              {/* Escape valve for soft-locks — always available, two-tap confirm */}
+              <button
+                type="button"
+                onClick={onAbandon}
+                className={`retro pointer-events-auto border-2 px-2 py-1 text-[8px] sm:text-[10px] ${
+                  abandonArmed
+                    ? 'border-[#e94560] bg-[#e94560]/20 text-[#e94560]'
+                    : 'border-[#4a4a6a] bg-[#1a1a2e]/80 text-white/60'
+                }`}
+              >
+                {abandonArmed ? 'CONFIRM ABANDON?' : 'ABANDON'}
+              </button>
+            </div>
+          )}
+
           {surfaceView !== null && surfaceView.outcome !== 'ongoing' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-black/70">
-              <span className="retro text-3xl text-white sm:text-5xl">POD LAUNCHED</span>
+              <span className="retro text-3xl text-white sm:text-5xl">
+                {surfaceView.outcome === 'abandoned' ? 'PLANET ABANDONED' : 'POD LAUNCHED'}
+              </span>
               {surfaceView.outcome === 'aboard' ? (
                 <span className="retro text-sm text-[#4fc3f7] sm:text-base">CLONE ABOARD</span>
               ) : (
                 <span className="retro text-sm text-[#e94560] sm:text-base">
-                  CLONE STRANDED — CONSCIOUSNESS RECALLED
+                  {surfaceView.outcome === 'abandoned'
+                    ? 'CLONE RECALLED — BACKPACK LOST'
+                    : 'CLONE STRANDED — CONSCIOUSNESS RECALLED'}
                 </span>
               )}
               <div className="retro flex gap-10 text-[10px] text-white sm:text-xs">

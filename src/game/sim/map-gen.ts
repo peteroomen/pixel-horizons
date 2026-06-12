@@ -24,7 +24,12 @@ import type { Rng } from './rng';
  * from the RunState's seed (ADR 005).
  */
 
-export type NodeType = 'start' | 'planet' | 'combat' | 'cache' | 'gate';
+/**
+ * Nodes are realspace destinations — the Bloom can't follow there (GDD §2).
+ * Combat exists only on the edges (lane encounters); danger is a property of
+ * the path, never of the destination.
+ */
+export type NodeType = 'start' | 'planet' | 'cache' | 'gate';
 
 export interface LaneParams {
   /** Lane length in turns of travel (GDD §5.1). */

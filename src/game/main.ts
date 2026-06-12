@@ -4,7 +4,7 @@ import { ROCKY_TEST_LEVEL } from '@/game/data/levels';
 import { POD_WINDOW_MS } from '@/game/data/surface';
 import { computeScale, VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from '@/renderer/pixel-scale';
 import type { CombatView } from './combat-view';
-import { BASELINE_AP, NODE_COMBAT_LANE, getEnemy, getHull } from './data';
+import { BASELINE_AP, getEnemy, getHull } from './data';
 import type { EnemyId } from './data';
 import { buildMapView } from './map-view';
 import type { MapView } from './map-view';
@@ -31,9 +31,13 @@ import type { SurfaceView } from './surface-view';
  * loop for the duration of one phase:
  *
  *   title ──new/resume──▶ map ──selectNode──▶ lane ──onArrival──▶ node entry
- *   node entry: cache → map · combat → forced-encounter lane → map ·
- *               planet → surface ──continueFromNode──▶ map · gate → sector-complete
+ *   node entry: cache → map · planet → surface ──continueFromNode──▶ map ·
+ *               gate → sector-complete
  *   lane ──onDefeat──▶ run-over · run-over/sector-complete ──newRun──▶ map
+ *
+ *   Combat lives in the lanes and only the lanes (GDD §2/§5.1): nodes are
+ *   realspace, where the Bloom can't follow — arrival always resolves straight
+ *   to the node's screen.
  *
  * Command methods guard instead of throwing: a double-tap racing a phase change
  * is normal pointer input and must be a quiet no-op.
@@ -84,6 +88,10 @@ export interface GameHandle {
   continueTravel(): void;
   /** Map phase: travel to a node one lane-hop away. */
   selectNode(nodeId: string): void;
+  /** Surface phase: launch the pod early — no-op unless the clone is on the pod. */
+  launchPod(): void;
+  /** Surface phase: recall the clone to orbit (backpack lost, deposits safe). */
+  abandonSurface(): void;
   /** Surface result screen: bank pod deposits into the run and return to the map. */
   continueFromNode(): void;
   /** Title screen: continue the saved run. */
@@ -223,8 +231,6 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   let surfaceMode: SurfaceMode | null = null;
   /** Node the active lane travels toward. */
   let laneDestination: string | null = null;
-  /** Combat-node arrivals owe one forced encounter before the node resolves. */
-  let nodeFightPending = false;
   /** Run loaded from storage, held until the title screen resolves. */
   let savedRun: RunState | null = null;
 
@@ -289,12 +295,6 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     if (laneDestination === null) return;
     const node = getNode(map, laneDestination);
     run.position.nodeId = node.id;
-    if (node.type === 'combat' && nodeFightPending) {
-      // The node's forced encounter (GDD §7.2) — a short lane of its own
-      nodeFightPending = false;
-      startLane(NODE_COMBAT_LANE);
-      return;
-    }
     laneDestination = null;
     if (node.type === 'cache') {
       run.resources.scrap += node.cacheScrap ?? 0;
@@ -351,8 +351,13 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       const edge = edgesFrom(map, run.position.nodeId).find((e) => e.to === nodeId);
       if (edge === undefined) return;
       laneDestination = nodeId;
-      nodeFightPending = getNode(map, nodeId).type === 'combat';
       startLane(edge.lane);
+    },
+    launchPod(): void {
+      surfaceMode?.launchPod();
+    },
+    abandonSurface(): void {
+      surfaceMode?.abandon();
     },
     continueFromNode(): void {
       if (phase !== 'surface' || surfaceMode === null) return;

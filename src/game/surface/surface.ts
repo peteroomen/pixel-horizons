@@ -13,9 +13,11 @@ import type { Tilemap } from './tilemap';
 /**
  * How a surface run ended (GDD §6.2/§6.4): 'aboard' — clone was on the pod at
  * launch, everything banked; 'stranded' — pod left without the clone, backpack
- * lost, deposited resources safe, consciousness snaps to orbit.
+ * lost, deposited resources safe, consciousness snaps to orbit; 'abandoned' —
+ * the player recalled the clone early (escape valve for soft-locks), same
+ * consequences as stranded.
  */
-export type SurfaceOutcome = 'ongoing' | 'aboard' | 'stranded';
+export type SurfaceOutcome = 'ongoing' | 'aboard' | 'stranded' | 'abandoned';
 
 export interface SurfaceState {
   map: Tilemap;
@@ -81,9 +83,51 @@ export function updateSurface(state: SurfaceState, input: InputState, dtMs: numb
     if (overlapping) {
       state.outcome = 'aboard';
     } else {
-      state.outcome = 'stranded';
-      state.lostBackpack = { ...state.clone.backpack };
-      state.clone.backpack = { scrap: 0, biominerals: 0, coreCrystals: 0, blueprints: 0 };
+      strandClone(state, 'stranded');
     }
   }
+}
+
+/** Backpack is lost, deposits stay safe, the sim freezes (GDD §6.2). */
+function strandClone(state: SurfaceState, outcome: 'stranded' | 'abandoned'): void {
+  state.outcome = outcome;
+  state.lostBackpack = { ...state.clone.backpack };
+  state.clone.backpack = { scrap: 0, biominerals: 0, coreCrystals: 0, blueprints: 0 };
+  if (state.pod !== null) {
+    state.pod.launched = true;
+  }
+}
+
+/** Whether a manual early launch is currently possible (clone standing on the pod). */
+export function canLaunchPod(state: SurfaceState): boolean {
+  return (
+    state.outcome === 'ongoing' &&
+    state.pod !== null &&
+    !state.pod.launched &&
+    podOverlapsClone(state.pod, state.clone.body)
+  );
+}
+
+/**
+ * Manual early launch (GDD §6.2 — the timer forces you out, but mining out the
+ * map shouldn't force you to wait it out). Only fires with the clone on the
+ * pod: the backpack deposits first, so 'aboard' banks everything, same as an
+ * on-pod expiry. No-op otherwise — callers gate UI on canLaunchPod.
+ */
+export function launchPod(state: SurfaceState): void {
+  const { pod } = state;
+  if (pod === null || !canLaunchPod(state)) return;
+  depositBackpack(state.clone, pod);
+  pod.launched = true;
+  state.outcome = 'aboard';
+}
+
+/**
+ * Recall the clone to orbit immediately — the always-available escape valve
+ * for soft-locks (unclimbable pits). Same consequences as missing the launch
+ * window: backpack lost, deposits safe.
+ */
+export function abandonSurface(state: SurfaceState): void {
+  if (state.outcome !== 'ongoing') return;
+  strandClone(state, 'abandoned');
 }

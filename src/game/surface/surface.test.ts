@@ -8,7 +8,7 @@ import {
 } from '@/game/data/surface';
 import type { InputState } from './clone';
 import { baselineLoadout } from './items';
-import { createSurface, updateSurface } from './surface';
+import { abandonSurface, canLaunchPod, createSurface, launchPod, updateSurface } from './surface';
 import type { SurfaceState } from './surface';
 
 /**
@@ -141,6 +141,83 @@ describe('launch outcomes', () => {
     const snapshot = JSON.parse(JSON.stringify(state)) as SurfaceState;
     run(state, { ...IDLE, right: true, jump: true, attack: true }, 30);
     expect(state).toEqual(snapshot);
+  });
+});
+
+describe('early launch', () => {
+  it('clone on the pod → launchPod banks the backpack and ends aboard', () => {
+    const state = createSurface(POD_ARENA);
+    mineSpawnDeposit(state);
+    run(state, RIGHT, 15); // onto the pod (auto-deposit fires en route)
+    expect(canLaunchPod(state)).toBe(true);
+    launchPod(state);
+    expect(state.outcome).toBe('aboard');
+    expect(state.pod?.launched).toBe(true);
+    expect(state.pod?.deposited.biominerals).toBe(BIOMINERAL_DEPOSIT_YIELD);
+    expect(state.clone.backpack.biominerals).toBe(0);
+    expect(state.lostBackpack).toBeNull();
+  });
+
+  it('launchPod is a no-op away from the pod', () => {
+    const state = createSurface(POD_ARENA);
+    mineSpawnDeposit(state); // clone is at spawn, off the pod
+    expect(canLaunchPod(state)).toBe(false);
+    launchPod(state);
+    expect(state.outcome).toBe('ongoing');
+    expect(state.pod?.launched).toBe(false);
+    expect(state.clone.backpack.biominerals).toBe(BIOMINERAL_DEPOSIT_YIELD);
+  });
+
+  it('launchPod is a no-op on pod-less levels and after launch', () => {
+    const podless = createSurface(['######', '#P...#', '######']);
+    launchPod(podless);
+    expect(podless.outcome).toBe('ongoing');
+
+    const state = createSurface(POD_ARENA, { podWindowMs: 100 });
+    run(state, IDLE, 30); // expires — stranded
+    launchPod(state);
+    expect(state.outcome).toBe('stranded');
+  });
+});
+
+describe('abandon', () => {
+  it('loses the backpack, keeps deposits, and freezes the sim', () => {
+    const state = createSurface(POD_ARENA);
+    mineSpawnDeposit(state);
+    run(state, RIGHT, 15); // deposit at the pod
+    run(state, RIGHT, 30); // walk past it, mine nothing more
+    state.clone.backpack.scrap = 3; // simulate undeposited haul
+    abandonSurface(state);
+    expect(state.outcome).toBe('abandoned');
+    expect(state.lostBackpack).toEqual({
+      scrap: 3,
+      biominerals: 0,
+      coreCrystals: 0,
+      blueprints: 0,
+    });
+    expect(state.clone.backpack).toEqual({
+      scrap: 0,
+      biominerals: 0,
+      coreCrystals: 0,
+      blueprints: 0,
+    });
+    expect(state.pod?.deposited.biominerals).toBe(BIOMINERAL_DEPOSIT_YIELD);
+    expect(state.pod?.launched).toBe(true);
+
+    const snapshot = JSON.parse(JSON.stringify(state)) as SurfaceState;
+    run(state, { ...IDLE, right: true, jump: true, attack: true }, 30);
+    expect(state).toEqual(snapshot);
+  });
+
+  it('works on pod-less levels and is a no-op once ended', () => {
+    const podless = createSurface(['######', '#P...#', '######']);
+    abandonSurface(podless);
+    expect(podless.outcome).toBe('abandoned');
+
+    const state = createSurface(POD_ARENA, { podWindowMs: 100 });
+    run(state, IDLE, 30); // expires — stranded
+    abandonSurface(state);
+    expect(state.outcome).toBe('stranded');
   });
 });
 
