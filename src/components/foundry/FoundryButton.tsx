@@ -18,7 +18,7 @@ export default function FoundryButton({
       <button
         type="button"
         disabled={disabled}
-        className={`pointer-events-auto chamfer chamfer-5 sm:chamfer-8 bg-fd-orange font-label text-fd-label uppercase text-fd-ink-dark min-h-11 sm:min-h-[52px] px-4 active:bg-fd-orange-press disabled:opacity-40 disabled:pointer-events-none ${className ?? ''}`}
+        className={`pointer-events-auto chamfer chamfer-5 sm:chamfer-8 bg-fd-orange font-label text-[8px] sm:text-fd-label uppercase text-fd-ink-dark min-h-11 sm:min-h-[52px] px-4 active:bg-fd-orange-press disabled:opacity-40 disabled:pointer-events-none ${className ?? ''}`}
         {...rest}
       >
         {children}
@@ -38,7 +38,7 @@ export default function FoundryButton({
       <button
         type="button"
         disabled={disabled}
-        className={`chamfer chamfer-5 sm:chamfer-8 ${fill} ${text} font-label text-fd-label uppercase min-h-11 sm:min-h-[52px] px-4 w-full`}
+        className={`chamfer chamfer-5 sm:chamfer-8 ${fill} ${text} font-label text-[8px] sm:text-fd-label uppercase min-h-11 sm:min-h-[52px] px-4 w-full`}
         {...rest}
       >
         {children}
@@ -51,7 +51,7 @@ export default function FoundryButton({
 function CostSpan({ cost }: { cost: { amount: number; resource: 'ap' | 'scrap' } }) {
   return (
     <span
-      className={`ml-1.5 font-readout ${cost.resource === 'ap' ? 'text-fd-orange' : 'text-fd-amber'}`}
+      className={`ml-1.5 font-readout text-[12px] sm:text-fd-label ${cost.resource === 'ap' ? 'text-fd-orange' : 'text-fd-amber'}`}
     >
       ({cost.amount} {cost.resource === 'ap' ? 'AP' : 'SCRAP'})
     </span>

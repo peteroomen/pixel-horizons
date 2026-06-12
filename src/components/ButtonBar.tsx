@@ -19,10 +19,13 @@ export default function ButtonBar({
   onPayToll,
 }: ButtonBarProps) {
   return (
-    <div className="flex flex-col items-end gap-2.5 sm:flex-row sm:items-end sm:gap-3">
+    // Mobile: fixed-width vertical stack, every button stretched to the same width,
+    // End Turn last (closest to thumb). Desktop: auto-width row.
+    <div className="flex w-48 shrink-0 flex-col items-stretch gap-2.5 sm:w-auto sm:flex-row sm:items-end sm:gap-3">
       {view.anchor !== null && (
         <FoundryButton
           variant="secondary"
+          className="w-full sm:w-auto"
           disabled={!view.anchor.payable}
           onClick={onPayToll}
           cost={{ amount: view.anchor.tollScrap, resource: 'scrap' }}
@@ -33,6 +36,7 @@ export default function ButtonBar({
       {!view.innate.passive && (
         <FoundryButton
           variant="secondary"
+          className="w-full sm:w-auto"
           armed={innateArmed}
           disabled={!view.innate.usable}
           title={view.innate.description}
@@ -42,7 +46,12 @@ export default function ButtonBar({
           {innateArmed ? 'Pick a card…' : view.innate.name}
         </FoundryButton>
       )}
-      <FoundryButton variant="primary" disabled={view.outcome !== 'ongoing'} onClick={onEndTurn}>
+      <FoundryButton
+        variant="primary"
+        className="w-full sm:w-auto"
+        disabled={view.outcome !== 'ongoing'}
+        onClick={onEndTurn}
+      >
         End Turn
       </FoundryButton>
     </div>

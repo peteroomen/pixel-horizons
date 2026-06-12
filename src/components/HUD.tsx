@@ -25,7 +25,7 @@ export default function HUD({ view, onEndTurn, onInnate, innateArmed, onPayToll 
 
       {/* Bottom: meta strip + button bar, above the hand */}
       {/* Hand heights: 142px mobile + 8px bottom inset + 8px breathing = 158px; 210px desktop + 16px bottom + 16px breathing = 242px */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-[158px] sm:bottom-[242px] flex items-end justify-between px-2 sm:px-6">
+      <div className="pointer-events-none absolute inset-x-0 bottom-[158px] sm:bottom-[242px] flex items-end justify-between gap-2 px-2 sm:gap-3 sm:px-6">
         <MetaStrip view={view} />
         <ButtonBar
           view={view}
