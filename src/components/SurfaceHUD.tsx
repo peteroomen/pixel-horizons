@@ -36,6 +36,18 @@ export default function SurfaceHUD({ view }: SurfaceHUDProps) {
             POD T-{formatTimer(view.podSecondsLeft)}
           </div>
         )}
+        {/* Projected items (GDD §6.3): dim = over the reactor cap */}
+        {view.items.map((item, i) => (
+          <div
+            key={`${item.name}-${i}`}
+            className={item.active ? 'text-[#4fc3f7]/90' : 'text-white/30 line-through'}
+          >
+            {item.name.toUpperCase()}
+          </div>
+        ))}
+        {view.dashCooldownSeconds !== null && view.dashCooldownSeconds > 0 && (
+          <div className="text-white/60">DASH {view.dashCooldownSeconds}s</div>
+        )}
       </div>
 
       <div className="retro space-y-1 text-right text-[10px] text-white sm:text-xs">

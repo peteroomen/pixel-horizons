@@ -38,3 +38,10 @@ export const MAP_NODE_WEIGHTS = { planet: 4, combat: 4, cache: 2 } as const;
 /** Scrap band for cache nodes — a free find, placeholder for events/shops (4.3/4.4). */
 export const CACHE_SCRAP_MIN = 5;
 export const CACHE_SCRAP_MAX = 10;
+
+/**
+ * The forced encounter at a combat node (GDD §7.2), run as a short lane so the
+ * whole encounter machinery (escape-by-arrival included) applies. Elite
+ * variants arrive in 5.1.
+ */
+export const NODE_COMBAT_LANE = { distance: 6, encounterCount: 1 } as const;

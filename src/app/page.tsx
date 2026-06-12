@@ -5,25 +5,25 @@ import { useCallback, useRef, useState } from 'react';
 import CombatHand from '@/components/CombatHand';
 import GameCanvas from '@/components/GameCanvas';
 import HUD from '@/components/HUD';
+import SectorMap from '@/components/SectorMap';
 import SurfaceHUD from '@/components/SurfaceHUD';
+import TitleOverlay from '@/components/TitleOverlay';
 import TouchControls from '@/components/TouchControls';
 import FoundryButton from '@/components/foundry/FoundryButton';
-import type { CombatView, GameHandle, SurfaceView } from '@/game/main';
+import type { CombatView, GameHandle, GamePhase, MapView, SurfaceView } from '@/game/main';
 
 const OUTCOME_COLOR: Record<string, string> = {
   victory: 'text-fd-orange',
   escaped: 'text-fd-amber',
-  defeat: 'text-fd-red',
 };
 
 function outcomeLabel(view: CombatView): string {
   if (view.outcome === 'victory') return 'VICTORY';
-  if (view.outcome === 'defeat') return 'DEFEAT';
   const arrived = view.travel !== null && view.travel.progress >= view.travel.distance;
   return arrived ? 'ARRIVED' : 'TOLL PAID';
 }
 
-const SURFACE_RESOURCE_LABELS: ReadonlyArray<[keyof SurfaceView['backpack'], string]> = [
+const RESOURCE_LABELS: ReadonlyArray<[keyof SurfaceView['backpack'], string]> = [
   ['scrap', 'SCRAP'],
   ['biominerals', 'BIO'],
   ['coreCrystals', 'CRYSTAL'],
@@ -32,7 +32,7 @@ const SURFACE_RESOURCE_LABELS: ReadonlyArray<[keyof SurfaceView['backpack'], str
 
 /** One "LABEL n" line per non-zero resource, or a dash when there is nothing. */
 function ResourceLines({ resources }: { resources: SurfaceView['backpack'] }) {
-  const lines = SURFACE_RESOURCE_LABELS.filter(([key]) => resources[key] > 0);
+  const lines = RESOURCE_LABELS.filter(([key]) => resources[key] > 0);
   if (lines.length === 0) {
     return <div className="text-white/40">—</div>;
   }
@@ -47,11 +47,24 @@ function ResourceLines({ resources }: { resources: SurfaceView['backpack'] }) {
   );
 }
 
+/** Run-total summary for the end screens, fed by the last MapView emission. */
+function RunSummary({ view }: { view: MapView }) {
+  return (
+    <div className="retro flex flex-col items-center gap-1 text-[10px] text-white sm:text-xs">
+      <div className="text-white/60">
+        {view.hullName.toUpperCase()} · HULL {view.hullHp}
+      </div>
+      <ResourceLines resources={view.resources} />
+    </div>
+  );
+}
+
 export default function Home() {
   const [view, setView] = useState<CombatView | null>(null);
   const [innateArmed, setInnateArmed] = useState(false);
-  const [mode, setMode] = useState<'combat' | 'surface' | null>(null);
+  const [phase, setPhase] = useState<GamePhase | null>(null);
   const [surfaceView, setSurfaceView] = useState<SurfaceView | null>(null);
+  const [mapView, setMapView] = useState<MapView | null>(null);
   const handleRef = useRef<GameHandle | null>(null);
 
   const onCombatUpdate = useCallback((next: CombatView) => {
@@ -63,12 +76,16 @@ export default function Home() {
     handleRef.current = handle;
   }, []);
 
-  const onModeChange = useCallback((m: 'combat' | 'surface') => {
-    setMode(m);
+  const onPhaseChange = useCallback((next: GamePhase) => {
+    setPhase(next);
   }, []);
 
   const onSurfaceUpdate = useCallback((next: SurfaceView) => {
     setSurfaceView(next);
+  }, []);
+
+  const onMapUpdate = useCallback((next: MapView) => {
+    setMapView(next);
   }, []);
 
   // Plain innates fire immediately; card-targeted ones (Slipstream) toggle arming.
@@ -81,20 +98,38 @@ export default function Home() {
     setInnateArmed((armed) => !armed);
   };
 
+  const hasDash = surfaceView !== null && surfaceView.dashCooldownSeconds !== null;
+
   return (
     <main className="fixed inset-0 touch-none select-none bg-fd-void">
       <GameCanvas
         onCombatUpdate={onCombatUpdate}
         onReady={onReady}
-        onModeChange={onModeChange}
+        onPhaseChange={onPhaseChange}
         onSurfaceUpdate={onSurfaceUpdate}
+        onMapUpdate={onMapUpdate}
       />
 
-      {/* Surface mode: HUD + touch controls + launch outcome overlay */}
-      {mode === 'surface' && (
+      {/* Title: a saved expedition exists */}
+      {phase === 'title' && mapView !== null && (
+        <TitleOverlay
+          view={mapView}
+          onResume={() => handleRef.current?.resumeRun()}
+          onNew={() => handleRef.current?.newRun()}
+        />
+      )}
+
+      {/* Sector map: pick the next node */}
+      {phase === 'map' && mapView !== null && (
+        <SectorMap view={mapView} onSelect={(id) => handleRef.current?.selectNode(id)} />
+      )}
+
+      {/* Surface: HUD + touch controls + launch result */}
+      {phase === 'surface' && (
         <>
           {surfaceView !== null && <SurfaceHUD view={surfaceView} />}
           <TouchControls
+            hasDash={hasDash}
             onInput={(action, pressed) => handleRef.current?.surfaceInput(action, pressed)}
           />
 
@@ -120,15 +155,19 @@ export default function Home() {
                   </div>
                 )}
               </div>
-              <FoundryButton variant="primary" onClick={() => handleRef.current?.restartRun()}>
-                Drop Again
+              <FoundryButton
+                variant="primary"
+                onClick={() => handleRef.current?.continueFromNode()}
+              >
+                Continue
               </FoundryButton>
             </div>
           )}
         </>
       )}
 
-      {mode === 'combat' && view !== null && (
+      {/* Lane: combat HUD + hand + between-encounter overlay */}
+      {phase === 'lane' && view !== null && (
         <>
           <HUD
             view={view}
@@ -146,28 +185,48 @@ export default function Home() {
             />
           </div>
 
-          {view.outcome !== 'ongoing' && (
+          {(view.outcome === 'victory' || view.outcome === 'escaped') && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-black/70">
               <span
                 className={`font-label text-3xl uppercase sm:text-5xl ${OUTCOME_COLOR[view.outcome]}`}
               >
                 {outcomeLabel(view)}
               </span>
-              {view.outcome === 'defeat' ? (
-                <FoundryButton variant="primary" onClick={() => handleRef.current?.restartRun()}>
-                  New Run
-                </FoundryButton>
-              ) : (
-                <FoundryButton
-                  variant="primary"
-                  onClick={() => handleRef.current?.continueTravel()}
-                >
-                  Continue
-                </FoundryButton>
-              )}
+              <FoundryButton variant="primary" onClick={() => handleRef.current?.continueTravel()}>
+                Continue
+              </FoundryButton>
             </div>
           )}
         </>
+      )}
+
+      {/* Run over: ship destroyed (GDD §6.4 — space risks are fatal) */}
+      {phase === 'run-over' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-black/80">
+          <span className="font-label text-3xl uppercase text-fd-red sm:text-5xl">
+            Ship Destroyed
+          </span>
+          {mapView !== null && <RunSummary view={mapView} />}
+          <FoundryButton variant="primary" onClick={() => handleRef.current?.newRun()}>
+            New Run
+          </FoundryButton>
+        </div>
+      )}
+
+      {/* Sector complete: reached the gate (boss arrives in 5.2) */}
+      {phase === 'sector-complete' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-black/80">
+          <span className="font-label text-3xl uppercase text-fd-orange sm:text-5xl">
+            Gate Reached
+          </span>
+          <span className="retro text-[10px] text-white/60 sm:text-xs">
+            SECTOR {mapView?.sector ?? 1} TRAVERSED — THE BLOOM GATE LOOMS
+          </span>
+          {mapView !== null && <RunSummary view={mapView} />}
+          <FoundryButton variant="primary" onClick={() => handleRef.current?.newRun()}>
+            New Run
+          </FoundryButton>
+        </div>
       )}
     </main>
   );
