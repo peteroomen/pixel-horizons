@@ -17,8 +17,8 @@ interface HUDProps {
 export default function HUD({ view, onEndTurn, onInnate, innateArmed, onPayToll }: HUDProps) {
   return (
     <>
-      {/* Top: hero plates */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 grid grid-cols-2 items-start gap-3 p-2 sm:p-6">
+      {/* Top: hero plates — content-sized at the screen edges, not full-width columns */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-2 sm:p-6">
         <PlayerPlate view={view} />
         <EnemyPlate view={view} />
       </div>

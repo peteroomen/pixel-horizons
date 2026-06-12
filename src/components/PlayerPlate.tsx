@@ -13,11 +13,11 @@ export default function PlayerPlate({ view }: PlayerPlateProps) {
     <Plate
       chamfer="chamfer-6 sm:chamfer-10"
       fillClassName="bg-fd-plate p-2.5 sm:p-4"
-      className="pointer-events-none"
+      className="pointer-events-none flex-1 sm:flex-none sm:w-[400px]"
     >
       <div className="space-y-1.5 sm:space-y-2.5">
-        {/* Hull row */}
-        <div className="flex items-baseline justify-between">
+        {/* Hull row — numeral sits next to the label, not far-right */}
+        <div className="flex items-baseline gap-2 sm:gap-3">
           <span className="font-label text-[8px] sm:text-fd-label text-fd-muted uppercase">
             Hull
           </span>
@@ -29,20 +29,9 @@ export default function PlayerPlate({ view }: PlayerPlateProps) {
         {/* Hull bar */}
         <StatBar value={view.hullHp} max={view.hullMaxHp} fillClassName="bg-fd-orange" />
 
-        {/* AP row */}
-        <div className="flex items-center gap-1">
-          <span className="font-label text-[8px] sm:text-fd-label text-fd-muted uppercase">AP</span>
-          {Array.from({ length: Math.max(view.apPerTurn, view.ap) }, (_, i) => (
-            <span
-              key={i}
-              className={`inline-block size-2.5 sm:size-3 ${i < view.ap ? 'bg-fd-orange' : 'bg-fd-strip'}`}
-            />
-          ))}
-        </div>
-
         {/* Shields row */}
         <div className="flex items-center gap-1">
-          <span className="font-label text-[8px] sm:text-fd-label text-fd-muted uppercase">
+          <span className="w-10 shrink-0 font-label text-[8px] sm:w-24 sm:text-fd-label text-fd-muted uppercase">
             <span className="sm:hidden">SHLD</span>
             <span className="hidden sm:inline">SHIELDS</span>
           </span>
@@ -66,6 +55,19 @@ export default function PlayerPlate({ view }: PlayerPlateProps) {
           ))}
         </div>
 
+        {/* AP row — squares column-align with the shield squares */}
+        <div className="flex items-center gap-1">
+          <span className="w-10 shrink-0 font-label text-[8px] sm:w-24 sm:text-fd-label text-fd-muted uppercase">
+            AP
+          </span>
+          {Array.from({ length: Math.max(view.apPerTurn, view.ap) }, (_, i) => (
+            <span
+              key={i}
+              className={`inline-block size-2.5 sm:size-3 ${i < view.ap ? 'bg-fd-orange' : 'bg-fd-strip'}`}
+            />
+          ))}
+        </div>
+
         {/* Malfunction warnings */}
         {view.modules
           .filter((m) => m.malfunctioning)
@@ -74,6 +76,13 @@ export default function PlayerPlate({ view }: PlayerPlateProps) {
               ⚠ {m.name.toUpperCase()} OFFLINE
             </div>
           ))}
+
+        {/* Anchor latch — always visible while held (archetype state, not intent info) */}
+        {view.anchor !== null && (
+          <div className="font-readout text-[13px] sm:text-fd-body text-fd-red">
+            ⚓ TRAVEL HALTED
+          </div>
+        )}
       </div>
     </Plate>
   );

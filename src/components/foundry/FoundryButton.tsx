@@ -53,8 +53,7 @@ function CostSpan({ cost }: { cost: { amount: number; resource: 'ap' | 'scrap' }
     <span
       className={`ml-1.5 font-readout ${cost.resource === 'ap' ? 'text-fd-orange' : 'text-fd-amber'}`}
     >
-      {cost.amount}
-      {cost.resource === 'ap' ? 'AP' : '⚙'}
+      ({cost.amount} {cost.resource === 'ap' ? 'AP' : 'SCRAP'})
     </span>
   );
 }
