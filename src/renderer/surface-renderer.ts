@@ -1,18 +1,33 @@
 import { Application, Container, Graphics } from 'pixi.js';
 
-import { TILE_SIZE } from '@/game/data/surface';
+import { POD_HEIGHT, POD_WARNING_MS, POD_WIDTH, TILE_SIZE } from '@/game/data/surface';
 import { attackHitbox } from '@/game/surface/clone';
-import { TILE_BREAKABLE, TILE_EMPTY, TILE_SOLID, tileAt } from '@/game/surface/tilemap';
+import {
+  TILE_BREAKABLE,
+  TILE_DEPOSIT_BIOMINERAL,
+  TILE_EMPTY,
+  TILE_SCRAP_CACHE,
+  TILE_SOLID,
+  tileAt,
+} from '@/game/surface/tilemap';
 import type { SurfaceState } from '@/game/surface/surface';
 import { VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from './pixel-scale';
 
 /** Rocky biome tile colors. */
 const COLOR_SOLID = 0x6b5a4a;
 const COLOR_BREAKABLE = 0xa07a3a;
+const COLOR_DEPOSIT = 0x3a8a6a;
+const COLOR_DEPOSIT_FLECK = 0x6fd0a8;
+const COLOR_CACHE = 0x8a8a92;
+const COLOR_CACHE_SEAM = 0x55555e;
 const COLOR_SKY = 0x1a1a2e;
 const COLOR_CLONE = 0xc8d8e8;
 const COLOR_VISOR = 0x4fc3f7;
 const COLOR_SLASH = 0xffffff;
+const COLOR_POD_HULL = 0xb0b8c0;
+const COLOR_POD_HULL_WARN = 0xe94560;
+const COLOR_POD_WINDOW = 0x4fc3f7;
+const COLOR_POD_BASE = 0x55555e;
 
 /** Backdrop rock sizes/positions — deterministic math, no RNG consumed. */
 const BACKDROP_ROCKS = Array.from({ length: 24 }, (_, i) => ({
@@ -46,6 +61,28 @@ export function createSurfaceRenderer(app: Application): SurfaceRenderer {
   const tileGfx = new Graphics();
   world.addChild(tileGfx);
   let lastTileVersion = -1;
+
+  // ── Drop pod ──────────────────────────────────────────────────────────────
+  // Two hull variants (normal / warning tint) so the urgency flash is a
+  // visibility toggle, not a per-frame Graphics rebuild.
+  const buildPodGfx = (hullColor: number): Graphics =>
+    new Graphics()
+      // landing skids
+      .rect(0, POD_HEIGHT - 4, POD_WIDTH, 4)
+      .fill(COLOR_POD_BASE)
+      // capsule hull
+      .rect(2, 4, POD_WIDTH - 4, POD_HEIGHT - 8)
+      .fill(hullColor)
+      // nose cap
+      .rect(6, 0, POD_WIDTH - 12, 4)
+      .fill(hullColor)
+      // viewport window
+      .rect(8, 12, POD_WIDTH - 16, 10)
+      .fill(COLOR_POD_WINDOW);
+  const podGfx = buildPodGfx(COLOR_POD_HULL);
+  const podWarnGfx = buildPodGfx(COLOR_POD_HULL_WARN);
+  world.addChild(podGfx);
+  world.addChild(podWarnGfx);
 
   // ── Clone sprite ──────────────────────────────────────────────────────────
   const cloneBody = new Graphics()
@@ -88,9 +125,43 @@ export function createSurfaceRenderer(app: Application): SurfaceRenderer {
                 .moveTo(px + 8, py + 3)
                 .lineTo(px + 5, py + 10)
                 .stroke({ color: 0x6b4a1a, width: 1 });
+            } else if (tile === TILE_DEPOSIT_BIOMINERAL) {
+              // Crystal flecks read as "minable" against the plain rock ochre
+              tileGfx
+                .rect(px, py, TILE_SIZE, TILE_SIZE)
+                .fill(COLOR_DEPOSIT)
+                .rect(px + 3, py + 4, 3, 3)
+                .fill(COLOR_DEPOSIT_FLECK)
+                .rect(px + 9, py + 8, 3, 3)
+                .fill(COLOR_DEPOSIT_FLECK)
+                .rect(px + 5, py + 11, 2, 2)
+                .fill(COLOR_DEPOSIT_FLECK);
+            } else if (tile === TILE_SCRAP_CACHE) {
+              // Metallic block with a seam line
+              tileGfx
+                .rect(px, py, TILE_SIZE, TILE_SIZE)
+                .fill(COLOR_CACHE)
+                .rect(px + 2, py + 7, TILE_SIZE - 4, 2)
+                .fill(COLOR_CACHE_SEAM);
             }
           }
         }
+      }
+
+      // Pod position + urgency flash (derived from sim time — deterministic)
+      const { pod } = state;
+      if (pod === null || pod.launched) {
+        podGfx.visible = false;
+        podWarnGfx.visible = false;
+      } else {
+        const flashWarn =
+          pod.remainingMs <= POD_WARNING_MS && Math.floor(pod.remainingMs / 250) % 2 === 0;
+        podGfx.visible = !flashWarn;
+        podWarnGfx.visible = flashWarn;
+        podGfx.x = pod.x;
+        podGfx.y = pod.y;
+        podWarnGfx.x = pod.x;
+        podWarnGfx.y = pod.y;
       }
 
       // Clone position + flip for facing direction

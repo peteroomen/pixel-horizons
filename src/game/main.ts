@@ -1,7 +1,7 @@
 import { Application, TextureSource } from 'pixi.js';
 
 import { ROCKY_TEST_LEVEL } from '@/game/data/levels';
-import { FIXED_DT_MS, MAX_FRAME_MS } from '@/game/data/surface';
+import { FIXED_DT_MS, MAX_FRAME_MS, POD_WINDOW_MS } from '@/game/data/surface';
 import { computeScale, VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from '@/renderer/pixel-scale';
 import { createSpaceRenderer } from '@/renderer/space-renderer';
 import type { SpaceRenderer } from '@/renderer/space-renderer';
@@ -32,6 +32,8 @@ import type { LaneState } from './sim/travel';
 import type { InputState } from './surface/clone';
 import { createSurface, updateSurface } from './surface/surface';
 import type { SurfaceState } from './surface/surface';
+import { buildSurfaceView, surfaceViewEquals } from './surface-view';
+import type { SurfaceView } from './surface-view';
 
 /**
  * The React↔game boundary (ADR 001). React components import this module and nothing
@@ -52,12 +54,18 @@ export type {
   ModuleView,
   ShieldLayerView,
 } from './combat-view';
+export type { SurfaceView } from './surface-view';
 
 export interface GameCallbacks {
   onCombatUpdate(view: CombatView): void;
   onScaleChange?(zoom: number): void;
   /** Fired once after init with the resolved game mode. */
   onModeChange?(mode: 'combat' | 'surface'): void;
+  /**
+   * Surface mode only: fired once per discrete change (pod second tick,
+   * mining, deposit, launch) — never per frame.
+   */
+  onSurfaceUpdate?(view: SurfaceView): void;
 }
 
 export interface GameHandle {
@@ -132,6 +140,17 @@ function resolveMode(): 'combat' | 'surface' {
 }
 
 /**
+ * Dev/test knob: `?pod=20` sets the launch window in seconds — manual testing
+ * shouldn't take 5 real minutes. Invalid values fall back to POD_WINDOW_MS.
+ */
+function resolvePodWindowMs(): number {
+  const param = new URLSearchParams(window.location.search).get('pod');
+  if (param === null) return POD_WINDOW_MS;
+  const seconds = Number.parseInt(param, 10);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : POD_WINDOW_MS;
+}
+
+/**
  * The session seed: a valid `?seed=` in the URL wins; otherwise a fresh seed is
  * generated from platform entropy and written back into the URL so every run is
  * shareable/reproducible. Entropy is allowed here at the edge — inside the sim all
@@ -182,11 +201,23 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
 
   // ── Surface mode ──────────────────────────────────────────────────────────
   if (gameMode === 'surface') {
-    const surfaceState: SurfaceState = createSurface(ROCKY_TEST_LEVEL);
+    const podWindowMs = resolvePodWindowMs();
+    let surfaceState: SurfaceState = createSurface(ROCKY_TEST_LEVEL, { podWindowMs });
     const surfaceRenderer: SurfaceRenderer = createSurfaceRenderer(app);
 
     // Held-key snapshot owned by main.ts; rising-edge detection is in clone.ts
     const input: InputState = { left: false, right: false, jump: false, attack: false };
+
+    // Emit a SurfaceView only when it differs from the last one — once per
+    // discrete change (timer second, mining, deposit, launch), never per frame.
+    let lastView: SurfaceView | null = null;
+    const emitSurface = (): void => {
+      const view = buildSurfaceView(surfaceState);
+      if (lastView === null || !surfaceViewEquals(lastView, view)) {
+        lastView = view;
+        callbacks.onSurfaceUpdate?.(view);
+      }
+    };
 
     // Keyboard listeners — removed in destroy()
     const onKeyDown = (e: KeyboardEvent): void => {
@@ -214,11 +245,13 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
         acc -= FIXED_DT_MS;
       }
       surfaceRenderer.sync(surfaceState);
+      emitSurface();
     };
     app.ticker.add(tickFn);
 
-    // Notify React once so it switches to surface UI (no HUD, no hand)
+    // Notify React once so it switches to surface UI, then seed the HUD
     callbacks.onModeChange?.('surface');
+    emitSurface();
 
     return {
       seed,
@@ -229,7 +262,13 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       endTurn(): void {},
       payToll(): void {},
       continueTravel(): void {},
-      restartRun(): void {},
+      restartRun(): void {
+        // Fresh drop on the same level — the post-launch "Drop Again" button
+        if (surfaceState.outcome === 'ongoing') return;
+        surfaceState = createSurface(ROCKY_TEST_LEVEL, { podWindowMs });
+        lastView = null;
+        emitSurface();
+      },
       surfaceInput(action, pressed): void {
         input[action] = pressed;
       },
