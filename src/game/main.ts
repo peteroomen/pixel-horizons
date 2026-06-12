@@ -90,7 +90,7 @@ export interface GameHandle {
    * Surface mode input: called by TouchControls on pointer events.
    * No-op in combat mode.
    */
-  surfaceInput(action: 'left' | 'right' | 'jump' | 'attack', pressed: boolean): void;
+  surfaceInput(action: 'left' | 'right' | 'jump' | 'attack' | 'dash', pressed: boolean): void;
   destroy(): void;
 }
 
@@ -206,7 +206,13 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     const surfaceRenderer: SurfaceRenderer = createSurfaceRenderer(app);
 
     // Held-key snapshot owned by main.ts; rising-edge detection is in clone.ts
-    const input: InputState = { left: false, right: false, jump: false, attack: false };
+    const input: InputState = {
+      left: false,
+      right: false,
+      jump: false,
+      attack: false,
+      dash: false,
+    };
 
     // Emit a SurfaceView only when it differs from the last one — once per
     // discrete change (timer second, mining, deposit, launch), never per frame.
@@ -226,12 +232,15 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true;
       if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') input.jump = true;
       if (e.code === 'KeyX' || e.code === 'KeyJ') input.attack = true;
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'KeyK') input.dash = true;
     };
     const onKeyUp = (e: KeyboardEvent): void => {
       if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
       if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
       if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') input.jump = false;
       if (e.code === 'KeyX' || e.code === 'KeyJ') input.attack = false;
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'KeyK')
+        input.dash = false;
     };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);

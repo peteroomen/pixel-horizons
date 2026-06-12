@@ -25,7 +25,7 @@ const POD_ARENA: string[] = [
   '##########',
 ];
 
-const IDLE: InputState = { left: false, right: false, jump: false, attack: false };
+const IDLE: InputState = { left: false, right: false, jump: false, attack: false, dash: false };
 const RIGHT: InputState = { ...IDLE, right: true };
 const ATTACK: InputState = { ...IDLE, attack: true };
 

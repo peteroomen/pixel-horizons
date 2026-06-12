@@ -45,6 +45,15 @@ export const COYOTE_TIME_MS = 80;
  */
 export const JUMP_BUFFER_MS = 100;
 
+/**
+ * Granularity of the dash landing-spot scan in px. The dash tries the farthest
+ * spot first and walks back by this step until a free spot is found.
+ */
+export const DASH_SCAN_STEP_PX = 4;
+
+/** How long the dash afterimage ghost stays visible (cosmetic, sim-timed). */
+export const DASH_GHOST_MS = 150;
+
 /** Total attack animation duration in ms. */
 export const ATTACK_DURATION_MS = 180;
 

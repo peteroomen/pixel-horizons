@@ -62,6 +62,26 @@ export function moveBody(body: Body, map: Tilemap, dtMs: number): MoveResult {
   return { onGround, hitWall, hitCeiling };
 }
 
+/** True if any solid tile overlaps the rect — dash landing-spot checks. */
+export function rectOverlapsSolid(
+  map: Tilemap,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): boolean {
+  const left = Math.floor(x / TILE_SIZE);
+  const right = maxEdgeTileIndex(x + w);
+  const top = Math.floor(y / TILE_SIZE);
+  const bottom = maxEdgeTileIndex(y + h);
+  for (let ty = top; ty <= bottom; ty++) {
+    for (let tx = left; tx <= right; tx++) {
+      if (isSolid(tileAt(map, tx, ty))) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Resolve X-axis penetration. prevX is the body's X position before the step.
  * Only resolves tiles the body actually crossed into in X (not tiles it was
