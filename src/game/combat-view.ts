@@ -30,6 +30,8 @@ export interface CardView {
   malfunction: boolean;
   /** Infestation hand-clog (GDD §5.6) — renders inert, tapping does nothing. */
   unplayable: boolean;
+  /** Bloom infestation card — green frame, no AP chip. Set by a future Bloom slice. */
+  infested?: boolean;
 }
 
 export interface ShieldLayerView {

@@ -13,12 +13,14 @@ export interface ScaleResult {
 }
 
 /**
- * Zoom is computed in device pixels (CSS size × devicePixelRatio) so integer zoom means
- * one virtual pixel covers an exact square of physical pixels — crisp on HiDPI displays.
+ * Zoom is computed in device pixels (CSS size × devicePixelRatio), never CSS pixels, so
+ * an integer zoom still lands on exact physical-pixel squares when the viewport allows.
  *
- * Below 1× (viewport smaller than 640×360 device px) we allow fractional downscale so the
- * whole scene always fits. Chosen over minimum-1×-with-scroll because mobile fit is a
- * launch requirement; slight pixel unevenness on sub-1× screens is the accepted trade-off.
+ * The zoom is the exact contain ratio — fractional values allowed — so the canvas always
+ * fills the viewport's width or height (whichever binds) with no letterbox dead bands on
+ * that axis. Integer snapping was dropped: it left up to a full zoom-step of dead space
+ * around the scene (a 320×180 canvas on a 375px phone), and the slight pixel unevenness
+ * of fractional zoom is the accepted trade-off, same as the sub-1× case below.
  */
 export function computeScale(
   availCssWidth: number,
@@ -28,7 +30,7 @@ export function computeScale(
   const availW = availCssWidth * dpr;
   const availH = availCssHeight * dpr;
   const raw = Math.min(availW / VIRTUAL_WIDTH, availH / VIRTUAL_HEIGHT);
-  const zoom = raw >= 1 ? Math.floor(raw) : Math.max(raw, 0.1);
+  const zoom = Math.max(raw, 0.1);
   const backingWidth = Math.round(VIRTUAL_WIDTH * zoom);
   const backingHeight = Math.round(VIRTUAL_HEIGHT * zoom);
   return {
