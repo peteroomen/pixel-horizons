@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import { BIOMINERAL_DEPOSIT_YIELD, SCRAP_CACHE_YIELD } from '@/game/data/surface';
+import {
+  BIOMINERAL_DEPOSIT_YIELD,
+  CORE_CRYSTAL_YIELD,
+  HIDDEN_DEPOSIT_YIELD,
+  SCRAP_CACHE_YIELD,
+} from '@/game/data/surface';
 import type { Resources } from '@/game/sim/run-state';
-import { addYield, backpackUsed, tileYield } from './mining';
+import { addYield, backpackUsed, scaleYield, tileYield } from './mining';
 import {
   TILE_BREAKABLE,
+  TILE_CORE_CRYSTAL,
   TILE_DEPOSIT_BIOMINERAL,
+  TILE_DEPOSIT_HIDDEN,
   TILE_EMPTY,
   TILE_SCRAP_CACHE,
   TILE_SOLID,
@@ -68,5 +75,32 @@ describe('addYield', () => {
     expect(pack.scrap).toBe(2);
     expect(pack.biominerals).toBe(1);
     expect(backpackUsed(pack)).toBe(20);
+  });
+});
+
+describe('tileYield — 3.3 tile types', () => {
+  it('hidden deposits yield rich biominerals', () => {
+    expect(tileYield(TILE_DEPOSIT_HIDDEN)).toEqual({ biominerals: HIDDEN_DEPOSIT_YIELD });
+  });
+
+  it('core crystal tiles yield a core crystal', () => {
+    expect(tileYield(TILE_CORE_CRYSTAL)).toEqual({ coreCrystals: CORE_CRYSTAL_YIELD });
+  });
+});
+
+describe('scaleYield', () => {
+  it('multiplier 1 returns the delta unchanged', () => {
+    const delta = { biominerals: 2 };
+    expect(scaleYield(delta, 1)).toBe(delta);
+  });
+
+  it('scales and rounds to nearest', () => {
+    expect(scaleYield({ biominerals: 2 }, 2)).toEqual({ biominerals: 4 });
+    expect(scaleYield({ biominerals: 2 }, 2.3)).toEqual({ biominerals: 5 });
+    expect(scaleYield({ scrap: 3 }, 1.15)).toEqual({ scrap: 3 });
+  });
+
+  it('never scales a positive yield below 1', () => {
+    expect(scaleYield({ coreCrystals: 1 }, 0.2)).toEqual({ coreCrystals: 1 });
   });
 });
