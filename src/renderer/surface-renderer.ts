@@ -1,10 +1,18 @@
 import { Application, Container, Graphics } from 'pixi.js';
 
-import { POD_HEIGHT, POD_WARNING_MS, POD_WIDTH, TILE_SIZE } from '@/game/data/surface';
+import {
+  DASH_GHOST_MS,
+  POD_HEIGHT,
+  POD_WARNING_MS,
+  POD_WIDTH,
+  TILE_SIZE,
+} from '@/game/data/surface';
 import { attackHitbox } from '@/game/surface/clone';
 import {
   TILE_BREAKABLE,
+  TILE_CORE_CRYSTAL,
   TILE_DEPOSIT_BIOMINERAL,
+  TILE_DEPOSIT_HIDDEN,
   TILE_EMPTY,
   TILE_SCRAP_CACHE,
   TILE_SOLID,
@@ -20,6 +28,9 @@ const COLOR_DEPOSIT = 0x3a8a6a;
 const COLOR_DEPOSIT_FLECK = 0x6fd0a8;
 const COLOR_CACHE = 0x8a8a92;
 const COLOR_CACHE_SEAM = 0x55555e;
+const COLOR_SCANNER_RING = 0xffd24a;
+const COLOR_CRYSTAL = 0xd070f0;
+const COLOR_CRYSTAL_FACET = 0xf0b8ff;
 const COLOR_SKY = 0x1a1a2e;
 const COLOR_CLONE = 0xc8d8e8;
 const COLOR_VISOR = 0x4fc3f7;
@@ -92,6 +103,10 @@ export function createSurfaceRenderer(app: Application): SurfaceRenderer {
     .fill(COLOR_VISOR);
   world.addChild(cloneBody);
 
+  // ── Dash afterimage ghost ─────────────────────────────────────────────────
+  const ghostGfx = new Graphics();
+  world.addChild(ghostGfx);
+
   // ── Attack slash flash ────────────────────────────────────────────────────
   const slashGfx = new Graphics();
   world.addChild(slashGfx);
@@ -143,6 +158,40 @@ export function createSurfaceRenderer(app: Application): SurfaceRenderer {
                 .fill(COLOR_CACHE)
                 .rect(px + 2, py + 7, TILE_SIZE - 4, 2)
                 .fill(COLOR_CACHE_SEAM);
+            } else if (tile === TILE_DEPOSIT_HIDDEN) {
+              if (state.loadout.scanner) {
+                // Revealed: rich vein with a scanner ring marker
+                tileGfx
+                  .rect(px, py, TILE_SIZE, TILE_SIZE)
+                  .fill(COLOR_DEPOSIT)
+                  .rect(px + 4, py + 4, 4, 4)
+                  .fill(COLOR_DEPOSIT_FLECK)
+                  .rect(px + 9, py + 9, 3, 3)
+                  .fill(COLOR_DEPOSIT_FLECK);
+                tileGfx
+                  .rect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2)
+                  .stroke({ color: COLOR_SCANNER_RING, width: 1 });
+              } else {
+                // Unscanned: indistinguishable from plain breakable rock
+                tileGfx.rect(px, py, TILE_SIZE, TILE_SIZE).fill(COLOR_BREAKABLE);
+                tileGfx
+                  .moveTo(px + 4, py + 3)
+                  .lineTo(px + 8, py + 13)
+                  .stroke({ color: 0x6b4a1a, width: 1 });
+                tileGfx
+                  .moveTo(px + 8, py + 3)
+                  .lineTo(px + 5, py + 10)
+                  .stroke({ color: 0x6b4a1a, width: 1 });
+              }
+            } else if (tile === TILE_CORE_CRYSTAL) {
+              // Faceted crystal — visibly rarer than anything else on the level
+              tileGfx
+                .rect(px, py, TILE_SIZE, TILE_SIZE)
+                .fill(COLOR_CRYSTAL)
+                .rect(px + 3, py + 3, 4, 6)
+                .fill(COLOR_CRYSTAL_FACET)
+                .rect(px + 9, py + 7, 4, 5)
+                .fill(COLOR_CRYSTAL_FACET);
             }
           }
         }
@@ -173,6 +222,14 @@ export function createSurfaceRenderer(app: Application): SurfaceRenderer {
         cloneBody.x = clone.body.x + clone.body.w;
       } else {
         cloneBody.scale.x = 1;
+      }
+
+      // Dash afterimage — fades over DASH_GHOST_MS of sim time
+      ghostGfx.clear();
+      if (clone.dashGhostMs > 0) {
+        ghostGfx
+          .rect(clone.dashFromX, clone.dashFromY, clone.body.w, clone.body.h)
+          .fill({ color: COLOR_VISOR, alpha: 0.4 * (clone.dashGhostMs / DASH_GHOST_MS) });
       }
 
       // Attack slash flash
