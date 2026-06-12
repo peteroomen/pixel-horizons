@@ -69,8 +69,14 @@ export const CLONE_WIDTH = 12;
 /** Clone collision body height in virtual px. */
 export const CLONE_HEIGHT = 20;
 
-/** Pod launch window in sim-time ms — GDD §6.2 baseline (~5 min); Engine quality extends it in 3.3+. */
+/** Pod launch window in sim-time ms — GDD §6.2 baseline (~5 min) before Engine extension. */
 export const POD_WINDOW_MS = 5 * 60 * 1000;
+
+/**
+ * Engine-quality pod-window extension (GDD §6.2): each installed engine module
+ * adds this much to the launch window. Applied by the loadout projection.
+ */
+export const POD_WINDOW_PER_ENGINE_MS = 45 * 1000;
 
 /** Remaining-time threshold for the HUD/pod urgency cue. */
 export const POD_WARNING_MS = 30 * 1000;
@@ -89,3 +95,12 @@ export const BIOMINERAL_DEPOSIT_YIELD = 2;
 
 /** Scrap per surface cache tile (GDD §6.5: Scrap found everywhere). */
 export const SCRAP_CACHE_YIELD = 3;
+
+/**
+ * Biominerals per hidden deposit tile ('h') — richer than surface deposits;
+ * invisible without a Resource Scanner but breakable like any rock.
+ */
+export const HIDDEN_DEPOSIT_YIELD = 4;
+
+/** Core Crystals per crystal tile ('c') — the rare reactor-upgrade resource (GDD §6.5). */
+export const CORE_CRYSTAL_YIELD = 1;

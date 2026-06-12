@@ -84,6 +84,49 @@ describe('module catalog', () => {
     }
   });
 
+  it('planet item effects carry sane tunables (GDD §6.3)', () => {
+    for (const { moduleId, tierName, tier } of moduleTiers()) {
+      for (const effect of tier.planetItem?.effects ?? []) {
+        const label = `${moduleId} ${tierName} ${effect.kind}`;
+        if (effect.kind === 'high-jump') {
+          expect(effect.jumpVelocityMultiplier, label).toBeGreaterThan(1);
+        } else if (effect.kind === 'phase-dash') {
+          expect(effect.distancePx, label).toBeGreaterThan(0);
+          expect(effect.cooldownMs, label).toBeGreaterThan(0);
+        } else if (effect.kind === 'mining-yield') {
+          expect(effect.multiplier, label).toBeGreaterThan(1);
+        } else if (effect.kind === 'yield-bonus') {
+          expect(effect.percent, label).toBeGreaterThan(0);
+        } else if (effect.kind === 'backpack-capacity') {
+          expect(effect.bonus, label).toBeGreaterThan(0);
+        } else if (effect.kind === 'shield-bubble') {
+          expect(effect.cooldownMs, label).toBeGreaterThan(0);
+        } else if (effect.kind === 'move-speed') {
+          expect(effect.multiplier, label).toBeGreaterThan(0);
+          expect(effect.multiplier, label).not.toBe(1);
+        }
+      }
+    }
+  });
+
+  it('the Mk I catalog projects the GDD §6.3 identity items', () => {
+    expect(getModule('mod-thruster').tiers.mk1.planetItem?.effects).toEqual([
+      { kind: 'double-jump' },
+    ]);
+    expect(
+      getModule('mod-phase-shifter').tiers.mk1.planetItem?.effects?.map((e) => e.kind),
+    ).toEqual(['phase-dash']);
+    expect(getModule('mod-mining-laser').tiers.mk1.planetItem?.effects?.map((e) => e.kind)).toEqual(
+      ['mining-yield'],
+    );
+    expect(
+      getModule('mod-hauler-engine').tiers.mk1.planetItem?.effects?.map((e) => e.kind),
+    ).toEqual(['high-jump', 'backpack-capacity']);
+    expect(
+      getModule('mod-cargo-scanner').tiers.mk1.planetItem?.effects?.map((e) => e.kind),
+    ).toEqual(['deposit-scanner']);
+  });
+
   it('every clone bay matrix contributes exactly 1 card (GDD §4.2)', () => {
     const matrices = MODULE_DEFS.filter((m) => m.slot === 'clone-bay');
     expect(matrices.length).toBe(5);

@@ -56,7 +56,11 @@ export const MODULE_DEFS: readonly ModuleDef[] = [
     tiers: {
       mk1: {
         cards: ['card-slag-shot'],
-        planetItem: { name: 'Enhanced Mining', description: '2× mining yield.' },
+        planetItem: {
+          name: 'Enhanced Mining',
+          description: '2× mining yield.',
+          effects: [{ kind: 'mining-yield', multiplier: 2 }],
+        },
       },
       mk2: {
         cards: ['card-slag-shot-mk2', 'card-slag-shot-mk2'],
@@ -92,7 +96,11 @@ export const MODULE_DEFS: readonly ModuleDef[] = [
     tiers: {
       mk1: {
         cards: ['card-ghost-shift', 'card-ghost-shift', 'card-desync-hull'],
-        planetItem: { name: 'Phase Dash', description: 'Blink through walls.' },
+        planetItem: {
+          name: 'Phase Dash',
+          description: 'Blink through walls.',
+          effects: [{ kind: 'phase-dash', distancePx: 48, cooldownMs: 1500 }],
+        },
       },
       mk2: {
         cards: ['card-ghost-shift', 'card-ghost-shift', 'card-desync-hull', 'card-phase-walk'],
@@ -114,6 +122,7 @@ export const MODULE_DEFS: readonly ModuleDef[] = [
         planetItem: {
           name: 'Shield Bubble',
           description: 'Absorbs 1 hit, 30s cooldown.',
+          effects: [{ kind: 'shield-bubble', cooldownMs: 30_000 }],
         },
       },
     },
@@ -128,6 +137,7 @@ export const MODULE_DEFS: readonly ModuleDef[] = [
         planetItem: {
           name: 'Resource Scanner',
           description: 'Highlights hidden deposits.',
+          effects: [{ kind: 'deposit-scanner' }],
         },
       },
     },
@@ -141,7 +151,11 @@ export const MODULE_DEFS: readonly ModuleDef[] = [
     tiers: {
       mk1: {
         cards: ['card-burn', 'card-burn', 'card-afterburner'],
-        planetItem: { name: 'Double Jump', description: 'Jump again mid-air.' },
+        planetItem: {
+          name: 'Double Jump',
+          description: 'Jump again mid-air.',
+          effects: [{ kind: 'double-jump' }],
+        },
       },
       mk2: {
         cards: ['card-hard-burn', 'card-hard-burn', 'card-emergency-boost'],
@@ -161,7 +175,11 @@ export const MODULE_DEFS: readonly ModuleDef[] = [
         cards: ['card-burn', 'card-cargo-thrust'],
         planetItem: {
           name: 'High Jump',
-          description: 'Taller single jump, no double jump.',
+          description: 'Taller single jump, no double jump; reinforced cargo rack.',
+          effects: [
+            { kind: 'high-jump', jumpVelocityMultiplier: 1.25 },
+            { kind: 'backpack-capacity', bonus: 10 },
+          ],
         },
       },
     },
@@ -189,6 +207,7 @@ export const MODULE_DEFS: readonly ModuleDef[] = [
         planetItem: {
           name: 'Scavenger Clone',
           description: '+15% mining yield, 2 HP.',
+          effects: [{ kind: 'yield-bonus', percent: 15 }],
         },
       },
     },
@@ -203,6 +222,7 @@ export const MODULE_DEFS: readonly ModuleDef[] = [
         planetItem: {
           name: 'Enforcer Clone',
           description: '+1 melee damage, -10% speed.',
+          effects: [{ kind: 'move-speed', multiplier: 0.9 }],
         },
       },
     },
