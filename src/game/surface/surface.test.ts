@@ -7,6 +7,7 @@ import {
   POD_WINDOW_MS,
 } from '@/game/data/surface';
 import type { InputState } from './clone';
+import { baselineLoadout } from './items';
 import { createSurface, updateSurface } from './surface';
 import type { SurfaceState } from './surface';
 
@@ -158,5 +159,49 @@ describe('determinism', () => {
     for (const input of script) updateSurface(a, input, FIXED_DT_MS);
     for (const input of script) updateSurface(b, input, FIXED_DT_MS);
     expect(a).toEqual(b);
+  });
+});
+
+describe('createSurface/updateSurface — loadout integration (3.3)', () => {
+  it('applies the yield multiplier to mined deposits', () => {
+    const state = createSurface(POD_ARENA, {
+      loadout: { ...baselineLoadout(), yieldMultiplier: 2 },
+    });
+    mineSpawnDeposit(state);
+    expect(state.clone.backpack.biominerals).toBe(2 * BIOMINERAL_DEPOSIT_YIELD);
+  });
+
+  it('enforces the loadout backpack capacity', () => {
+    const state = createSurface(POD_ARENA, {
+      loadout: { ...baselineLoadout(), yieldMultiplier: 2, backpackCapacity: 3 },
+    });
+    mineSpawnDeposit(state);
+    // 2× yield = 4 clamps at the capacity of 3
+    expect(state.clone.backpack.biominerals).toBe(3);
+  });
+
+  it('engine quality extends the pod window', () => {
+    const state = createSurface(POD_ARENA, {
+      podWindowMs: 10_000,
+      loadout: { ...baselineLoadout(), podWindowBonusMs: 90_000 },
+    });
+    expect(state.pod?.windowMs).toBe(100_000);
+    expect(state.pod?.remainingMs).toBe(100_000);
+  });
+
+  it('clone inherits loadout capabilities', () => {
+    const state = createSurface(POD_ARENA, {
+      loadout: {
+        ...baselineLoadout(),
+        capabilities: {
+          maxAirJumps: 2,
+          jumpVelocityMultiplier: 1,
+          moveSpeedMultiplier: 1,
+          dash: null,
+        },
+      },
+    });
+    expect(state.clone.capabilities.maxAirJumps).toBe(2);
+    expect(state.clone.airJumpsLeft).toBe(2);
   });
 });

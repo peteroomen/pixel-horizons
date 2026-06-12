@@ -54,7 +54,7 @@ export type {
   ModuleView,
   ShieldLayerView,
 } from './combat-view';
-export type { SurfaceView } from './surface-view';
+export type { SurfaceItemView, SurfaceView } from './surface-view';
 
 export interface GameCallbacks {
   onCombatUpdate(view: CombatView): void;

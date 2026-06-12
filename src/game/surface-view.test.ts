@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { POD_WARNING_MS } from '@/game/data/surface';
 import { buildSurfaceView, surfaceViewEquals } from './surface-view';
+import { projectLoadout } from './surface/items';
 import { createSurface } from './surface/surface';
 
 const POD_LEVEL = ['#######', '#PD...#', '#.....#', '#######'];
@@ -66,5 +67,40 @@ describe('surfaceViewEquals', () => {
     const c = buildSurfaceView(state);
     expect(surfaceViewEquals(b, c)).toBe(false);
     expect(surfaceViewEquals(c, buildSurfaceView(state))).toBe(true);
+  });
+});
+
+describe('SurfaceView — projected items (3.3)', () => {
+  it('exposes items and dash cooldown from the loadout', () => {
+    const loadout = projectLoadout(['mod-phase-shifter', 'mod-standard-print-matrix'], 3);
+    const state = createSurface(['####', '#PD#', '####'], { loadout });
+    const view = buildSurfaceView(state);
+    expect(view.items).toEqual([
+      { name: 'Phase Dash', active: true, chassis: false },
+      { name: 'Baseline Clone', active: true, chassis: true },
+    ]);
+    expect(view.dashCooldownSeconds).toBe(0);
+  });
+
+  it('dash cooldown is null without a dash item and second-rounded with one', () => {
+    const bare = createSurface(['####', '#PD#', '####']);
+    expect(buildSurfaceView(bare).dashCooldownSeconds).toBeNull();
+
+    const loadout = projectLoadout(['mod-phase-shifter'], 3);
+    const state = createSurface(['####', '#PD#', '####'], { loadout });
+    state.clone.dashCooldownMs = 1499;
+    expect(buildSurfaceView(state).dashCooldownSeconds).toBe(2);
+    state.clone.dashCooldownMs = 400;
+    expect(buildSurfaceView(state).dashCooldownSeconds).toBe(1);
+  });
+
+  it('sub-second cooldown ticks do not change the view (emission contract)', () => {
+    const loadout = projectLoadout(['mod-phase-shifter'], 3);
+    const state = createSurface(['####', '#PD#', '####'], { loadout });
+    state.clone.dashCooldownMs = 950;
+    const a = buildSurfaceView(state);
+    state.clone.dashCooldownMs = 920;
+    const b = buildSurfaceView(state);
+    expect(surfaceViewEquals(a, b)).toBe(true);
   });
 });

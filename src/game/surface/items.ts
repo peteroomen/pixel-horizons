@@ -61,6 +61,11 @@ export interface SurfaceLoadout {
   shieldBubble: { cooldownMs: number } | null;
 }
 
+/** The bare clone — no modules installed. Used as the default loadout. */
+export function baselineLoadout(): SurfaceLoadout {
+  return projectLoadout([], 0);
+}
+
 export function projectLoadout(
   moduleIds: readonly ModuleId[],
   reactorLevel: number,

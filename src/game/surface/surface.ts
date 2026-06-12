@@ -1,8 +1,10 @@
-import { BACKPACK_CAPACITY, POD_WINDOW_MS } from '@/game/data/surface';
+import { POD_WINDOW_MS } from '@/game/data/surface';
 import type { Resources } from '@/game/sim/run-state';
 import { createClone, updateClone } from './clone';
 import type { CloneState, InputState } from './clone';
-import { addYield, tileYield } from './mining';
+import { baselineLoadout } from './items';
+import type { SurfaceLoadout } from './items';
+import { addYield, scaleYield, tileYield } from './mining';
 import { createPod, depositBackpack, podOverlapsClone, tickPod } from './pod';
 import type { PodState } from './pod';
 import { parseLevel } from './tilemap';
@@ -19,22 +21,28 @@ export interface SurfaceState {
   map: Tilemap;
   clone: CloneState;
   pod: PodState | null;
+  /** Items projected from the ship's modules (GDD §6.3) — fixed for the drop. */
+  loadout: SurfaceLoadout;
   outcome: SurfaceOutcome;
   /** Snapshot of the backpack lost at a stranded launch; null otherwise. */
   lostBackpack: Resources | null;
 }
 
 export interface CreateSurfaceOptions {
-  /** Override the pod window (dev knob / tests). Defaults to POD_WINDOW_MS. */
+  /** Override the base pod window (dev knob / tests). Defaults to POD_WINDOW_MS. */
   podWindowMs?: number;
+  /** Module-projected items. Defaults to the bare clone. */
+  loadout?: SurfaceLoadout;
 }
 
 /** Build a SurfaceState from ASCII level rows. */
 export function createSurface(rows: string[], options?: CreateSurfaceOptions): SurfaceState {
   const map = parseLevel(rows);
-  const clone = createClone(map);
-  const pod = createPod(map, options?.podWindowMs ?? POD_WINDOW_MS);
-  return { map, clone, pod, outcome: 'ongoing', lostBackpack: null };
+  const loadout = options?.loadout ?? baselineLoadout();
+  const clone = createClone(map, loadout.capabilities);
+  // Engine quality extends the launch window on top of the base (GDD §6.2)
+  const pod = createPod(map, (options?.podWindowMs ?? POD_WINDOW_MS) + loadout.podWindowBonusMs);
+  return { map, clone, pod, loadout, outcome: 'ongoing', lostBackpack: null };
 }
 
 /**
@@ -53,7 +61,11 @@ export function updateSurface(state: SurfaceState, input: InputState, dtMs: numb
   for (const tile of brokenTiles) {
     const delta = tileYield(tile);
     if (delta !== null) {
-      addYield(state.clone.backpack, delta, BACKPACK_CAPACITY);
+      addYield(
+        state.clone.backpack,
+        scaleYield(delta, state.loadout.yieldMultiplier),
+        state.loadout.backpackCapacity,
+      );
     }
   }
 
