@@ -3,13 +3,14 @@
 import { useEffect, useRef } from 'react';
 
 import { initGame } from '@/game/main';
-import type { CombatView, GameHandle } from '@/game/main';
+import type { CombatView, GameHandle, SurfaceView } from '@/game/main';
 
 interface GameCanvasProps {
   onCombatUpdate: (view: CombatView) => void;
   onReady: (handle: GameHandle) => void;
   onScaleChange?: (zoom: number) => void;
   onModeChange?: (mode: 'combat' | 'surface') => void;
+  onSurfaceUpdate?: (view: SurfaceView) => void;
 }
 
 /**
@@ -23,13 +24,26 @@ export default function GameCanvas({
   onReady,
   onScaleChange,
   onModeChange,
+  onSurfaceUpdate,
 }: GameCanvasProps) {
   const hostRef = useRef<HTMLDivElement>(null);
-  const callbacksRef = useRef({ onCombatUpdate, onReady, onScaleChange, onModeChange });
+  const callbacksRef = useRef({
+    onCombatUpdate,
+    onReady,
+    onScaleChange,
+    onModeChange,
+    onSurfaceUpdate,
+  });
 
   useEffect(() => {
-    callbacksRef.current = { onCombatUpdate, onReady, onScaleChange, onModeChange };
-  }, [onCombatUpdate, onReady, onScaleChange, onModeChange]);
+    callbacksRef.current = {
+      onCombatUpdate,
+      onReady,
+      onScaleChange,
+      onModeChange,
+      onSurfaceUpdate,
+    };
+  }, [onCombatUpdate, onReady, onScaleChange, onModeChange, onSurfaceUpdate]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -43,6 +57,7 @@ export default function GameCanvas({
         onCombatUpdate: (view) => callbacksRef.current.onCombatUpdate(view),
         onScaleChange: (zoom) => callbacksRef.current.onScaleChange?.(zoom),
         onModeChange: (mode) => callbacksRef.current.onModeChange?.(mode),
+        onSurfaceUpdate: (view) => callbacksRef.current.onSurfaceUpdate?.(view),
       });
       if (cancelled) {
         candidate.destroy();

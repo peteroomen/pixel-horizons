@@ -11,7 +11,7 @@ import {
 } from '@/game/data/surface';
 import { attackHitbox, createClone, updateClone } from './clone';
 import type { CloneState, InputState } from './clone';
-import { TILE_EMPTY, parseLevel, tileAt } from './tilemap';
+import { TILE_BREAKABLE, TILE_DEPOSIT_BIOMINERAL, TILE_EMPTY, parseLevel, tileAt } from './tilemap';
 
 /** Tall open arena for movement tests (6 tiles high). */
 const ARENA = ['######', '#P...#', '#....#', '#....#', '#....#', '######'];
@@ -279,19 +279,70 @@ describe('updateClone — attack', () => {
     expect(clone.attackElapsedMs).toBeGreaterThanOrEqual(0);
   });
 
-  it('breaks a breakable rock within the attack hitbox', () => {
+  it('breaks a breakable rock within the attack hitbox and reports it', () => {
     const map = parseLevel(ROCK_ARENA);
     const clone = createClone(map);
     runUntilGrounded(clone, map);
     clone.facing = 1; // face right
     clone.prevAttack = false;
-    // Run through the full active window
+    // Run through the full active window, collecting reported breaks
+    const allBroken: number[] = [];
     const framesForActive = Math.ceil(ATTACK_ACTIVE_TO_MS / FIXED_DT_MS) + 2;
     for (let i = 0; i < framesForActive; i++) {
-      updateClone(clone, map, i === 0 ? { ...NO_INPUT, attack: true } : NO_INPUT, FIXED_DT_MS);
+      const { brokenTiles } = updateClone(
+        clone,
+        map,
+        i === 0 ? { ...NO_INPUT, attack: true } : NO_INPUT,
+        FIXED_DT_MS,
+      );
+      allBroken.push(...brokenTiles);
     }
     // Rock at tile (2,4) should be broken (at floor level, within attack range)
     expect(tileAt(map, 2, 4)).toBe(TILE_EMPTY);
+    expect(allBroken).toEqual([TILE_BREAKABLE]);
+  });
+
+  it('returns no broken tiles for swings that hit nothing', () => {
+    const map = parseLevel(ARENA);
+    const clone = createClone(map);
+    runUntilGrounded(clone, map);
+    clone.prevAttack = false;
+    const framesForActive = Math.ceil(ATTACK_ACTIVE_TO_MS / FIXED_DT_MS) + 2;
+    for (let i = 0; i < framesForActive; i++) {
+      const { brokenTiles } = updateClone(
+        clone,
+        map,
+        i === 0 ? { ...NO_INPUT, attack: true } : NO_INPUT,
+        FIXED_DT_MS,
+      );
+      expect(brokenTiles).toEqual([]);
+    }
+  });
+
+  it('reports two stacked tiles broken by one swing in a single step', () => {
+    // Deposit at torso height (row 3) and rock at floor level (row 4), both in column 2.
+    // Hitbox spans y=62..78 → tile rows 3 (48..63) and 4 (64..79) — both overlap.
+    const map = parseLevel(['######', '#P...#', '#....#', '#.b..#', '#.*..#', '######']);
+    const clone = createClone(map);
+    runUntilGrounded(clone, map);
+    clone.facing = 1;
+    clone.prevAttack = false;
+    const allBroken: number[] = [];
+    const framesForActive = Math.ceil(ATTACK_ACTIVE_TO_MS / FIXED_DT_MS) + 2;
+    for (let i = 0; i < framesForActive; i++) {
+      const { brokenTiles } = updateClone(
+        clone,
+        map,
+        i === 0 ? { ...NO_INPUT, attack: true } : NO_INPUT,
+        FIXED_DT_MS,
+      );
+      if (brokenTiles.length > 0) {
+        allBroken.push(...brokenTiles);
+        // Both must arrive in the same step (the first active frame)
+        expect(brokenTiles).toHaveLength(2);
+      }
+    }
+    expect(allBroken.sort()).toEqual([TILE_BREAKABLE, TILE_DEPOSIT_BIOMINERAL].sort());
   });
 });
 

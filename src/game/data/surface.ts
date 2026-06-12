@@ -68,3 +68,24 @@ export const CLONE_WIDTH = 12;
 
 /** Clone collision body height in virtual px. */
 export const CLONE_HEIGHT = 20;
+
+/** Pod launch window in sim-time ms — GDD §6.2 baseline (~5 min); Engine quality extends it in 3.3+. */
+export const POD_WINDOW_MS = 5 * 60 * 1000;
+
+/** Remaining-time threshold for the HUD/pod urgency cue. */
+export const POD_WARNING_MS = 30 * 1000;
+
+/** Pod AABB width — 2 tiles, big enough to overlap-deposit without precision walking. */
+export const POD_WIDTH = 32;
+
+/** Pod AABB height — 3 tiles, taller than the clone so it reads as a vehicle. */
+export const POD_HEIGHT = 48;
+
+/** Total resource units the clone can carry — forces return trips within one window. */
+export const BACKPACK_CAPACITY = 20;
+
+/** Biominerals per deposit tile — Rocky worlds are Biomineral-rich (GDD §6.5). */
+export const BIOMINERAL_DEPOSIT_YIELD = 2;
+
+/** Scrap per surface cache tile (GDD §6.5: Scrap found everywhere). */
+export const SCRAP_CACHE_YIELD = 3;

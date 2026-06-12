@@ -1,24 +1,31 @@
 /**
  * Hand-crafted test levels. One level = string[] where every row has equal length.
- * Legend: '#' solid, '*' breakable rock, 'P' spawn (counts as empty), '.' empty.
+ * Legend: '#' solid, '*' breakable rock (yields nothing), 'b' biomineral deposit,
+ * 's' scrap cache, 'P' spawn (counts as empty), 'D' pod marker (counts as empty),
+ * '.' empty.
  *
- * TILE_SIZE = 16 px; CLONE body = 12 × 20 px.
+ * TILE_SIZE = 16 px; CLONE body = 12 × 20 px; POD = 32 × 48 px (2×3 tiles).
  * Jump apex ≈ 380² / (2 × 1500) ≈ 48 px = 3 tiles → max climbable step = 3 tiles.
  */
 
 /**
- * Rocky biome test level (Slice 3.1). 60 × 20 tiles = 960 × 320 virtual px.
+ * Rocky biome test level (Slices 3.1–3.2). 60 × 20 tiles = 960 × 320 virtual px.
  * Wider and taller than the 640 × 360 virtual screen so the camera must scroll.
  *
  * Row / column key (0-based, TILE_SIZE = 16):
  *   Rows 0 and 19      : solid top/bottom boundary
  *   Row 18             : sub-floor (solid)
- *   Row 17             : main floor; pit at cols 14-15; wall at cols 38-39 (rows 14-17)
+ *   Row 17             : main floor; pit at cols 14-17; wall base at cols 36-37
  *   Rows 15-16 col 22-27 : step-1 platform (2 tiles above floor)
- *   Row 14 col 28-35   : step-2 platform (3 tiles above floor)
- *   Row 17 cols 5-6    : breakable rocks at standing height (near spawn)
- *   Row 14 col 32      : breakable rock atop step-2 platform
- *   Row 17 col 50      : breakable rock in far-right section
+ *   Row 14 col 28-32   : step-2 platform (3 tiles above floor)
+ *   Row 15 col 3       : pod marker — pod AABB spans cols 3-4 × rows 15-17,
+ *                        resting on the row-18 floor, one step right of spawn
+ *   Row 17 cols 6-7    : biomineral deposits at standing height (near spawn)
+ *   Row 14 col 32      : biomineral deposit atop step-2 platform
+ *   Row 17 col 33      : scrap cache on the mid floor stretch
+ *   Row 17 cols 40-44  : far cluster beyond the wall (b b s b b) — the
+ *                        risk/reward trip against the pod timer
+ *   Row 17 col 47      : plain breakable rock (yields nothing — kept testable)
  */
 export const ROCKY_TEST_LEVEL: string[] = [
   // col: 0         1         2         3         4         5
@@ -37,10 +44,10 @@ export const ROCKY_TEST_LEVEL: string[] = [
   /* 11 */ '#..........................................................#',
   /* 12 */ '#..........................................................#',
   /* 13 */ '#..........................................................#',
-  /* 14 */ '#...........................####*....##....................#',
-  /* 15 */ '#.P...................######.........##....................#',
+  /* 14 */ '#...........................####b....##....................#',
+  /* 15 */ '#.PD..................######.........##....................#',
   /* 16 */ '#.....................######.........##....................#',
-  /* 17 */ '##....**######....######............##.........*..##########',
+  /* 17 */ '##....bb######....######.........s..##..bbsbb..*..##########',
   /* 18 */ '############################################################',
   /* 19 */ '############################################################',
 ];

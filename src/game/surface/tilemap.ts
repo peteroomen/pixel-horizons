@@ -3,6 +3,8 @@ import { TILE_SIZE } from '@/game/data/surface';
 export const TILE_EMPTY = 0;
 export const TILE_SOLID = 1;
 export const TILE_BREAKABLE = 2;
+export const TILE_DEPOSIT_BIOMINERAL = 3;
+export const TILE_SCRAP_CACHE = 4;
 
 export interface Tilemap {
   width: number;
@@ -11,6 +13,9 @@ export interface Tilemap {
   tiles: number[];
   spawnX: number;
   spawnY: number;
+  /** Top-left px of the 'D' pod marker tile, or null if the level has no pod. */
+  podX: number | null;
+  podY: number | null;
   /**
    * Incremented by breakTile so the renderer knows to redraw the tile layer.
    * Plain number — no object identity needed.
@@ -24,8 +29,12 @@ export interface Tilemap {
  *
  * Legend:
  *   '#' = TILE_SOLID
- *   '*' = TILE_BREAKABLE
+ *   '*' = TILE_BREAKABLE (plain rock — yields nothing)
+ *   'b' = TILE_DEPOSIT_BIOMINERAL
+ *   's' = TILE_SCRAP_CACHE
  *   'P' = spawn tile (empty after parsing; spawnX/spawnY record the position)
+ *   'D' = pod marker (empty after parsing; podX/podY record the position — the
+ *         pod is an entity, never a solid tile). At most one per level.
  *   '.' = TILE_EMPTY
  */
 export function parseLevel(rows: string[]): Tilemap {
@@ -46,6 +55,9 @@ export function parseLevel(rows: string[]): Tilemap {
   let spawnCount = 0;
   let spawnX = 0;
   let spawnY = 0;
+  let podCount = 0;
+  let podX: number | null = null;
+  let podY: number | null = null;
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -54,11 +66,21 @@ export function parseLevel(rows: string[]): Tilemap {
         tiles[y * width + x] = TILE_SOLID;
       } else if (ch === '*') {
         tiles[y * width + x] = TILE_BREAKABLE;
+      } else if (ch === 'b') {
+        tiles[y * width + x] = TILE_DEPOSIT_BIOMINERAL;
+      } else if (ch === 's') {
+        tiles[y * width + x] = TILE_SCRAP_CACHE;
       } else if (ch === 'P') {
         spawnCount++;
         // Spawn tile itself is empty; clone spawns at its top-left corner
         spawnX = x * TILE_SIZE;
         spawnY = y * TILE_SIZE;
+        tiles[y * width + x] = TILE_EMPTY;
+      } else if (ch === 'D') {
+        podCount++;
+        // Pod marker tile is empty; the pod AABB anchors at its top-left corner
+        podX = x * TILE_SIZE;
+        podY = y * TILE_SIZE;
         tiles[y * width + x] = TILE_EMPTY;
       } else if (ch !== '.') {
         throw new Error(`parseLevel: unknown character '${ch}' at (${x}, ${y})`);
@@ -69,8 +91,11 @@ export function parseLevel(rows: string[]): Tilemap {
   if (spawnCount !== 1) {
     throw new Error(`parseLevel: expected exactly 1 spawn tile ('P'), found ${spawnCount}`);
   }
+  if (podCount > 1) {
+    throw new Error(`parseLevel: expected at most 1 pod marker ('D'), found ${podCount}`);
+  }
 
-  return { width, height, tiles, spawnX, spawnY, version: 0 };
+  return { width, height, tiles, spawnX, spawnY, podX, podY, version: 0 };
 }
 
 /**
@@ -84,9 +109,19 @@ export function tileAt(map: Tilemap, tx: number, ty: number): number {
   return map.tiles[ty * map.width + tx];
 }
 
-/** Solid tiles and breakable rocks both block movement. */
+/** Solid tiles and all breakable kinds block movement — deposits are rock you can stand on. */
 export function isSolid(tile: number): boolean {
-  return tile === TILE_SOLID || tile === TILE_BREAKABLE;
+  return (
+    tile === TILE_SOLID ||
+    tile === TILE_BREAKABLE ||
+    tile === TILE_DEPOSIT_BIOMINERAL ||
+    tile === TILE_SCRAP_CACHE
+  );
+}
+
+/** True for every tile type a melee swing can break. */
+function isBreakable(tile: number): boolean {
+  return tile === TILE_BREAKABLE || tile === TILE_DEPOSIT_BIOMINERAL || tile === TILE_SCRAP_CACHE;
 }
 
 /**
@@ -103,13 +138,16 @@ export function maxEdgeTileIndex(edge: number): number {
 
 /**
  * Converts a breakable tile to empty and bumps map.version so the renderer
- * knows to redraw the tile layer. No-op on non-breakable tiles.
+ * knows to redraw the tile layer. Returns the tile type that was broken so
+ * callers can resolve mining yields, or null if nothing broke (non-breakable
+ * tile or out of bounds).
  */
-export function breakTile(map: Tilemap, tx: number, ty: number): void {
-  if (tx < 0 || ty < 0 || tx >= map.width || ty >= map.height) return;
+export function breakTile(map: Tilemap, tx: number, ty: number): number | null {
+  if (tx < 0 || ty < 0 || tx >= map.width || ty >= map.height) return null;
   const idx = ty * map.width + tx;
-  if (map.tiles[idx] === TILE_BREAKABLE) {
-    map.tiles[idx] = TILE_EMPTY;
-    map.version++;
-  }
+  const tile = map.tiles[idx];
+  if (!isBreakable(tile)) return null;
+  map.tiles[idx] = TILE_EMPTY;
+  map.version++;
+  return tile;
 }

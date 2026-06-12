@@ -16,6 +16,7 @@ import {
   MOVE_SPEED,
   TILE_SIZE,
 } from '@/game/data/surface';
+import type { Resources } from '@/game/sim/run-state';
 import { moveBody } from './physics';
 import { breakTile, maxEdgeTileIndex } from './tilemap';
 import type { Tilemap } from './tilemap';
@@ -55,6 +56,12 @@ export interface CloneState {
   prevJump: boolean;
   /** Attack button state last frame — used for rising-edge detection. */
   prevAttack: boolean;
+  /**
+   * Resources carried by the clone — banked only when deposited at the pod,
+   * lost on a stranded launch (and dropped at the death point in 3.4).
+   * Capacity is enforced by surface.ts, not here — 3.3 makes it module-driven.
+   */
+  backpack: Resources;
 }
 
 /** Spawn the clone at the level's designated spawn point. */
@@ -77,6 +84,7 @@ export function createClone(map: Tilemap): CloneState {
     attackCooldownMs: 0,
     prevJump: false,
     prevAttack: false,
+    backpack: { scrap: 0, biominerals: 0, coreCrystals: 0, blueprints: 0 },
   };
 }
 
@@ -105,6 +113,8 @@ export function attackHitbox(
 
 /**
  * Advance the clone one fixed timestep. Mutates clone and map in place.
+ * Returns the tile types broken by this step's attack hitbox — surface.ts
+ * resolves them into mining yields (clone.ts knows nothing about economy).
  *
  * Steps (in order per spec):
  * 1. Horizontal velocity from held buttons; update facing.
@@ -120,7 +130,7 @@ export function updateClone(
   map: Tilemap,
   input: InputState,
   dtMs: number,
-): void {
+): { brokenTiles: number[] } {
   // 1. Horizontal movement (instant — no acceleration this slice)
   const dx = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   clone.body.vx = dx * MOVE_SPEED;
@@ -185,6 +195,7 @@ export function updateClone(
   clone.attackCooldownMs = Math.max(0, clone.attackCooldownMs - dtMs);
 
   // Break any breakable tiles overlapping the active hitbox
+  const brokenTiles: number[] = [];
   const hb = attackHitbox(clone);
   if (hb !== null) {
     const txLeft = Math.floor(hb.x / TILE_SIZE);
@@ -193,7 +204,10 @@ export function updateClone(
     const tyBottom = maxEdgeTileIndex(hb.y + hb.h);
     for (let ty = tyTop; ty <= tyBottom; ty++) {
       for (let tx = txLeft; tx <= txRight; tx++) {
-        breakTile(map, tx, ty);
+        const broken = breakTile(map, tx, ty);
+        if (broken !== null) {
+          brokenTiles.push(broken);
+        }
       }
     }
   }
@@ -201,4 +215,6 @@ export function updateClone(
   // Save button state for next frame's rising-edge detection
   clone.prevJump = input.jump;
   clone.prevAttack = input.attack;
+
+  return { brokenTiles };
 }
