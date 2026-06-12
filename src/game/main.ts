@@ -94,6 +94,9 @@ export interface GameHandle {
   destroy(): void;
 }
 
+/** Stand-in lane shape until the sector map drives lanes (next commit in this slice). */
+const INTERIM_LANE_PARAMS = { distance: 8, encounterCount: 2 };
+
 /** Weapon-rich starting deck — the winnable first playable fight. Hull select is Phase 5. */
 const DEFAULT_HULL = 'hull-gunship';
 
@@ -298,7 +301,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const hullId = resolveHull();
   const enemyPool = resolveEnemyPool();
   let run: RunState = createRunState(seed, hullId);
-  let lane: LaneState = createLane(run, enemyPool);
+  let lane: LaneState = createLane(run, INTERIM_LANE_PARAMS, enemyPool);
 
   // Travels to the next fight; on arrival the lane ends — systems reset (malfunctions
   // gone with it) — and a fresh lane begins. A new lane always has an encounter ahead,
@@ -314,7 +317,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
           malfunctioning: lane.malfunctioning,
         });
       }
-      lane = createLane(run, enemyPool);
+      lane = createLane(run, INTERIM_LANE_PARAMS, enemyPool);
     }
   };
 
@@ -372,7 +375,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     restartRun(): void {
       if (combat.outcome !== 'defeat') return;
       run = createRunState(seed, hullId);
-      lane = createLane(run, enemyPool);
+      lane = createLane(run, INTERIM_LANE_PARAMS, enemyPool);
       combat = nextEncounter();
       emit();
     },
