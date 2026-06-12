@@ -73,6 +73,77 @@
   --ring: oklch(0.556 0 0);
 }
 
+/* ── FOUNDRY design tokens ─────────────────────────────────────────── */
+@theme {
+  --color-fd-orange: #ff9e2c;
+  --color-fd-orange-press: #d9821a;
+  --color-fd-red: #ff4757;
+  --color-fd-cyan: #6ad1e3;
+  --color-fd-amber: #ffb454;
+  --color-fd-green: #8ac926;
+
+  --color-fd-void: #0b0d18;
+  --color-fd-plate: #16181d;
+  --color-fd-strip: #23262d;
+  --color-fd-steel: #3a3e48;
+  --color-fd-muted: #9aa0ad;
+  --color-fd-ink: #e8e6e0;
+  --color-fd-ink-dark: #14151a;
+
+  --color-fd-card: #1a1c22;
+  --color-fd-card-body: #c9cdd6;
+  --color-fd-card-amber: #211a10;
+  --color-fd-card-amber-header: #3a2c14;
+  --color-fd-card-amber-body: #d9c79a;
+  --color-fd-card-green: #131a0d;
+  --color-fd-card-green-header: #1d2a12;
+  --color-fd-card-green-body: #9ab886;
+  --color-fd-card-cyan: #14242a;
+  --color-fd-card-cyan-header: #1c333a;
+
+  --color-fd-armed: #2a2010;
+
+  --font-label: var(--font-silkscreen), monospace;
+  --font-readout: var(--font-vt323), monospace;
+
+  --text-fd-numeral: 32px;
+  --text-fd-numeral--line-height: 1;
+  --text-fd-intent: 27px;
+  --text-fd-intent--line-height: 1;
+  --text-fd-readout: 24px;
+  --text-fd-readout--line-height: 1.1;
+  --text-fd-body: 22px;
+  --text-fd-body--line-height: 1.15;
+  --text-fd-label: 15px;
+  --text-fd-label--line-height: 1.2;
+  --text-fd-tag: 12px;
+  --text-fd-tag--line-height: 1.2;
+}
+
+/* ── FOUNDRY chamfer utilities ────────────────────────────────────── */
+@utility chamfer {
+  clip-path: polygon(
+    var(--fd-chamfer) 0,
+    100% 0,
+    100% calc(100% - var(--fd-chamfer)),
+    calc(100% - var(--fd-chamfer)) 100%,
+    0 100%,
+    0 var(--fd-chamfer)
+  );
+}
+@utility chamfer-5 {
+  --fd-chamfer: 5px;
+}
+@utility chamfer-6 {
+  --fd-chamfer: 6px;
+}
+@utility chamfer-8 {
+  --fd-chamfer: 8px;
+}
+@utility chamfer-10 {
+  --fd-chamfer: 10px;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
