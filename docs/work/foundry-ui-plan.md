@@ -540,6 +540,8 @@ Implemented exactly as planned — no deviations. All design tokens, chamfer uti
 
 Manually verified at desktop (1280×800) and mobile (375×812): chamfered plates with correct corner cuts, orange hull bar + AP pips, red enemy bar, cyan shields, amber temp shields + malfunction warnings, intent chip fused under HP bar, Silkscreen labels (uppercase), VT323 numerals + body text, 5-state cards (normal, unaffordable opacity, malfunction amber, discard cyan with TAP TO DISCARD, infested green placeholder), armed Slipstream button, End Turn primary button (orange, no translate on press), VICTORY/DEFEAT/ARRIVED outcome overlays with FoundryButton.
 
+PR #9 review follow-ups (same branch): content-sized hero plates (400px/460px) instead of 50% columns, design-accurate intent row (kind chip + name + DMG ? until Deep Scan), armor count, TRAVEL HALTED line restored, MetaStrip as a one-line plate, parenthesized button costs, mobile button stack with equal widths + spec type ramp (8px mobile labels), AP/shield squares unified at 12px, and the PixiJS canvas now contain-fits the viewport exactly (fractional zoom — integer snapping dropped, see updated CLAUDE.md known-issues note).
+
 ## Files created / modified
 
 **Created:**
@@ -564,8 +566,13 @@ Manually verified at desktop (1280×800) and mobile (375×812): chamfered plates
 
 - Card animations / flip / draw / fan — slice 6.6 (`motion` stays unused)
 - Wiring `infested` to real Bloom card data — future Bloom slice
-- Armor display (no data source yet — `strip-armor` throws until Carapace 2.5)
+- Armor display: PR review added the armor *count* (⛨ N) to EnemyPlate since `enemyArmor` exists in CombatView; richer armor presentation still future
 - Component-test infrastructure (needs an ADR)
+
+### Roadmap notes from PR #9 review (not implemented — future slices)
+
+- **Fixed-size cards:** cards currently flex to fill the hand row, so their size depends on hand count. Long-term they need a real card component with fixed, consistent dimensions regardless of how many cards are in hand (likely lands with the 6.6 card-feel pass or a dedicated card-component slice).
+- **Combat animations:** spending/losing AP, hit/weapon effects, card play animations, card draw animations — all future work (6.6 juice pass).
 
 ## Status
 

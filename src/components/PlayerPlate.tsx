@@ -63,7 +63,7 @@ export default function PlayerPlate({ view }: PlayerPlateProps) {
           {Array.from({ length: Math.max(view.apPerTurn, view.ap) }, (_, i) => (
             <span
               key={i}
-              className={`inline-block size-2.5 sm:size-3 ${i < view.ap ? 'bg-fd-orange' : 'bg-fd-strip'}`}
+              className={`inline-block size-3 ${i < view.ap ? 'bg-fd-orange' : 'bg-fd-strip'}`}
             />
           ))}
         </div>
