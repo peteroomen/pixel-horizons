@@ -1,12 +1,4 @@
-import {
-  BASELINE_AP,
-  getCard,
-  getEnemy,
-  getHull,
-  getModule,
-  HAND_SIZE,
-  MALFUNCTION_REPAIR_AP,
-} from '../data';
+import { getCard, getEnemy, getHull, getModule, HAND_SIZE, MALFUNCTION_REPAIR_AP } from '../data';
 import type {
   CardEffect,
   EnemyDef,
@@ -136,8 +128,10 @@ export function createCombat(run: RunState, enemyId: EnemyId, lane?: LaneContext
   const enemy = getEnemy(enemyId);
   const rng = restoreRng(run.rng.combat);
   const drawPile = rng.shuffle(generateCombatDeck(run.modules));
-  const shields = run.modules.flatMap((moduleId): ShieldLayer[] => {
-    const passive = getModule(moduleId).tiers.mk1.passive;
+  const shields = run.modules.flatMap((mod): ShieldLayer[] => {
+    const def = getModule(mod.id);
+    const tier = def.tiers[mod.tier === 2 ? 'mk2' : 'mk1'] ?? def.tiers.mk1;
+    const passive = tier.passive;
     if (passive === undefined || passive.kind !== 'shield-layers') {
       return [];
     }
@@ -154,12 +148,12 @@ export function createCombat(run: RunState, enemyId: EnemyId, lane?: LaneContext
     intentIndex: enemy.pattern === 'random' ? rng.int(0, enemy.intents.length) : 0,
     hullId: run.hullId,
     hullHp: run.hullHp,
-    modules: [...run.modules],
+    modules: run.modules.map((m) => m.id),
     malfunctioning: lane === undefined ? [] : [...lane.malfunctioning],
     shields,
     tempShieldLayers: 0,
-    ap: BASELINE_AP,
-    apPerTurn: BASELINE_AP,
+    ap: run.reactorLevel,
+    apPerTurn: run.reactorLevel,
     innateUsedThisTurn: false,
     innateUsedThisCombat: false,
     turn: 1,

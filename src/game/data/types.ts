@@ -11,6 +11,13 @@ export type CardId = string;
 export type ModuleId = string;
 export type HullId = string;
 
+export type ModuleTierLevel = 1 | 2;
+
+export interface ModuleInstance {
+  id: ModuleId;
+  tier: ModuleTierLevel;
+}
+
 export type CardEffect =
   | { kind: 'damage'; amount: number; piercing?: boolean }
   | { kind: 'travel'; amount: number }

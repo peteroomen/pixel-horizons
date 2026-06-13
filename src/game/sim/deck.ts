@@ -1,5 +1,5 @@
 import { getModule } from '../data';
-import type { CardId, ModuleId } from '../data';
+import type { CardId, ModuleId, ModuleInstance } from '../data';
 
 /**
  * One card instance in a combat deck. `moduleIndex` indexes the run's module list —
@@ -14,22 +14,34 @@ export interface CombatCard {
   moduleIndex: number | null;
 }
 
+function tierKey(tier: 1 | 2): 'mk1' | 'mk2' {
+  return tier === 2 ? 'mk2' : 'mk1';
+}
+
 /**
  * Generates the combat deck from installed modules (GDD §5.3): each module's
  * cards are appended in module-list order — no curation, no shuffling (shuffling
  * is combat's job and consumes the combat RNG stream). Duplicate module ids
- * contribute duplicate card sets. Mk I only until RunState tracks tiers (4.2).
+ * contribute duplicate card sets. At tier 2, uses mk2 cards if defined,
+ * otherwise falls back to mk1.
  *
  * Throws on unknown module ids — a corrupt module list is a programming error,
  * not a recoverable input.
  */
-export function generateCombatDeck(moduleIds: readonly ModuleId[]): CombatCard[] {
-  return moduleIds.flatMap((id, moduleIndex) =>
-    getModule(id).tiers.mk1.cards.map((cardId) => ({ cardId, moduleIndex })),
-  );
+export function generateCombatDeck(modules: readonly ModuleInstance[]): CombatCard[] {
+  return modules.flatMap((mod, moduleIndex) => {
+    const def = getModule(mod.id);
+    const tier = def.tiers[tierKey(mod.tier)] ?? def.tiers.mk1;
+    return tier.cards.map((cardId) => ({ cardId, moduleIndex }));
+  });
 }
 
 /** The deck as bare CardIds — catalog assertions and anything indifferent to origin. */
-export function generateDeck(moduleIds: readonly ModuleId[]): CardId[] {
-  return generateCombatDeck(moduleIds).map((card) => card.cardId);
+export function generateDeck(modules: readonly ModuleInstance[]): CardId[] {
+  return generateCombatDeck(modules).map((card) => card.cardId);
+}
+
+/** Convenience: wrap bare module ids as tier-1 instances. */
+export function moduleIds(ids: readonly ModuleId[]): ModuleInstance[] {
+  return ids.map((id) => ({ id, tier: 1 }));
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { getHull, getModule } from '../data';
-import { generateCombatDeck, generateDeck } from './deck';
+import { generateCombatDeck, generateDeck, moduleIds } from './deck';
 
 function tally(cards: readonly string[]): Record<string, number> {
   const counts: Record<string, number> = {};
@@ -12,7 +12,7 @@ function tally(cards: readonly string[]): Record<string, number> {
 }
 
 function startingDeck(hullId: string): string[] {
-  return generateDeck(getHull(hullId).startingModules);
+  return generateDeck(moduleIds(getHull(hullId).startingModules));
 }
 
 describe('generateDeck', () => {
@@ -66,18 +66,15 @@ describe('generateDeck', () => {
 
   it('deck size equals the sum of module card contributions (GDD §5.3)', () => {
     for (const hullId of ['hull-scout', 'hull-gunship', 'hull-freighter', 'hull-tactical']) {
-      const modules = getHull(hullId).startingModules;
-      const expectedSize = modules.reduce(
-        (sum, id) => sum + getModule(id).tiers.mk1.cards.length,
-        0,
-      );
+      const mods = moduleIds(getHull(hullId).startingModules);
+      const expectedSize = mods.reduce((sum, m) => sum + getModule(m.id).tiers.mk1.cards.length, 0);
       expect(startingDeck(hullId).length, hullId).toBe(expectedSize);
     }
   });
 
   it('appends cards in module-list order and is deterministic', () => {
-    const modules = ['mod-thruster', 'mod-light-laser'];
-    const deck = generateDeck(modules);
+    const mods = moduleIds(['mod-thruster', 'mod-light-laser']);
+    const deck = generateDeck(mods);
     expect(deck).toEqual([
       'card-burn',
       'card-burn',
@@ -85,12 +82,12 @@ describe('generateDeck', () => {
       'card-laser-burst',
       'card-laser-burst',
     ]);
-    expect(generateDeck(modules)).toEqual(deck);
+    expect(generateDeck(mods)).toEqual(deck);
   });
 
   it('duplicate modules contribute duplicate card sets', () => {
-    expect(generateDeck(['mod-thruster', 'mod-thruster']).length).toBe(
-      generateDeck(['mod-thruster']).length * 2,
+    expect(generateDeck(moduleIds(['mod-thruster', 'mod-thruster'])).length).toBe(
+      generateDeck(moduleIds(['mod-thruster'])).length * 2,
     );
   });
 
@@ -99,19 +96,21 @@ describe('generateDeck', () => {
   });
 
   it('throws on unknown module ids, naming the offender', () => {
-    expect(() => generateDeck(['mod-thruster', 'mod-nonexistent'])).toThrow('mod-nonexistent');
+    expect(() => generateDeck(moduleIds(['mod-thruster', 'mod-nonexistent']))).toThrow(
+      'mod-nonexistent',
+    );
   });
 
   it('mutating the returned deck does not corrupt the catalog', () => {
-    const deck = generateDeck(['mod-thruster']);
+    const deck = generateDeck(moduleIds(['mod-thruster']));
     deck.pop();
-    expect(generateDeck(['mod-thruster']).length).toBe(3);
+    expect(generateDeck(moduleIds(['mod-thruster'])).length).toBe(3);
   });
 });
 
 describe('generateCombatDeck', () => {
   it('tags every card with the index of its contributing module', () => {
-    expect(generateCombatDeck(['mod-thruster', 'mod-light-laser'])).toEqual([
+    expect(generateCombatDeck(moduleIds(['mod-thruster', 'mod-light-laser']))).toEqual([
       { cardId: 'card-burn', moduleIndex: 0 },
       { cardId: 'card-burn', moduleIndex: 0 },
       { cardId: 'card-afterburner', moduleIndex: 0 },
@@ -121,7 +120,7 @@ describe('generateCombatDeck', () => {
   });
 
   it('duplicate modules keep distinct indices — they are separate malfunction targets', () => {
-    const deck = generateCombatDeck(['mod-thruster', 'mod-thruster']);
+    const deck = generateCombatDeck(moduleIds(['mod-thruster', 'mod-thruster']));
     expect(new Set(deck.map((card) => card.moduleIndex))).toEqual(new Set([0, 1]));
   });
 });

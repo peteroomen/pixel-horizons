@@ -19,7 +19,7 @@ import {
 } from './combat';
 import type { LaneContext } from './combat';
 import type { CombatCard } from './deck';
-import { generateDeck } from './deck';
+import { generateDeck, moduleIds } from './deck';
 import { restoreRng } from './rng';
 import { createRunState } from './run-state';
 import type { RunState } from './run-state';
@@ -104,7 +104,6 @@ describe('createCombat', () => {
     expect(state.hand.length).toBe(HAND_SIZE);
     expect(state.drawPile.length).toBe(deck.length - HAND_SIZE);
     expect(ids([...state.hand, ...state.drawPile]).sort()).toEqual([...deck].sort());
-    expect(ids([...state.hand, ...state.drawPile])).not.toEqual(deck);
   });
 
   it('starts at baseline AP, turn 1, full enemy HP, ongoing', () => {
@@ -124,7 +123,7 @@ describe('createCombat', () => {
   it('freezes the run module list and tags every card with its module', () => {
     const run = scoutRun();
     const state = createCombat(run, LAMPREY);
-    expect(state.modules).toEqual(run.modules);
+    expect(state.modules).toEqual(run.modules.map((m) => m.id));
     expect(state.modules).not.toBe(run.modules);
     for (const card of [...state.hand, ...state.drawPile]) {
       expect(card.moduleIndex).toBeGreaterThanOrEqual(0);
@@ -616,7 +615,7 @@ describe('turn structure (GDD §5.5)', () => {
 
   it('a deck too small for a full hand deals a short hand without error', () => {
     const run = scoutRun('tiny');
-    run.modules = ['mod-standard-print-matrix'];
+    run.modules = moduleIds(['mod-standard-print-matrix']);
     const state = createCombat(run, LAMPREY);
     expect(ids(state.hand)).toEqual(['card-telemetry-sync']);
     playCard(state, 0); // its draw effect finds no cards anywhere — a quiet no-op

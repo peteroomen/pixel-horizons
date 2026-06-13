@@ -1,12 +1,12 @@
 import { getModule } from '@/game/data';
-import type { ModuleId, PlanetItemEffect } from '@/game/data';
+import type { ModuleInstance, PlanetItemEffect } from '@/game/data';
 import { BACKPACK_CAPACITY, POD_WINDOW_PER_ENGINE_MS } from '@/game/data/surface';
 
 /**
  * Loadout projection (GDD §6.3): installed ship modules project items onto the
  * printed clone. Pure interpretation of catalog data — no module is special-cased
- * by id, only by its declared effects. Mk tier tracking arrives with the
- * Workbench (4.2); until then every module projects its Mk I item.
+ * by id, only by its declared effects. Tier-aware: reads the module instance's
+ * tier, falling back to mk1 if the requested tier is undefined.
  */
 
 export interface DashConfig {
@@ -34,7 +34,7 @@ export const BASELINE_CAPABILITIES: CloneCapabilities = {
 };
 
 export interface ProjectedItem {
-  moduleId: ModuleId;
+  moduleId: string;
   name: string;
   description: string;
   /** False when over the reactor item cap — projected but not equipped (GDD §4.3). */
@@ -67,7 +67,7 @@ export function baselineLoadout(): SurfaceLoadout {
 }
 
 export function projectLoadout(
-  moduleIds: readonly ModuleId[],
+  modules: readonly ModuleInstance[],
   reactorLevel: number,
 ): SurfaceLoadout {
   const items: ProjectedItem[] = [];
@@ -75,12 +75,13 @@ export function projectLoadout(
   let engineCount = 0;
   let equippedCount = 0;
 
-  for (const moduleId of moduleIds) {
-    const def = getModule(moduleId);
+  for (const mod of modules) {
+    const def = getModule(mod.id);
     if (def.slot === 'engine') {
       engineCount += 1;
     }
-    const item = def.tiers.mk1.planetItem;
+    const tier = def.tiers[mod.tier === 2 ? 'mk2' : 'mk1'] ?? def.tiers.mk1;
+    const item = tier.planetItem;
     if (item === undefined) {
       continue;
     }
@@ -89,7 +90,13 @@ export function projectLoadout(
     if (!chassis && active) {
       equippedCount += 1;
     }
-    items.push({ moduleId, name: item.name, description: item.description, active, chassis });
+    items.push({
+      moduleId: mod.id,
+      name: item.name,
+      description: item.description,
+      active,
+      chassis,
+    });
     if (active) {
       activeEffects.push(...(item.effects ?? []));
     }

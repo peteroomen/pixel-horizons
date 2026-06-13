@@ -4,8 +4,8 @@ import { ROCKY_TEST_LEVEL } from '@/game/data/levels';
 import { POD_WINDOW_MS } from '@/game/data/surface';
 import { computeScale, VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from '@/renderer/pixel-scale';
 import type { CombatView } from './combat-view';
-import { BASELINE_AP, getEnemy, getHull, getModule } from './data';
-import type { EnemyId } from './data';
+import { getEnemy, getHull, getModule } from './data';
+import type { EnemyId, ModuleInstance } from './data';
 import { buildMapView } from './map-view';
 import type { MapView } from './map-view';
 import { startCombatMode } from './modes/combat-mode';
@@ -130,34 +130,33 @@ function resolveHull(): string {
  * the whole ship — the combat deck and the surface items both project from it.
  * An all-invalid or empty list falls back to the hull's defaults.
  */
-function resolveModuleOverride(): string[] | null {
+function resolveModuleOverride(): ModuleInstance[] | null {
   const param = new URLSearchParams(window.location.search).get('modules');
   if (param === null) return null;
-  const ids: string[] = [];
+  const modules: ModuleInstance[] = [];
   for (const entry of param.split(',')) {
     const name = entry.trim();
     if (name === '') continue;
     const id = name.startsWith('mod-') ? name : `mod-${name}`;
     try {
-      ids.push(getModule(id).id);
+      modules.push({ id: getModule(id).id, tier: 1 });
     } catch {
       // Unknown module id — skipped quietly
     }
   }
-  return ids.length > 0 ? ids : null;
+  return modules.length > 0 ? modules : null;
 }
 
 /**
- * Dev/test knob: `?reactor=4` overrides the reactor level driving the surface
- * item cap (GDD §4.3) — testing the cap shouldn't require Core Crystals.
- * Combat AP stays at BASELINE_AP until reactor level lives on RunState (4.2+).
- * Invalid values fall back quietly; 0 is valid (every equipment item inactive).
+ * Dev/test knob: `?reactor=4` overrides the reactor level on the RunState —
+ * testing the cap shouldn't require Core Crystals. Null means "use the
+ * RunState's actual reactorLevel" (the normal path).
  */
-function resolveReactorLevel(): number {
+function resolveReactorOverride(): number | null {
   const param = new URLSearchParams(window.location.search).get('reactor');
-  if (param === null) return BASELINE_AP;
+  if (param === null) return null;
   const level = Number.parseInt(param, 10);
-  return Number.isFinite(level) && level >= 0 ? level : BASELINE_AP;
+  return Number.isFinite(level) && level >= 0 ? level : null;
 }
 
 /**
@@ -231,7 +230,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const podWindowMs = resolvePodWindowMs();
   const devSurface = resolveDevSurface();
   const moduleOverride = resolveModuleOverride();
-  const reactorLevel = resolveReactorLevel();
+  const reactorOverride = resolveReactorOverride();
 
   TextureSource.defaultOptions.scaleMode = 'nearest';
   const app = new Application();
@@ -267,6 +266,9 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     const next = createRunState(urlSeed, hullId);
     if (moduleOverride !== null) {
       next.modules = [...moduleOverride];
+    }
+    if (reactorOverride !== null) {
+      next.reactorLevel = reactorOverride;
     }
     return next;
   };
@@ -312,7 +314,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       {
         level: ROCKY_TEST_LEVEL,
         podWindowMs,
-        loadout: projectLoadout(run.modules, reactorLevel),
+        loadout: projectLoadout(run.modules, run.reactorLevel),
       },
       { onUpdate: (view) => callbacks.onSurfaceUpdate?.(view) },
     );

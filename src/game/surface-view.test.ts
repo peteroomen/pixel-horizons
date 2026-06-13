@@ -86,7 +86,13 @@ describe('surfaceViewEquals', () => {
 
 describe('SurfaceView — projected items (3.3)', () => {
   it('exposes items and dash cooldown from the loadout', () => {
-    const loadout = projectLoadout(['mod-phase-shifter', 'mod-standard-print-matrix'], 3);
+    const loadout = projectLoadout(
+      [
+        { id: 'mod-phase-shifter', tier: 1 },
+        { id: 'mod-standard-print-matrix', tier: 1 },
+      ],
+      3,
+    );
     const state = createSurface(['####', '#PD#', '####'], { loadout });
     const view = buildSurfaceView(state);
     expect(view.items).toEqual([
@@ -100,7 +106,7 @@ describe('SurfaceView — projected items (3.3)', () => {
     const bare = createSurface(['####', '#PD#', '####']);
     expect(buildSurfaceView(bare).dashCooldownSeconds).toBeNull();
 
-    const loadout = projectLoadout(['mod-phase-shifter'], 3);
+    const loadout = projectLoadout([{ id: 'mod-phase-shifter', tier: 1 }], 3);
     const state = createSurface(['####', '#PD#', '####'], { loadout });
     state.clone.dashCooldownMs = 1499;
     expect(buildSurfaceView(state).dashCooldownSeconds).toBe(2);
@@ -109,7 +115,7 @@ describe('SurfaceView — projected items (3.3)', () => {
   });
 
   it('sub-second cooldown ticks do not change the view (emission contract)', () => {
-    const loadout = projectLoadout(['mod-phase-shifter'], 3);
+    const loadout = projectLoadout([{ id: 'mod-phase-shifter', tier: 1 }], 3);
     const state = createSurface(['####', '#PD#', '####'], { loadout });
     state.clone.dashCooldownMs = 950;
     const a = buildSurfaceView(state);
