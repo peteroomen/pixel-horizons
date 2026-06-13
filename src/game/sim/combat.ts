@@ -119,6 +119,8 @@ export interface CombatState {
   scrapAtStart: number;
   /** Accumulated here; applied to RunState resources by the caller when the fight ends. */
   scrapGained: number;
+  /** Current phase index into the enemy's `phases` array (-1 = base phase). */
+  phaseIndex: number;
   modifiers: CombatModifiers;
   rng: RngState;
   outcome: CombatOutcome;
@@ -168,6 +170,7 @@ export function createCombat(run: RunState, enemyId: EnemyId, lane?: LaneContext
         : { distance: lane.distance, progressAtStart: lane.progressAtStart },
     scrapAtStart: run.resources.scrap,
     scrapGained: 0,
+    phaseIndex: -1,
     modifiers: {
       nextAttackBonus: 0,
       nextAttackMultiplier: 1,
@@ -402,7 +405,7 @@ export function endTurn(state: CombatState): void {
   // Snapshot before the attack so a layer spent this phase doesn't also tick this
   // phase — rechargeTurns counts full enemy phases the layer stays down.
   const recharging = state.shields.filter((layer) => layer.turnsUntilUp > 0);
-  resolveEnemyIntent(state, rng, enemy.intents[state.intentIndex]);
+  resolveEnemyIntent(state, rng, activeIntents(state)[state.intentIndex]);
   if (state.hullHp <= 0) {
     state.outcome = 'defeat';
     state.rng = rng.getState();
@@ -414,7 +417,12 @@ export function endTurn(state: CombatState): void {
 
   // Organic armor regrows after the enemy phase (GDD §5.7): chip damage spread
   // across turns is eaten; sustained damage within one turn breaks through.
-  const armor = enemy.armor;
+  // Phase-specific armor overrides the base definition.
+  const phaseArmor =
+    state.phaseIndex >= 0 && enemy.phases !== undefined
+      ? enemy.phases[state.phaseIndex].armor
+      : undefined;
+  const armor = phaseArmor ?? enemy.armor;
   if (armor !== undefined) {
     state.enemyArmor = Math.min(armor.amount, state.enemyArmor + armor.regen);
   }
@@ -443,9 +451,18 @@ export function endTurn(state: CombatState): void {
   state.rng = rng.getState();
 }
 
+/** The active intent table — base intents or the current phase's intents. */
+function activeIntents(state: CombatState): EnemyIntentDef[] {
+  const enemy = getEnemy(state.enemyId);
+  if (state.phaseIndex >= 0 && enemy.phases !== undefined) {
+    return enemy.phases[state.phaseIndex].intents;
+  }
+  return enemy.intents;
+}
+
 /** The enemy action telegraphed for the upcoming enemy phase (shown by the UI in 2.2). */
 export function currentIntent(state: CombatState): EnemyIntentDef {
-  return getEnemy(state.enemyId).intents[state.intentIndex];
+  return activeIntents(state)[state.intentIndex];
 }
 
 /**
@@ -568,6 +585,23 @@ function dealDamageToEnemy(state: CombatState, amount: number, piercing: boolean
     remaining -= absorbed;
   }
   state.enemyHp = Math.max(0, state.enemyHp - remaining);
+  checkPhaseTransition(state);
+}
+
+function checkPhaseTransition(state: CombatState): void {
+  const enemy = getEnemy(state.enemyId);
+  if (enemy.phases === undefined || enemy.maxHp === 0) return;
+  const hpFraction = state.enemyHp / enemy.maxHp;
+  const nextPhase = state.phaseIndex + 1;
+  if (nextPhase >= enemy.phases.length) return;
+  const phase = enemy.phases[nextPhase];
+  if (hpFraction < phase.belowHpFraction) {
+    state.phaseIndex = nextPhase;
+    state.intentIndex = 0;
+    if (phase.armor !== undefined) {
+      state.enemyArmor = phase.armor.amount;
+    }
+  }
 }
 
 function resolveEnemyIntent(state: CombatState, rng: Rng, intent: EnemyIntentDef): void {
@@ -661,10 +695,11 @@ function moduleValue(moduleId: ModuleId): number {
 }
 
 function rollNextIntent(state: CombatState, rng: Rng, enemy: EnemyDef): void {
+  const intents = activeIntents(state);
   state.intentIndex =
     enemy.pattern === 'random'
-      ? rng.int(0, enemy.intents.length)
-      : (state.intentIndex + 1) % enemy.intents.length;
+      ? rng.int(0, intents.length)
+      : (state.intentIndex + 1) % intents.length;
 }
 
 function drawCards(state: CombatState, rng: Rng, count: number): void {

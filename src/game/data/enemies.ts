@@ -77,4 +77,31 @@ export const ENEMY_DEFS: readonly EnemyDef[] = [
       { kind: 'attack', name: 'Drag Under', amount: 7 },
     ],
   },
+  {
+    id: 'enemy-gatemaw',
+    name: 'Gatemaw',
+    archetype: 'Gate Guardian',
+    maxHp: 70,
+    pattern: 'cycle',
+    scrapReward: { min: 15, max: 25 },
+    armor: { amount: 8, regen: 3 },
+    anchor: { tollScrap: 999 },
+    intents: [
+      { kind: 'attack', name: 'Gate Slam', amount: 6 },
+      { kind: 'attack', name: 'Tendril Sweep', amount: 4, hits: 2 },
+      { kind: 'attack-module', name: 'Bore', amount: 5, targeting: 'highest-value' },
+    ],
+    phases: [
+      {
+        belowHpFraction: 0.5,
+        intents: [
+          { kind: 'attack', name: 'Frenzy', amount: 5, hits: 3 },
+          { kind: 'inject', name: 'Spore Flood', cardId: 'card-spore-cluster', count: 2 },
+          { kind: 'attack-module', name: 'Devour', amount: 8, piercing: true, targeting: 'random' },
+          { kind: 'attack', name: 'Death Rattle', amount: 10 },
+        ],
+        armor: { amount: 0, regen: 0 },
+      },
+    ],
+  },
 ];

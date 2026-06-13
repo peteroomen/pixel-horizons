@@ -104,6 +104,10 @@ export interface CombatView {
   scrap: number;
   scrapGained: number;
   outcome: CombatOutcome;
+  /** True for multi-phase boss enemies — drives scaled rendering and boss HUD plate. */
+  boss: boolean;
+  /** Current boss phase (-1 = base); null for non-boss enemies. */
+  bossPhase: number | null;
 }
 
 export function buildCombatView(state: CombatState): CombatView {
@@ -194,6 +198,8 @@ export function buildCombatView(state: CombatState): CombatView {
     scrap: state.scrapAtStart + state.scrapGained,
     scrapGained: state.scrapGained,
     outcome: state.outcome,
+    boss: enemy.phases !== undefined && enemy.phases.length > 0,
+    bossPhase: enemy.phases !== undefined && enemy.phases.length > 0 ? state.phaseIndex : null,
   };
 }
 

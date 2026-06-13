@@ -979,3 +979,64 @@ describe('Infestations (GDD §5.6)', () => {
     expect(() => playCard(scout, 0)).not.toThrow();
   });
 });
+
+const GATEMAW = 'enemy-gatemaw';
+
+describe('boss phases (GDD §7.5)', () => {
+  it('starts in base phase (phaseIndex -1)', () => {
+    const state = createCombat(gunshipRun(), GATEMAW);
+    expect(state.phaseIndex).toBe(-1);
+  });
+
+  it('phase transition switches intent table and resets intent index', () => {
+    const run = gunshipRun();
+    const s = createCombat(run, GATEMAW);
+    const enemy = getEnemy(GATEMAW);
+    s.enemyHp = Math.floor(enemy.maxHp * enemy.phases![0].belowHpFraction) + 1;
+    s.enemyArmor = 0;
+    expect(s.phaseIndex).toBe(-1);
+    s.hand = hand('card-laser-burst');
+    playCard(s, 0);
+    expect(s.phaseIndex).toBe(0);
+    expect(s.intentIndex).toBe(0);
+    expect(currentIntent(s).name).toBe(enemy.phases![0].intents[0].name);
+  });
+
+  it('phase 2 sheds armor (Gatemaw: armor goes to 0)', () => {
+    const run = gunshipRun();
+    const state = createCombat(run, GATEMAW);
+    const enemy = getEnemy(GATEMAW);
+    expect(state.enemyArmor).toBe(enemy.armor!.amount);
+    // Trigger phase transition
+    state.enemyHp = Math.floor(enemy.maxHp * enemy.phases![0].belowHpFraction) + 1;
+    state.enemyArmor = 0;
+    state.hand = hand('card-laser-burst');
+    playCard(state, 0);
+    expect(state.phaseIndex).toBe(0);
+    // Phase 2 armor is { amount: 0, regen: 0 }
+    expect(state.enemyArmor).toBe(0);
+    // After endTurn, armor stays at 0 (phase 2 regen is 0)
+    endTurn(state);
+    expect(state.enemyArmor).toBe(0);
+  });
+
+  it('Gatemaw is an anchor with toll=999 (effectively unpayable)', () => {
+    const run = gunshipRun();
+    run.resources.scrap = 50;
+    const state = createCombat(run, GATEMAW, {
+      distance: 10,
+      progressAtStart: 0,
+      malfunctioning: [],
+    });
+    expect(isTravelAnchored(state)).toBe(true);
+    expect(canPayToll(state)).toBe(false);
+  });
+
+  it('no-lane boss fight has no escape-by-arrival', () => {
+    const state = createCombat(gunshipRun(), GATEMAW);
+    expect(state.lane).toBeNull();
+    endTurn(state);
+    expect(state.travelProgress).toBe(0);
+    expect(state.outcome).toBe('ongoing');
+  });
+});
