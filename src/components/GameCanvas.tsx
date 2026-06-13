@@ -3,7 +3,15 @@
 import { useEffect, useRef } from 'react';
 
 import { initGame } from '@/game/main';
-import type { CombatView, GameHandle, GamePhase, MapView, SurfaceView } from '@/game/main';
+import type {
+  CombatView,
+  GameHandle,
+  GamePhase,
+  MapView,
+  ShipView,
+  StationView,
+  SurfaceView,
+} from '@/game/main';
 
 interface GameCanvasProps {
   onCombatUpdate: (view: CombatView) => void;
@@ -12,6 +20,8 @@ interface GameCanvasProps {
   onPhaseChange?: (phase: GamePhase) => void;
   onSurfaceUpdate?: (view: SurfaceView) => void;
   onMapUpdate?: (view: MapView) => void;
+  onShipUpdate?: (view: ShipView) => void;
+  onStationUpdate?: (view: StationView) => void;
 }
 
 /**
@@ -27,6 +37,8 @@ export default function GameCanvas({
   onPhaseChange,
   onSurfaceUpdate,
   onMapUpdate,
+  onShipUpdate,
+  onStationUpdate,
 }: GameCanvasProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const callbacksRef = useRef({
@@ -36,6 +48,8 @@ export default function GameCanvas({
     onPhaseChange,
     onSurfaceUpdate,
     onMapUpdate,
+    onShipUpdate,
+    onStationUpdate,
   });
 
   useEffect(() => {
@@ -46,8 +60,19 @@ export default function GameCanvas({
       onPhaseChange,
       onSurfaceUpdate,
       onMapUpdate,
+      onShipUpdate,
+      onStationUpdate,
     };
-  }, [onCombatUpdate, onReady, onScaleChange, onPhaseChange, onSurfaceUpdate, onMapUpdate]);
+  }, [
+    onCombatUpdate,
+    onReady,
+    onScaleChange,
+    onPhaseChange,
+    onSurfaceUpdate,
+    onMapUpdate,
+    onShipUpdate,
+    onStationUpdate,
+  ]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -63,6 +88,8 @@ export default function GameCanvas({
         onPhaseChange: (phase) => callbacksRef.current.onPhaseChange?.(phase),
         onSurfaceUpdate: (view) => callbacksRef.current.onSurfaceUpdate?.(view),
         onMapUpdate: (view) => callbacksRef.current.onMapUpdate?.(view),
+        onShipUpdate: (view) => callbacksRef.current.onShipUpdate?.(view),
+        onStationUpdate: (view) => callbacksRef.current.onStationUpdate?.(view),
       });
       if (cancelled) {
         candidate.destroy();

@@ -2,15 +2,26 @@
 
 import { useCallback, useRef, useState } from 'react';
 
+import BossReward from '@/components/BossReward';
 import CombatHand from '@/components/CombatHand';
 import GameCanvas from '@/components/GameCanvas';
 import HUD from '@/components/HUD';
 import SectorMap from '@/components/SectorMap';
+import StationScreen from '@/components/StationScreen';
 import SurfaceHUD from '@/components/SurfaceHUD';
 import TitleOverlay from '@/components/TitleOverlay';
 import TouchControls from '@/components/TouchControls';
+import Workbench from '@/components/Workbench';
 import FoundryButton from '@/components/foundry/FoundryButton';
-import type { CombatView, GameHandle, GamePhase, MapView, SurfaceView } from '@/game/main';
+import type {
+  CombatView,
+  GameHandle,
+  GamePhase,
+  MapView,
+  ShipView,
+  StationView,
+  SurfaceView,
+} from '@/game/main';
 
 const OUTCOME_COLOR: Record<string, string> = {
   victory: 'text-fd-orange',
@@ -65,7 +76,11 @@ export default function Home() {
   const [phase, setPhase] = useState<GamePhase | null>(null);
   const [surfaceView, setSurfaceView] = useState<SurfaceView | null>(null);
   const [mapView, setMapView] = useState<MapView | null>(null);
+  const [shipView, setShipView] = useState<ShipView | null>(null);
+  const [stationView, setStationView] = useState<StationView | null>(null);
+  const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [abandonArmed, setAbandonArmed] = useState(false);
+  const [handle, setHandle] = useState<GameHandle | null>(null);
   const handleRef = useRef<GameHandle | null>(null);
   const abandonTimerRef = useRef<number | null>(null);
 
@@ -89,13 +104,15 @@ export default function Home() {
     setInnateArmed(false);
   }, []);
 
-  const onReady = useCallback((handle: GameHandle) => {
-    handleRef.current = handle;
+  const onReady = useCallback((h: GameHandle) => {
+    handleRef.current = h;
+    setHandle(h);
   }, []);
 
   const onPhaseChange = useCallback((next: GamePhase) => {
     setPhase(next);
     setAbandonArmed(false);
+    if (next === 'map') setWorkbenchOpen(false);
   }, []);
 
   const onSurfaceUpdate = useCallback((next: SurfaceView) => {
@@ -104,6 +121,14 @@ export default function Home() {
 
   const onMapUpdate = useCallback((next: MapView) => {
     setMapView(next);
+  }, []);
+
+  const onShipUpdate = useCallback((next: ShipView) => {
+    setShipView(next);
+  }, []);
+
+  const onStationUpdate = useCallback((next: StationView) => {
+    setStationView(next);
   }, []);
 
   // Plain innates fire immediately; card-targeted ones (Slipstream) toggle arming.
@@ -126,6 +151,8 @@ export default function Home() {
         onPhaseChange={onPhaseChange}
         onSurfaceUpdate={onSurfaceUpdate}
         onMapUpdate={onMapUpdate}
+        onShipUpdate={onShipUpdate}
+        onStationUpdate={onStationUpdate}
       />
 
       {/* Title: a saved expedition exists */}
@@ -139,7 +166,30 @@ export default function Home() {
 
       {/* Sector map: pick the next node */}
       {phase === 'map' && mapView !== null && (
-        <SectorMap view={mapView} onSelect={(id) => handleRef.current?.selectNode(id)} />
+        <>
+          <SectorMap view={mapView} onSelect={(id) => handleRef.current?.selectNode(id)} />
+          <div className="absolute right-2 top-12 sm:right-6 sm:top-16">
+            <FoundryButton
+              variant="secondary"
+              onClick={() => {
+                handleRef.current?.openWorkbench();
+                setWorkbenchOpen(true);
+              }}
+            >
+              Ship
+            </FoundryButton>
+          </div>
+          {workbenchOpen && shipView !== null && handle !== null && (
+            <Workbench
+              view={shipView}
+              handle={handle}
+              onClose={() => {
+                handle.closeWorkbench();
+                setWorkbenchOpen(false);
+              }}
+            />
+          )}
+        </>
       )}
 
       {/* Surface: HUD + touch controls + launch/abandon + launch result */}
@@ -245,6 +295,16 @@ export default function Home() {
         </>
       )}
 
+      {/* Shop / Engineer station screens */}
+      {(phase === 'shop' || phase === 'engineer') && stationView !== null && handle !== null && (
+        <StationScreen view={stationView} handle={handle} />
+      )}
+
+      {/* Boss reward: three-choice pick after the gate guardian dies */}
+      {phase === 'boss-reward' && handle !== null && (
+        <BossReward mapView={mapView} handle={handle} />
+      )}
+
       {/* Run over: ship destroyed (GDD §6.4 — space risks are fatal) */}
       {phase === 'run-over' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-black/80">
@@ -258,14 +318,14 @@ export default function Home() {
         </div>
       )}
 
-      {/* Sector complete: reached the gate (boss arrives in 5.2) */}
+      {/* Sector complete: gate guardian defeated */}
       {phase === 'sector-complete' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-black/80">
           <span className="font-label text-3xl uppercase text-fd-orange sm:text-5xl">
-            Gate Reached
+            Sector Clear
           </span>
           <span className="retro text-[10px] text-white/60 sm:text-xs">
-            SECTOR {mapView?.sector ?? 1} TRAVERSED — THE BLOOM GATE LOOMS
+            SECTOR {mapView?.sector ?? 1} — BLOOM GATE DESTROYED
           </span>
           {mapView !== null && <RunSummary view={mapView} />}
           <FoundryButton variant="primary" onClick={() => handleRef.current?.newRun()}>
