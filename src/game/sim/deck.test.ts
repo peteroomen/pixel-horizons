@@ -124,3 +124,30 @@ describe('generateCombatDeck', () => {
     expect(new Set(deck.map((card) => card.moduleIndex))).toEqual(new Set([0, 1]));
   });
 });
+
+describe('tier-aware deck generation', () => {
+  it('tier 2 uses mk2 cards when defined', () => {
+    const mk1 = generateDeck([{ id: 'mod-mining-laser', tier: 1 }]);
+    const mk2 = generateDeck([{ id: 'mod-mining-laser', tier: 2 }]);
+    expect(mk1).toEqual(['card-slag-shot']);
+    expect(mk2).toEqual(['card-slag-shot-mk2', 'card-slag-shot-mk2']);
+  });
+
+  it('tier 2 falls back to mk1 when mk2 is undefined', () => {
+    const mk1 = generateDeck([{ id: 'mod-cargo-scanner', tier: 1 }]);
+    const mk2 = generateDeck([{ id: 'mod-cargo-scanner', tier: 2 }]);
+    expect(mk2).toEqual(mk1);
+  });
+
+  it('mixed tiers in the same loadout each pull from the right tier', () => {
+    const deck = generateDeck([
+      { id: 'mod-thruster', tier: 1 },
+      { id: 'mod-mining-laser', tier: 2 },
+    ]);
+    expect(tally(deck)).toEqual({
+      'card-burn': 2,
+      'card-afterburner': 1,
+      'card-slag-shot-mk2': 2,
+    });
+  });
+});

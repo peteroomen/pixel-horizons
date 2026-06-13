@@ -110,3 +110,37 @@ describe('projectLoadout — effect combination', () => {
     expect(loadout.podWindowBonusMs).toBe(0);
   });
 });
+
+describe('projectLoadout — tier 2 items', () => {
+  it('Mining Laser Mk II projects 2× yield + deposit scanner', () => {
+    const loadout = projectLoadout([{ id: 'mod-mining-laser', tier: 2 }], REACTOR);
+    expect(loadout.yieldMultiplier).toBe(2);
+    expect(loadout.scanner).toBe(true);
+  });
+
+  it('Thruster Mk II keeps double jump and adds high jump', () => {
+    const loadout = projectLoadout([{ id: 'mod-thruster', tier: 2 }], REACTOR);
+    expect(loadout.capabilities.maxAirJumps).toBe(1);
+    expect(loadout.capabilities.jumpVelocityMultiplier).toBe(1.15);
+  });
+
+  it('Phase Shifter Mk II has a stronger dash (longer range, shorter cooldown)', () => {
+    const mk1 = projectLoadout([{ id: 'mod-phase-shifter', tier: 1 }], REACTOR);
+    const mk2 = projectLoadout([{ id: 'mod-phase-shifter', tier: 2 }], REACTOR);
+    expect(mk2.capabilities.dash).toEqual({ distancePx: 64, cooldownMs: 1200 });
+    expect(mk2.capabilities.dash!.distancePx).toBeGreaterThan(mk1.capabilities.dash!.distancePx);
+  });
+
+  it('tier 2 falls back to mk1 item when mk2 has no planet item', () => {
+    const mk1 = projectLoadout([{ id: 'mod-cargo-scanner', tier: 1 }], REACTOR);
+    const mk2 = projectLoadout([{ id: 'mod-cargo-scanner', tier: 2 }], REACTOR);
+    expect(mk2.scanner).toBe(true);
+    expect(mk2.items[0].name).toBe(mk1.items[0].name);
+  });
+
+  it('an upgrade never loses a working effect', () => {
+    const mk1 = projectLoadout([{ id: 'mod-mining-laser', tier: 1 }], REACTOR);
+    const mk2 = projectLoadout([{ id: 'mod-mining-laser', tier: 2 }], REACTOR);
+    expect(mk2.yieldMultiplier).toBeGreaterThanOrEqual(mk1.yieldMultiplier);
+  });
+});

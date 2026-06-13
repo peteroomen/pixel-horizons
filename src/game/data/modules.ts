@@ -67,6 +67,7 @@ export const MODULE_DEFS: readonly ModuleDef[] = [
         planetItem: {
           name: 'Enhanced Mining + Deposit Scanner',
           description: '2× mining yield; highlights deposits.',
+          effects: [{ kind: 'mining-yield', multiplier: 2 }, { kind: 'deposit-scanner' }],
         },
       },
     },
@@ -107,6 +108,7 @@ export const MODULE_DEFS: readonly ModuleDef[] = [
         planetItem: {
           name: 'Phase Dash + Phase Vision',
           description: 'Blink through walls; see through walls briefly.',
+          effects: [{ kind: 'phase-dash', distancePx: 64, cooldownMs: 1200 }],
         },
       },
     },
@@ -160,8 +162,9 @@ export const MODULE_DEFS: readonly ModuleDef[] = [
       mk2: {
         cards: ['card-hard-burn', 'card-hard-burn', 'card-emergency-boost'],
         planetItem: {
-          name: 'Double Jump + Air Dash + Hover',
-          description: 'Jump again mid-air; dash mid-air; hover briefly.',
+          name: 'Enhanced Double Jump',
+          description: 'Jump again mid-air; higher jump.',
+          effects: [{ kind: 'double-jump' }, { kind: 'high-jump', jumpVelocityMultiplier: 1.15 }],
         },
       },
     },
