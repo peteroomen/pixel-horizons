@@ -16,11 +16,29 @@ export const HAND_SIZE = 5;
 export const MALFUNCTION_REPAIR_AP = 1;
 
 /**
- * Lane length band in turns (GDD §5.1 says 6–12 depending on path and modifiers;
- * lane modifiers arrive in 4.1, so 2.4 rolls the middle of the band).
+ * Lane length band in turns (GDD §5.1: 6–12 depending on path). Map generation
+ * rolls each edge's lane inside this band — short safe hops and long gauntlets
+ * both exist on every map.
  */
-export const LANE_DISTANCE_MIN = 7;
-export const LANE_DISTANCE_MAX = 10;
+export const LANE_DISTANCE_MIN = 6;
+export const LANE_DISTANCE_MAX = 12;
 
-/** Encounters rolled per lane until danger-weighted counts arrive with lane modifiers (4.1). */
-export const LANE_ENCOUNTER_COUNT = 2;
+/** Encounter-count band rolled per map edge — the lane "danger" axis (GDD §7.1). */
+export const LANE_ENCOUNTERS_MIN = 1;
+export const LANE_ENCOUNTERS_MAX = 3;
+
+/** Sector map shape (GDD §7.1): START + middle columns + GATE. */
+export const MAP_MIDDLE_COLUMNS = 4;
+export const MAP_COLUMN_NODES_MIN = 2;
+export const MAP_COLUMN_NODES_MAX = 3;
+
+/**
+ * Relative weights for middle-column node types. Nodes are realspace
+ * destinations — combat happens only on lanes (GDD §2/§5.1); shop/event
+ * node types join the table in 4.3/4.4.
+ */
+export const MAP_NODE_WEIGHTS = { planet: 4, cache: 2 } as const;
+
+/** Scrap band for cache nodes — a free find, placeholder for events/shops (4.3/4.4). */
+export const CACHE_SCRAP_MIN = 5;
+export const CACHE_SCRAP_MAX = 10;

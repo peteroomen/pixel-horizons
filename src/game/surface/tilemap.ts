@@ -5,6 +5,10 @@ export const TILE_SOLID = 1;
 export const TILE_BREAKABLE = 2;
 export const TILE_DEPOSIT_BIOMINERAL = 3;
 export const TILE_SCRAP_CACHE = 4;
+/** Rich biomineral vein that renders as plain rock without a Resource Scanner. */
+export const TILE_DEPOSIT_HIDDEN = 5;
+/** Core Crystal vein — the rare reactor-upgrade resource (GDD §6.5). */
+export const TILE_CORE_CRYSTAL = 6;
 
 export interface Tilemap {
   width: number;
@@ -32,6 +36,8 @@ export interface Tilemap {
  *   '*' = TILE_BREAKABLE (plain rock — yields nothing)
  *   'b' = TILE_DEPOSIT_BIOMINERAL
  *   's' = TILE_SCRAP_CACHE
+ *   'h' = TILE_DEPOSIT_HIDDEN
+ *   'c' = TILE_CORE_CRYSTAL
  *   'P' = spawn tile (empty after parsing; spawnX/spawnY record the position)
  *   'D' = pod marker (empty after parsing; podX/podY record the position — the
  *         pod is an entity, never a solid tile). At most one per level.
@@ -70,6 +76,10 @@ export function parseLevel(rows: string[]): Tilemap {
         tiles[y * width + x] = TILE_DEPOSIT_BIOMINERAL;
       } else if (ch === 's') {
         tiles[y * width + x] = TILE_SCRAP_CACHE;
+      } else if (ch === 'h') {
+        tiles[y * width + x] = TILE_DEPOSIT_HIDDEN;
+      } else if (ch === 'c') {
+        tiles[y * width + x] = TILE_CORE_CRYSTAL;
       } else if (ch === 'P') {
         spawnCount++;
         // Spawn tile itself is empty; clone spawns at its top-left corner
@@ -111,17 +121,12 @@ export function tileAt(map: Tilemap, tx: number, ty: number): number {
 
 /** Solid tiles and all breakable kinds block movement — deposits are rock you can stand on. */
 export function isSolid(tile: number): boolean {
-  return (
-    tile === TILE_SOLID ||
-    tile === TILE_BREAKABLE ||
-    tile === TILE_DEPOSIT_BIOMINERAL ||
-    tile === TILE_SCRAP_CACHE
-  );
+  return tile !== TILE_EMPTY;
 }
 
 /** True for every tile type a melee swing can break. */
 function isBreakable(tile: number): boolean {
-  return tile === TILE_BREAKABLE || tile === TILE_DEPOSIT_BIOMINERAL || tile === TILE_SCRAP_CACHE;
+  return tile !== TILE_EMPTY && tile !== TILE_SOLID;
 }
 
 /**

@@ -1,5 +1,6 @@
-import { ENEMY_DEFS, LANE_DISTANCE_MAX, LANE_DISTANCE_MIN, LANE_ENCOUNTER_COUNT } from '../data';
+import { ENEMY_DEFS } from '../data';
 import type { EnemyId } from '../data';
+import type { LaneParams } from './map-gen';
 import { restoreRng } from './rng';
 import type { RunState } from './run-state';
 
@@ -41,22 +42,24 @@ export interface LaneState {
 const DEFAULT_ENEMY_POOL: readonly EnemyId[] = ENEMY_DEFS.map((enemy) => enemy.id);
 
 /**
- * Rolls a lane on the run's map-gen stream and commits the stream back. Encounter
- * positions partition [1, distance-1] into equal segments — always strictly increasing,
- * never at the lane mouth or the destination. Enemy picks are uniform over the pool
- * (danger weighting is 4.1's lane-modifier work); `enemyPool` exists for the `?enemy=`
- * dev knob.
+ * Rolls a lane on the run's map-gen stream and commits the stream back. Distance
+ * and encounter count come from the chosen map edge (GDD §7.1 — the lane is a
+ * property of the path). Encounter positions partition [1, distance-1] into equal
+ * segments — always strictly increasing, never at the lane mouth or the
+ * destination. Enemy picks are uniform over the pool (danger weighting beyond
+ * encounter count is later work); `enemyPool` exists for the `?enemy=` dev knob.
  */
 export function createLane(
   run: RunState,
+  params: LaneParams,
   enemyPool: readonly EnemyId[] = DEFAULT_ENEMY_POOL,
 ): LaneState {
   const rng = restoreRng(run.rng['map-gen']);
-  const distance = rng.int(LANE_DISTANCE_MIN, LANE_DISTANCE_MAX + 1);
+  const { distance, encounterCount } = params;
   const usable = distance - 1;
-  const encounters = Array.from({ length: LANE_ENCOUNTER_COUNT }, (_, i): LaneEncounter => {
-    const lo = 1 + Math.floor((i * usable) / LANE_ENCOUNTER_COUNT);
-    const hi = 1 + Math.floor(((i + 1) * usable) / LANE_ENCOUNTER_COUNT);
+  const encounters = Array.from({ length: encounterCount }, (_, i): LaneEncounter => {
+    const lo = 1 + Math.floor((i * usable) / encounterCount);
+    const hi = 1 + Math.floor(((i + 1) * usable) / encounterCount);
     return { at: rng.int(lo, hi), enemyId: rng.pick(enemyPool) };
   });
   run.rng['map-gen'] = rng.getState();

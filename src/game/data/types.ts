@@ -55,10 +55,28 @@ export type ModulePassive = {
   rechargeTurns: number;
 };
 
-/** Inert metadata until Slice 3.3 — recorded so the catalog mirrors GDD §5.8. */
+/**
+ * One mechanical consequence of a projected planet item (GDD §6.3) — interpreted
+ * by surface/items.ts, like card effects are interpreted by combat. Tunable
+ * numbers ride on the effect itself: per-item balance is data, not logic.
+ */
+export type PlanetItemEffect =
+  | { kind: 'double-jump' }
+  | { kind: 'high-jump'; jumpVelocityMultiplier: number }
+  | { kind: 'phase-dash'; distancePx: number; cooldownMs: number }
+  | { kind: 'mining-yield'; multiplier: number }
+  | { kind: 'yield-bonus'; percent: number }
+  | { kind: 'deposit-scanner' }
+  | { kind: 'backpack-capacity'; bonus: number }
+  /** Projected and shown in the HUD, but mechanically inert until clone damage exists (3.4). */
+  | { kind: 'shield-bubble'; cooldownMs: number }
+  | { kind: 'move-speed'; multiplier: number };
+
 export interface PlanetItem {
   name: string;
   description: string;
+  /** Omitted/empty = flavor only — recorded for the catalog, no projection yet. */
+  effects?: PlanetItemEffect[];
 }
 
 export interface ModuleTier {

@@ -26,6 +26,12 @@
  *   Row 17 cols 40-44  : far cluster beyond the wall (b b s b b) — the
  *                        risk/reward trip against the pod timer
  *   Row 17 col 47      : plain breakable rock (yields nothing — kept testable)
+ *   Row 17 cols 34, 46 : hidden deposits ('h') — render as plain rock without
+ *                        a Resource Scanner
+ *   Cols 50-55 rows 15-17: dash-gated crystal pocket — 2-tile wall (cols 50-51),
+ *                        ceiling (row 15), interior at cols 52-53 rows 16-17,
+ *                        core crystal at row 17 col 54. Only a phase dash gets
+ *                        in; the crystal can't be swung at from outside.
  */
 export const ROCKY_TEST_LEVEL: string[] = [
   // col: 0         1         2         3         4         5
@@ -45,9 +51,9 @@ export const ROCKY_TEST_LEVEL: string[] = [
   /* 12 */ '#..........................................................#',
   /* 13 */ '#..........................................................#',
   /* 14 */ '#...........................####b....##....................#',
-  /* 15 */ '#.PD..................######.........##....................#',
-  /* 16 */ '#.....................######.........##....................#',
-  /* 17 */ '##....bb######....######.........s..##..bbsbb..*..##########',
+  /* 15 */ '#.PD..................######.........##...........######...#',
+  /* 16 */ '#.....................######.........##...........##...#...#',
+  /* 17 */ '##....bb######....######.........sh.##..bbsbb.h*..##..c#####',
   /* 18 */ '############################################################',
   /* 19 */ '############################################################',
 ];

@@ -232,6 +232,8 @@ The ship stays in orbit. A **drop pod** carries the clone to the surface and ser
 
 - **The pod is on a timer** (~5 minutes baseline; Engine module quality extends the window). When the window closes, the pod auto-launches back to orbit — with or without you.
 - Walk back to the pod to **deposit resources** — deposited resources are safe no matter what happens after.
+- **Leave early:** standing on the pod, you can launch before the window closes — the backpack deposits and you ride up with everything banked. Mining out a planet never means waiting out the clock.
+- **Abandon:** the clone can always be recalled to orbit (e.g. trapped in a pit) — same consequences as missing the window. The pod leaves with what was deposited.
 - **Miss the launch window:** the pod leaves with whatever was deposited. Resources still in the clone's backpack are lost; clone consciousness snaps back to orbit. Harsh but recoverable.
 - Module items can be swapped at the pod (between forays on the same planet).
 - **Pod-defense events:** something attacks the pod while you're deep in a cave, forcing a rushed return. Makes the base camp *felt*, and connects both game modes in real time.
@@ -295,20 +297,20 @@ The game is divided into **3 sectors, each ending with a sector boss**, with a s
 
 Each sector is a fixed branching-path map (like Slay the Spire). Paths are visible from the start. The player chooses which path to take, weighing:
 
-1. **What's at the node** — planet type (resources), shop, event, elite encounter
+1. **What's at the node** — planet type (resources), shop, event
 2. **What's on the lane** — distance (turns), encounter density, lane modifiers
 
 A safe destination might have a dangerous lane. A dangerous planet might be easy to reach. Both dimensions matter.
+
+**Nodes are realspace — combat never happens at them.** The Bloom lives in the lanes (§2): every fight is a lane encounter, and arrival means safety. Forced combat is therefore a *lane* property (infested/elite lanes, §7.3), never a destination. The one exception is the Sector Boss: the gate itself is a Bloom growth sealing the lane mouth, so the boss fight happens at the gate.
 
 ### 7.2 Node Types
 
 | Node | What Happens | Duration |
 |------|-------------|----------|
 | **Planet** | Drop pod, explore (platformer mode), mine resources | 3-5 min |
-| **Combat** | Forced encounter (stronger than lane encounters) | 5-8 min |
 | **Shop/Merchant** | Buy modules, sell resources | 1-2 min |
 | **Engineer** | Hull repairs (Scrap), module Mk upgrades (Biominerals + Scrap) | 1-2 min |
-| **Elite** | Tough encounter, high-value rewards | 5-10 min |
 | **Event** | Random event with choices (text-based, quick decisions) | 1-2 min |
 | **Sector Boss** | Major multi-phase encounter at the Bloom gate | 8-12 min |
 
@@ -319,6 +321,7 @@ The travel between nodes has its own properties:
 - **Clear lane:** Short distance, no encounters
 - **Asteroid field:** Moderate encounters, some resource pickups
 - **Infested lane:** Guaranteed combat encounter en route
+- **Elite lane:** A souped-up encounter guards the lane — high-value rewards for going through it
 - **Nebula:** Reduced visibility, harder combat, but possible rare salvage
 - **Debris field:** Chance to find wreckage from previous failed runs (meta-progression tie-in)
 

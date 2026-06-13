@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '@/game/data/surface';
 import {
   TILE_BREAKABLE,
+  TILE_CORE_CRYSTAL,
   TILE_DEPOSIT_BIOMINERAL,
+  TILE_DEPOSIT_HIDDEN,
   TILE_EMPTY,
   TILE_SCRAP_CACHE,
   TILE_SOLID,
@@ -159,5 +161,18 @@ describe('ROCKY_TEST_LEVEL', () => {
     expect(map.tiles).toContain(TILE_DEPOSIT_BIOMINERAL);
     expect(map.tiles).toContain(TILE_SCRAP_CACHE);
     expect(map.tiles).toContain(TILE_BREAKABLE);
+  });
+});
+
+describe('hidden deposits and core crystals (3.3)', () => {
+  it('parses h and c, both solid and breakable', () => {
+    const map = parseLevel(['#####', '#P.h#', '#..c#', '#####']);
+    expect(tileAt(map, 3, 1)).toBe(TILE_DEPOSIT_HIDDEN);
+    expect(tileAt(map, 3, 2)).toBe(TILE_CORE_CRYSTAL);
+    expect(isSolid(TILE_DEPOSIT_HIDDEN)).toBe(true);
+    expect(isSolid(TILE_CORE_CRYSTAL)).toBe(true);
+    expect(breakTile(map, 3, 1)).toBe(TILE_DEPOSIT_HIDDEN);
+    expect(breakTile(map, 3, 2)).toBe(TILE_CORE_CRYSTAL);
+    expect(tileAt(map, 3, 1)).toBe(TILE_EMPTY);
   });
 });

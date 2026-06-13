@@ -8,6 +8,8 @@ import {
   CLONE_HEIGHT,
   CLONE_WIDTH,
   COYOTE_TIME_MS,
+  DASH_GHOST_MS,
+  DASH_SCAN_STEP_PX,
   GRAVITY,
   JUMP_BUFFER_MS,
   JUMP_CUT_MULTIPLIER,
@@ -17,7 +19,9 @@ import {
   TILE_SIZE,
 } from '@/game/data/surface';
 import type { Resources } from '@/game/sim/run-state';
-import { moveBody } from './physics';
+import { BASELINE_CAPABILITIES } from './items';
+import type { CloneCapabilities } from './items';
+import { moveBody, rectOverlapsSolid } from './physics';
 import { breakTile, maxEdgeTileIndex } from './tilemap';
 import type { Tilemap } from './tilemap';
 
@@ -26,6 +30,7 @@ export interface InputState {
   right: boolean;
   jump: boolean;
   attack: boolean;
+  dash: boolean;
 }
 
 export interface CloneState {
@@ -56,6 +61,19 @@ export interface CloneState {
   prevJump: boolean;
   /** Attack button state last frame — used for rising-edge detection. */
   prevAttack: boolean;
+  /** Dash button state last frame — used for rising-edge detection. */
+  prevDash: boolean;
+  /** Movement items projected from ship modules (GDD §6.3). Fixed at print time. */
+  capabilities: CloneCapabilities;
+  /** Mid-air jumps still available; refilled on landing. */
+  airJumpsLeft: number;
+  /** Remaining cooldown before another dash can fire (ms). */
+  dashCooldownMs: number;
+  /** Remaining lifetime of the dash afterimage (ms, cosmetic). */
+  dashGhostMs: number;
+  /** Body position the last dash departed from — afterimage anchor. */
+  dashFromX: number;
+  dashFromY: number;
   /**
    * Resources carried by the clone — banked only when deposited at the pod,
    * lost on a stranded launch (and dropped at the death point in 3.4).
@@ -65,7 +83,10 @@ export interface CloneState {
 }
 
 /** Spawn the clone at the level's designated spawn point. */
-export function createClone(map: Tilemap): CloneState {
+export function createClone(
+  map: Tilemap,
+  capabilities: CloneCapabilities = BASELINE_CAPABILITIES,
+): CloneState {
   return {
     body: {
       x: map.spawnX,
@@ -84,6 +105,13 @@ export function createClone(map: Tilemap): CloneState {
     attackCooldownMs: 0,
     prevJump: false,
     prevAttack: false,
+    prevDash: false,
+    capabilities,
+    airJumpsLeft: capabilities.maxAirJumps,
+    dashCooldownMs: 0,
+    dashGhostMs: 0,
+    dashFromX: 0,
+    dashFromY: 0,
     backpack: { scrap: 0, biominerals: 0, coreCrystals: 0, blueprints: 0 },
   };
 }
@@ -118,11 +146,12 @@ export function attackHitbox(
  *
  * Steps (in order per spec):
  * 1. Horizontal velocity from held buttons; update facing.
+ * 1b. Phase dash: rising-edge blink in facing direction (through solids).
  * 2. Rising-edge jump → fill jump buffer; tick both timers.
  * 3. Apply gravity, clamp fall speed.
- * 4. Fire jump if buffer active and (grounded or coyote).
+ * 4. Fire jump if buffer active and (grounded or coyote); else burn an air jump.
  * 5. Jump cut on button release while ascending.
- * 6. moveBody; update grounded / coyote.
+ * 6. moveBody; update grounded / coyote; refill air jumps on landing.
  * 7. Attack: rising-edge start; tick elapsed; break tiles in hitbox window.
  */
 export function updateClone(
@@ -133,10 +162,31 @@ export function updateClone(
 ): { brokenTiles: number[] } {
   // 1. Horizontal movement (instant — no acceleration this slice)
   const dx = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-  clone.body.vx = dx * MOVE_SPEED;
+  clone.body.vx = dx * MOVE_SPEED * clone.capabilities.moveSpeedMultiplier;
   if (dx !== 0) {
     clone.facing = dx > 0 ? 1 : -1;
   }
+
+  // 1b. Phase dash: blink to the farthest free spot within range, scanning
+  // far-to-near — intervening solids are skipped, which IS the through-walls
+  // behavior. Fully blocked = no-op without spending the cooldown.
+  const dashRising = input.dash && !clone.prevDash;
+  const dashConfig = clone.capabilities.dash;
+  if (dashRising && dashConfig !== null && clone.dashCooldownMs <= 0) {
+    for (let d = dashConfig.distancePx; d >= DASH_SCAN_STEP_PX; d -= DASH_SCAN_STEP_PX) {
+      const targetX = clone.body.x + clone.facing * d;
+      if (!rectOverlapsSolid(map, targetX, clone.body.y, clone.body.w, clone.body.h)) {
+        clone.dashFromX = clone.body.x;
+        clone.dashFromY = clone.body.y;
+        clone.dashGhostMs = DASH_GHOST_MS;
+        clone.body.x = targetX;
+        clone.dashCooldownMs = dashConfig.cooldownMs;
+        break;
+      }
+    }
+  }
+  clone.dashCooldownMs = Math.max(0, clone.dashCooldownMs - dtMs);
+  clone.dashGhostMs = Math.max(0, clone.dashGhostMs - dtMs);
 
   // 2. Jump buffer: rising edge of jump button
   const jumpRising = input.jump && !clone.prevJump;
@@ -149,12 +199,19 @@ export function updateClone(
   // 3. Apply gravity
   clone.body.vy = Math.min(clone.body.vy + (GRAVITY * dtMs) / 1000, MAX_FALL_SPEED);
 
-  // 4. Fire jump if buffer active and can jump
+  // 4. Fire jump if buffer active and can jump; else burn an air jump on the
+  // rising edge only (a buffered press still fires the ground jump on landing
+  // when no air jumps remain).
   const canJump = clone.grounded || clone.coyoteMs > 0;
   if (clone.jumpBufferMs > 0 && canJump) {
-    clone.body.vy = JUMP_VELOCITY;
+    clone.body.vy = JUMP_VELOCITY * clone.capabilities.jumpVelocityMultiplier;
     clone.jumpBufferMs = 0;
     clone.coyoteMs = 0;
+    clone.jumpHeld = true;
+  } else if (jumpRising && !canJump && clone.airJumpsLeft > 0) {
+    clone.body.vy = JUMP_VELOCITY * clone.capabilities.jumpVelocityMultiplier;
+    clone.airJumpsLeft -= 1;
+    clone.jumpBufferMs = 0;
     clone.jumpHeld = true;
   }
 
@@ -174,6 +231,7 @@ export function updateClone(
     clone.coyoteMs = 0;
     // Clear jumpHeld once landed
     clone.jumpHeld = false;
+    clone.airJumpsLeft = clone.capabilities.maxAirJumps;
   } else if (wasGrounded && !moveResult.onGround) {
     // Just walked off a ledge without jumping — start coyote window
     clone.coyoteMs = COYOTE_TIME_MS;
@@ -215,6 +273,7 @@ export function updateClone(
   // Save button state for next frame's rising-edge detection
   clone.prevJump = input.jump;
   clone.prevAttack = input.attack;
+  clone.prevDash = input.dash;
 
   return { brokenTiles };
 }

@@ -9,6 +9,7 @@ import {
   JUMP_VELOCITY,
   MOVE_SPEED,
 } from '@/game/data/surface';
+import { BASELINE_CAPABILITIES } from './items';
 import { attackHitbox, createClone, updateClone } from './clone';
 import type { CloneState, InputState } from './clone';
 import { TILE_BREAKABLE, TILE_DEPOSIT_BIOMINERAL, TILE_EMPTY, parseLevel, tileAt } from './tilemap';
@@ -24,7 +25,7 @@ const ARENA = ['######', '#P...#', '#....#', '#....#', '#....#', '######'];
  */
 const ROCK_ARENA = ['######', '#P...#', '#....#', '#....#', '#.*..#', '######'];
 
-const NO_INPUT: InputState = { left: false, right: false, jump: false, attack: false };
+const NO_INPUT: InputState = { left: false, right: false, jump: false, attack: false, dash: false };
 
 type ParsedMap = ReturnType<typeof parseLevel>;
 
@@ -385,12 +386,131 @@ describe('updateClone — real level integration', () => {
     const { ROCKY_TEST_LEVEL } = await import('@/game/data/levels');
     const map = parseLevel(ROCKY_TEST_LEVEL);
     const clone = createClone(map);
-    const idle: InputState = { left: false, right: false, jump: false, attack: false };
+    const idle: InputState = { left: false, right: false, jump: false, attack: false, dash: false };
     for (let i = 0; i < 600; i++) {
       updateClone(clone, map, idle, FIXED_DT_MS);
     }
     // Spawn column's floor is row 18 (top y = 288); clone rests at 288 - 20 = 268
     expect(clone.body.y).toBe(268);
     expect(clone.grounded).toBe(true);
+  });
+});
+
+describe('updateClone — projected capabilities (GDD §6.3)', () => {
+  /**
+   * Arena with a 2-tile-thick wall (cols 4-5). The clone walks up to it
+   * (stopping at x = 52) and must phase-dash through to x = 100.
+   */
+  const DASH_ARENA = ['##########', '#P..##...#', '#...##...#', '##########'];
+
+  /** Narrow pocket: dashing right from the wall has no free landing spot. */
+  const POCKET = ['#####', '#P..#', '#...#', '#####'];
+
+  const DASH = { distancePx: 48, cooldownMs: 1500 };
+
+  it('double jump fires once mid-air and refills on landing', () => {
+    const map = parseLevel(ARENA);
+    const clone = createClone(map, {
+      ...BASELINE_CAPABILITIES,
+      maxAirJumps: 1,
+    });
+    runUntilGrounded(clone, map);
+
+    steps(clone, map, { ...NO_INPUT, jump: true }, 1);
+    expect(clone.body.vy).toBe(JUMP_VELOCITY);
+    steps(clone, map, NO_INPUT, 8);
+
+    // Air jump on a fresh rising edge
+    steps(clone, map, { ...NO_INPUT, jump: true }, 1);
+    expect(clone.body.vy).toBe(JUMP_VELOCITY);
+    expect(clone.airJumpsLeft).toBe(0);
+
+    // Third press mid-air does nothing
+    steps(clone, map, NO_INPUT, 4);
+    const vyBefore = clone.body.vy;
+    steps(clone, map, { ...NO_INPUT, jump: true }, 1);
+    expect(clone.body.vy).not.toBe(JUMP_VELOCITY);
+    expect(clone.body.vy).toBeGreaterThan(vyBefore);
+
+    runUntilGrounded(clone, map);
+    expect(clone.airJumpsLeft).toBe(1);
+  });
+
+  it('baseline clone has no air jump', () => {
+    const map = parseLevel(ARENA);
+    const clone = createClone(map);
+    runUntilGrounded(clone, map);
+    steps(clone, map, { ...NO_INPUT, jump: true }, 1);
+    steps(clone, map, NO_INPUT, 8);
+    steps(clone, map, { ...NO_INPUT, jump: true }, 1);
+    expect(clone.body.vy).not.toBe(JUMP_VELOCITY);
+  });
+
+  it('high jump scales launch velocity', () => {
+    const map = parseLevel(ARENA);
+    const clone = createClone(map, {
+      ...BASELINE_CAPABILITIES,
+      jumpVelocityMultiplier: 1.25,
+    });
+    runUntilGrounded(clone, map);
+    steps(clone, map, { ...NO_INPUT, jump: true }, 1);
+    expect(clone.body.vy).toBe(JUMP_VELOCITY * 1.25);
+  });
+
+  it('move-speed multiplier scales run velocity', () => {
+    const map = parseLevel(ARENA);
+    const clone = createClone(map, {
+      ...BASELINE_CAPABILITIES,
+      moveSpeedMultiplier: 0.9,
+    });
+    steps(clone, map, { ...NO_INPUT, right: true }, 1);
+    expect(clone.body.vx).toBeCloseTo(MOVE_SPEED * 0.9);
+  });
+
+  it('phase dash blinks through a 2-tile wall', () => {
+    const map = parseLevel(DASH_ARENA);
+    const clone = createClone(map, { ...BASELINE_CAPABILITIES, dash: DASH });
+    runUntilGrounded(clone, map);
+    steps(clone, map, { ...NO_INPUT, right: true }, 30);
+    expect(clone.body.x).toBe(52); // pinned against the wall
+
+    steps(clone, map, { ...NO_INPUT, dash: true }, 1);
+    expect(clone.body.x).toBe(100); // beyond the wall (96+)
+    expect(clone.dashCooldownMs).toBeGreaterThan(0);
+    expect(clone.dashGhostMs).toBeGreaterThan(0);
+  });
+
+  it('dash respects its cooldown', () => {
+    const map = parseLevel(DASH_ARENA);
+    const clone = createClone(map, { ...BASELINE_CAPABILITIES, dash: DASH });
+    runUntilGrounded(clone, map);
+    steps(clone, map, { ...NO_INPUT, right: true }, 30);
+    steps(clone, map, { ...NO_INPUT, dash: true }, 1);
+    expect(clone.body.x).toBe(100);
+
+    steps(clone, map, NO_INPUT, 1);
+    steps(clone, map, { ...NO_INPUT, dash: true }, 1);
+    expect(clone.body.x).toBe(100); // still cooling down
+  });
+
+  it('fully blocked dash is a no-op and spends no cooldown', () => {
+    const map = parseLevel(POCKET);
+    const clone = createClone(map, { ...BASELINE_CAPABILITIES, dash: DASH });
+    runUntilGrounded(clone, map);
+    steps(clone, map, { ...NO_INPUT, right: true }, 30);
+    expect(clone.body.x).toBe(52);
+
+    steps(clone, map, { ...NO_INPUT, dash: true }, 1);
+    expect(clone.body.x).toBe(52);
+    expect(clone.dashCooldownMs).toBe(0);
+  });
+
+  it('clone without a dash item ignores the dash button', () => {
+    const map = parseLevel(DASH_ARENA);
+    const clone = createClone(map);
+    runUntilGrounded(clone, map);
+    const xBefore = clone.body.x;
+    steps(clone, map, { ...NO_INPUT, dash: true }, 1);
+    expect(clone.body.x).toBe(xBefore);
   });
 });

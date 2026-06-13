@@ -3,14 +3,15 @@
 import { useEffect, useRef } from 'react';
 
 import { initGame } from '@/game/main';
-import type { CombatView, GameHandle, SurfaceView } from '@/game/main';
+import type { CombatView, GameHandle, GamePhase, MapView, SurfaceView } from '@/game/main';
 
 interface GameCanvasProps {
   onCombatUpdate: (view: CombatView) => void;
   onReady: (handle: GameHandle) => void;
   onScaleChange?: (zoom: number) => void;
-  onModeChange?: (mode: 'combat' | 'surface') => void;
+  onPhaseChange?: (phase: GamePhase) => void;
   onSurfaceUpdate?: (view: SurfaceView) => void;
+  onMapUpdate?: (view: MapView) => void;
 }
 
 /**
@@ -23,16 +24,18 @@ export default function GameCanvas({
   onCombatUpdate,
   onReady,
   onScaleChange,
-  onModeChange,
+  onPhaseChange,
   onSurfaceUpdate,
+  onMapUpdate,
 }: GameCanvasProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const callbacksRef = useRef({
     onCombatUpdate,
     onReady,
     onScaleChange,
-    onModeChange,
+    onPhaseChange,
     onSurfaceUpdate,
+    onMapUpdate,
   });
 
   useEffect(() => {
@@ -40,10 +43,11 @@ export default function GameCanvas({
       onCombatUpdate,
       onReady,
       onScaleChange,
-      onModeChange,
+      onPhaseChange,
       onSurfaceUpdate,
+      onMapUpdate,
     };
-  }, [onCombatUpdate, onReady, onScaleChange, onModeChange, onSurfaceUpdate]);
+  }, [onCombatUpdate, onReady, onScaleChange, onPhaseChange, onSurfaceUpdate, onMapUpdate]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -56,8 +60,9 @@ export default function GameCanvas({
       const candidate = await initGame(host, {
         onCombatUpdate: (view) => callbacksRef.current.onCombatUpdate(view),
         onScaleChange: (zoom) => callbacksRef.current.onScaleChange?.(zoom),
-        onModeChange: (mode) => callbacksRef.current.onModeChange?.(mode),
+        onPhaseChange: (phase) => callbacksRef.current.onPhaseChange?.(phase),
         onSurfaceUpdate: (view) => callbacksRef.current.onSurfaceUpdate?.(view),
+        onMapUpdate: (view) => callbacksRef.current.onMapUpdate?.(view),
       });
       if (cancelled) {
         candidate.destroy();

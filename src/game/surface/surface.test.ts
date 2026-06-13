@@ -7,7 +7,8 @@ import {
   POD_WINDOW_MS,
 } from '@/game/data/surface';
 import type { InputState } from './clone';
-import { createSurface, updateSurface } from './surface';
+import { baselineLoadout } from './items';
+import { abandonSurface, canLaunchPod, createSurface, launchPod, updateSurface } from './surface';
 import type { SurfaceState } from './surface';
 
 /**
@@ -25,7 +26,7 @@ const POD_ARENA: string[] = [
   '##########',
 ];
 
-const IDLE: InputState = { left: false, right: false, jump: false, attack: false };
+const IDLE: InputState = { left: false, right: false, jump: false, attack: false, dash: false };
 const RIGHT: InputState = { ...IDLE, right: true };
 const ATTACK: InputState = { ...IDLE, attack: true };
 
@@ -143,6 +144,83 @@ describe('launch outcomes', () => {
   });
 });
 
+describe('early launch', () => {
+  it('clone on the pod → launchPod banks the backpack and ends aboard', () => {
+    const state = createSurface(POD_ARENA);
+    mineSpawnDeposit(state);
+    run(state, RIGHT, 15); // onto the pod (auto-deposit fires en route)
+    expect(canLaunchPod(state)).toBe(true);
+    launchPod(state);
+    expect(state.outcome).toBe('aboard');
+    expect(state.pod?.launched).toBe(true);
+    expect(state.pod?.deposited.biominerals).toBe(BIOMINERAL_DEPOSIT_YIELD);
+    expect(state.clone.backpack.biominerals).toBe(0);
+    expect(state.lostBackpack).toBeNull();
+  });
+
+  it('launchPod is a no-op away from the pod', () => {
+    const state = createSurface(POD_ARENA);
+    mineSpawnDeposit(state); // clone is at spawn, off the pod
+    expect(canLaunchPod(state)).toBe(false);
+    launchPod(state);
+    expect(state.outcome).toBe('ongoing');
+    expect(state.pod?.launched).toBe(false);
+    expect(state.clone.backpack.biominerals).toBe(BIOMINERAL_DEPOSIT_YIELD);
+  });
+
+  it('launchPod is a no-op on pod-less levels and after launch', () => {
+    const podless = createSurface(['######', '#P...#', '######']);
+    launchPod(podless);
+    expect(podless.outcome).toBe('ongoing');
+
+    const state = createSurface(POD_ARENA, { podWindowMs: 100 });
+    run(state, IDLE, 30); // expires — stranded
+    launchPod(state);
+    expect(state.outcome).toBe('stranded');
+  });
+});
+
+describe('abandon', () => {
+  it('loses the backpack, keeps deposits, and freezes the sim', () => {
+    const state = createSurface(POD_ARENA);
+    mineSpawnDeposit(state);
+    run(state, RIGHT, 15); // deposit at the pod
+    run(state, RIGHT, 30); // walk past it, mine nothing more
+    state.clone.backpack.scrap = 3; // simulate undeposited haul
+    abandonSurface(state);
+    expect(state.outcome).toBe('abandoned');
+    expect(state.lostBackpack).toEqual({
+      scrap: 3,
+      biominerals: 0,
+      coreCrystals: 0,
+      blueprints: 0,
+    });
+    expect(state.clone.backpack).toEqual({
+      scrap: 0,
+      biominerals: 0,
+      coreCrystals: 0,
+      blueprints: 0,
+    });
+    expect(state.pod?.deposited.biominerals).toBe(BIOMINERAL_DEPOSIT_YIELD);
+    expect(state.pod?.launched).toBe(true);
+
+    const snapshot = JSON.parse(JSON.stringify(state)) as SurfaceState;
+    run(state, { ...IDLE, right: true, jump: true, attack: true }, 30);
+    expect(state).toEqual(snapshot);
+  });
+
+  it('works on pod-less levels and is a no-op once ended', () => {
+    const podless = createSurface(['######', '#P...#', '######']);
+    abandonSurface(podless);
+    expect(podless.outcome).toBe('abandoned');
+
+    const state = createSurface(POD_ARENA, { podWindowMs: 100 });
+    run(state, IDLE, 30); // expires — stranded
+    abandonSurface(state);
+    expect(state.outcome).toBe('stranded');
+  });
+});
+
 describe('determinism', () => {
   it('the same input script twice produces deep-equal final states', () => {
     const script: InputState[] = [
@@ -158,5 +236,49 @@ describe('determinism', () => {
     for (const input of script) updateSurface(a, input, FIXED_DT_MS);
     for (const input of script) updateSurface(b, input, FIXED_DT_MS);
     expect(a).toEqual(b);
+  });
+});
+
+describe('createSurface/updateSurface — loadout integration (3.3)', () => {
+  it('applies the yield multiplier to mined deposits', () => {
+    const state = createSurface(POD_ARENA, {
+      loadout: { ...baselineLoadout(), yieldMultiplier: 2 },
+    });
+    mineSpawnDeposit(state);
+    expect(state.clone.backpack.biominerals).toBe(2 * BIOMINERAL_DEPOSIT_YIELD);
+  });
+
+  it('enforces the loadout backpack capacity', () => {
+    const state = createSurface(POD_ARENA, {
+      loadout: { ...baselineLoadout(), yieldMultiplier: 2, backpackCapacity: 3 },
+    });
+    mineSpawnDeposit(state);
+    // 2× yield = 4 clamps at the capacity of 3
+    expect(state.clone.backpack.biominerals).toBe(3);
+  });
+
+  it('engine quality extends the pod window', () => {
+    const state = createSurface(POD_ARENA, {
+      podWindowMs: 10_000,
+      loadout: { ...baselineLoadout(), podWindowBonusMs: 90_000 },
+    });
+    expect(state.pod?.windowMs).toBe(100_000);
+    expect(state.pod?.remainingMs).toBe(100_000);
+  });
+
+  it('clone inherits loadout capabilities', () => {
+    const state = createSurface(POD_ARENA, {
+      loadout: {
+        ...baselineLoadout(),
+        capabilities: {
+          maxAirJumps: 2,
+          jumpVelocityMultiplier: 1,
+          moveSpeedMultiplier: 1,
+          dash: null,
+        },
+      },
+    });
+    expect(state.clone.capabilities.maxAirJumps).toBe(2);
+    expect(state.clone.airJumpsLeft).toBe(2);
   });
 });

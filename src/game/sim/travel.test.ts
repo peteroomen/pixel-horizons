@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { LANE_DISTANCE_MAX, LANE_DISTANCE_MIN } from '../data';
 import { createRunState } from './run-state';
 import { advanceLane, createLane } from './travel';
 import type { LaneState } from './travel';
 
+const PARAMS = { distance: 9, encounterCount: 2 };
+
 function lane(seed = 'travel-test'): LaneState {
-  return createLane(createRunState(seed));
+  return createLane(createRunState(seed), PARAMS);
 }
 
 describe('createLane', () => {
@@ -17,17 +18,23 @@ describe('createLane', () => {
   it('commits the map-gen stream back so consecutive lanes differ', () => {
     const run = createRunState('stream');
     const before = run.rng['map-gen'];
-    const first = createLane(run);
+    const first = createLane(run, PARAMS);
     expect(run.rng['map-gen']).not.toEqual(before);
-    const second = createLane(run);
+    const second = createLane(run, PARAMS);
     expect(second).not.toEqual(first);
   });
 
-  it('rolls distance inside the band and encounters strictly between mouth and destination', () => {
+  it('takes distance and encounter count from the map edge', () => {
+    const result = createLane(createRunState('edge'), { distance: 12, encounterCount: 3 });
+    expect(result.distance).toBe(12);
+    expect(result.encounters).toHaveLength(3);
+  });
+
+  it('rolls encounters strictly between mouth and destination, increasing', () => {
     for (let i = 0; i < 50; i++) {
-      const result = lane(`bounds-${i}`);
-      expect(result.distance).toBeGreaterThanOrEqual(LANE_DISTANCE_MIN);
-      expect(result.distance).toBeLessThanOrEqual(LANE_DISTANCE_MAX);
+      const params = { distance: 6 + (i % 7), encounterCount: 1 + (i % 3) };
+      const result = createLane(createRunState(`bounds-${i}`), params);
+      expect(result.distance).toBe(params.distance);
       let previous = 0;
       for (const encounter of result.encounters) {
         expect(encounter.at).toBeGreaterThan(previous);
@@ -45,7 +52,7 @@ describe('createLane', () => {
   });
 
   it('a forced single-enemy pool fills every encounter (the ?enemy= knob)', () => {
-    const result = createLane(createRunState('forced'), ['enemy-anchormaw']);
+    const result = createLane(createRunState('forced'), PARAMS, ['enemy-anchormaw']);
     expect(result.encounters.map((e) => e.enemyId)).toEqual(['enemy-anchormaw', 'enemy-anchormaw']);
   });
 });

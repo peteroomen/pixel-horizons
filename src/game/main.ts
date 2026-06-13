@@ -1,48 +1,46 @@
 import { Application, TextureSource } from 'pixi.js';
 
 import { ROCKY_TEST_LEVEL } from '@/game/data/levels';
-import { FIXED_DT_MS, MAX_FRAME_MS, POD_WINDOW_MS } from '@/game/data/surface';
+import { POD_WINDOW_MS } from '@/game/data/surface';
 import { computeScale, VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from '@/renderer/pixel-scale';
-import { createSpaceRenderer } from '@/renderer/space-renderer';
-import type { SpaceRenderer } from '@/renderer/space-renderer';
-import { createSurfaceRenderer } from '@/renderer/surface-renderer';
-import type { SurfaceRenderer } from '@/renderer/surface-renderer';
-import { buildCombatView } from './combat-view';
 import type { CombatView } from './combat-view';
-import { getEnemy, getHull } from './data';
+import { BASELINE_AP, getEnemy, getHull, getModule } from './data';
 import type { EnemyId } from './data';
-import {
-  activateInnate,
-  applyCombatResult,
-  canPayToll,
-  canUseInnate,
-  cardPlayCost,
-  createCombat,
-  endTurn,
-  isCardPlayable,
-  payToll,
-  playCard,
-} from './sim/combat';
-import type { CombatState } from './sim/combat';
+import { buildMapView } from './map-view';
+import type { MapView } from './map-view';
+import { startCombatMode } from './modes/combat-mode';
+import type { CombatMode } from './modes/combat-mode';
+import { startSurfaceMode } from './modes/surface-mode';
+import type { SurfaceAction, SurfaceMode } from './modes/surface-mode';
+import { createSaveStore } from './save';
+import { generateSectorMap, getNode, edgesFrom } from './sim/map-gen';
+import type { LaneParams, SectorMap } from './sim/map-gen';
 import { createRunState } from './sim/run-state';
-import type { RunState } from './sim/run-state';
+import type { Resources, RunState } from './sim/run-state';
 import { parseSeedParam, seedToSearchParam } from './sim/seed-url';
-import { advanceLane, createLane } from './sim/travel';
-import type { LaneState } from './sim/travel';
-import type { InputState } from './surface/clone';
-import { createSurface, updateSurface } from './surface/surface';
-import type { SurfaceState } from './surface/surface';
-import { buildSurfaceView, surfaceViewEquals } from './surface-view';
+import { projectLoadout } from './surface/items';
 import type { SurfaceView } from './surface-view';
 
 /**
- * The React↔game boundary (ADR 001). React components import this module and nothing
- * else from src/game/: commands flow in through the GameHandle, state flows out as
- * CombatView snapshots through onCombatUpdate — once per event, never per frame.
+ * The React↔game boundary (ADR 001) and the run-loop orchestrator (ADR 005).
+ * React components import this module and nothing else from src/game/: commands
+ * flow in through the GameHandle, state flows out as view snapshots — once per
+ * event, never per frame.
  *
- * Command methods guard instead of throwing: the sim's loud-failure policy is for
- * programming errors, but a double-tap racing a state update is normal pointer input
- * and must be a quiet no-op.
+ * main.ts owns the phase machine; the modes/ controllers own their renderer and
+ * loop for the duration of one phase:
+ *
+ *   title ──new/resume──▶ map ──selectNode──▶ lane ──onArrival──▶ node entry
+ *   node entry: cache → map · planet → surface ──continueFromNode──▶ map ·
+ *               gate → sector-complete
+ *   lane ──onDefeat──▶ run-over · run-over/sector-complete ──newRun──▶ map
+ *
+ *   Combat lives in the lanes and only the lanes (GDD §2/§5.1): nodes are
+ *   realspace, where the Bloom can't follow — arrival always resolves straight
+ *   to the node's screen.
+ *
+ * Command methods guard instead of throwing: a double-tap racing a phase change
+ * is normal pointer input and must be a quiet no-op.
  */
 
 export type {
@@ -54,24 +52,28 @@ export type {
   ModuleView,
   ShieldLayerView,
 } from './combat-view';
-export type { SurfaceView } from './surface-view';
+export type { SurfaceItemView, SurfaceView } from './surface-view';
+export type { MapEdgeView, MapNodeView, MapView } from './map-view';
+
+export type GamePhase = 'title' | 'map' | 'lane' | 'surface' | 'run-over' | 'sector-complete';
 
 export interface GameCallbacks {
   onCombatUpdate(view: CombatView): void;
   onScaleChange?(zoom: number): void;
-  /** Fired once after init with the resolved game mode. */
-  onModeChange?(mode: 'combat' | 'surface'): void;
+  /** Fired on every phase transition, after the phase's data callbacks. */
+  onPhaseChange?(phase: GamePhase): void;
   /**
-   * Surface mode only: fired once per discrete change (pod second tick,
+   * Surface phase only: fired once per discrete change (pod second tick,
    * mining, deposit, launch) — never per frame.
    */
   onSurfaceUpdate?(view: SurfaceView): void;
+  /** Fired on map entry and at run end states (the end screens read run totals from it). */
+  onMapUpdate?(view: MapView): void;
 }
 
 export interface GameHandle {
+  /** Seed of the active run (the resumed seed after RESUME RUN). */
   readonly seed: string;
-  /** Which mode was resolved at init time. */
-  readonly mode: 'combat' | 'surface';
   playCard(handIndex: number): void;
   /** Hull innate ability; handIndex only for card-targeted innates (Slipstream). */
   useInnate(handIndex?: number): void;
@@ -79,18 +81,25 @@ export interface GameHandle {
   /** Pays the anchor enemy's Scrap toll — the blockade lets you pass (GDD §5.7). */
   payToll(): void;
   /**
-   * After victory or escape: commits the result to the run, carries malfunctions and
-   * travel progress into the lane, and travels on — next encounter, or arrival and a
-   * fresh lane (systems reset).
+   * After victory or escape: commits the result to the run, carries malfunctions
+   * and travel progress into the lane, and travels on — next encounter, or
+   * arrival at the destination node.
    */
   continueTravel(): void;
-  /** Fresh run from the same seed — the post-defeat restart. */
-  restartRun(): void;
-  /**
-   * Surface mode input: called by TouchControls on pointer events.
-   * No-op in combat mode.
-   */
-  surfaceInput(action: 'left' | 'right' | 'jump' | 'attack', pressed: boolean): void;
+  /** Map phase: travel to a node one lane-hop away. */
+  selectNode(nodeId: string): void;
+  /** Surface phase: launch the pod early — no-op unless the clone is on the pod. */
+  launchPod(): void;
+  /** Surface phase: recall the clone to orbit (backpack lost, deposits safe). */
+  abandonSurface(): void;
+  /** Surface result screen: bank pod deposits into the run and return to the map. */
+  continueFromNode(): void;
+  /** Title screen: continue the saved run. */
+  resumeRun(): void;
+  /** Title/run-over/sector-complete: discard any save and start fresh from the URL seed. */
+  newRun(): void;
+  /** Surface phase input: called by TouchControls on pointer events. */
+  surfaceInput(action: SurfaceAction, pressed: boolean): void;
   destroy(): void;
 }
 
@@ -98,8 +107,8 @@ export interface GameHandle {
 const DEFAULT_HULL = 'hull-gunship';
 
 /**
- * Dev/test knob until hull select lands (Phase 5): `?hull=hull-scout` etc. exercises
- * the other innate abilities in the browser. Unknown values fall back quietly.
+ * Dev/test knob until hull select lands (Phase 5): `?hull=hull-scout` etc.
+ * exercises the other hulls in the browser. Unknown values fall back quietly.
  */
 function resolveHull(): string {
   const param = new URLSearchParams(window.location.search).get('hull');
@@ -114,9 +123,47 @@ function resolveHull(): string {
 }
 
 /**
- * Dev/test knob until the sector map drives encounters (4.1): `?enemy=enemy-anchormaw`
- * forces every lane encounter to one enemy — lane picks are random, and each enemy
- * must be reachable on demand for manual testing. Unknown values fall back quietly.
+ * Dev/test knob until the Workbench lands (4.2): `?modules=mining-laser,thruster`
+ * overrides the hull's installed modules, so any item combination is testable
+ * without module acquisition. The `mod-` prefix is optional; unknown entries are
+ * dropped quietly (same fallback convention as the other knobs). The override is
+ * the whole ship — the combat deck and the surface items both project from it.
+ * An all-invalid or empty list falls back to the hull's defaults.
+ */
+function resolveModuleOverride(): string[] | null {
+  const param = new URLSearchParams(window.location.search).get('modules');
+  if (param === null) return null;
+  const ids: string[] = [];
+  for (const entry of param.split(',')) {
+    const name = entry.trim();
+    if (name === '') continue;
+    const id = name.startsWith('mod-') ? name : `mod-${name}`;
+    try {
+      ids.push(getModule(id).id);
+    } catch {
+      // Unknown module id — skipped quietly
+    }
+  }
+  return ids.length > 0 ? ids : null;
+}
+
+/**
+ * Dev/test knob: `?reactor=4` overrides the reactor level driving the surface
+ * item cap (GDD §4.3) — testing the cap shouldn't require Core Crystals.
+ * Combat AP stays at BASELINE_AP until reactor level lives on RunState (4.2+).
+ * Invalid values fall back quietly; 0 is valid (every equipment item inactive).
+ */
+function resolveReactorLevel(): number {
+  const param = new URLSearchParams(window.location.search).get('reactor');
+  if (param === null) return BASELINE_AP;
+  const level = Number.parseInt(param, 10);
+  return Number.isFinite(level) && level >= 0 ? level : BASELINE_AP;
+}
+
+/**
+ * Dev/test knob: `?enemy=enemy-anchormaw` forces every lane encounter to one
+ * enemy — each enemy must be reachable on demand for manual testing. Unknown
+ * values fall back quietly.
  */
 function resolveEnemyPool(): readonly EnemyId[] | undefined {
   const param = new URLSearchParams(window.location.search).get('enemy');
@@ -131,17 +178,18 @@ function resolveEnemyPool(): readonly EnemyId[] | undefined {
 }
 
 /**
- * Dev/test knob until the sector map drives mode entry (4.1): `?mode=surface`
- * activates the platformer. Unknown values fall back to 'combat'.
+ * Dev/test knob: `?mode=surface` skips the run loop and drops straight onto the
+ * test planet with the resolved hull's loadout — per-hull item checks shouldn't
+ * require traversing a map first. No save interaction.
  */
-function resolveMode(): 'combat' | 'surface' {
-  const param = new URLSearchParams(window.location.search).get('mode');
-  return param === 'surface' ? 'surface' : 'combat';
+function resolveDevSurface(): boolean {
+  return new URLSearchParams(window.location.search).get('mode') === 'surface';
 }
 
 /**
- * Dev/test knob: `?pod=20` sets the launch window in seconds — manual testing
- * shouldn't take 5 real minutes. Invalid values fall back to POD_WINDOW_MS.
+ * Dev/test knob: `?pod=20` sets the base launch window in seconds — manual
+ * testing shouldn't take 5 real minutes. Engine bonuses still apply on top.
+ * Invalid values fall back to POD_WINDOW_MS.
  */
 function resolvePodWindowMs(): number {
   const param = new URLSearchParams(window.location.search).get('pod');
@@ -153,8 +201,8 @@ function resolvePodWindowMs(): number {
 /**
  * The session seed: a valid `?seed=` in the URL wins; otherwise a fresh seed is
  * generated from platform entropy and written back into the URL so every run is
- * shareable/reproducible. Entropy is allowed here at the edge — inside the sim all
- * randomness stays on the seeded streams.
+ * shareable/reproducible. Entropy is allowed here at the edge — inside the sim
+ * all randomness stays on the seeded streams.
  */
 function resolveSeed(): string {
   const fromUrl = parseSeedParam(window.location.search);
@@ -169,9 +217,21 @@ function generateSeed(): string {
   return Array.from(bytes, (b) => b.toString(36).padStart(2, '0')).join('');
 }
 
+function addResources(target: Resources, delta: Resources): void {
+  target.scrap += delta.scrap;
+  target.biominerals += delta.biominerals;
+  target.coreCrystals += delta.coreCrystals;
+  target.blueprints += delta.blueprints;
+}
+
 export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Promise<GameHandle> {
-  const seed = resolveSeed();
-  const gameMode = resolveMode();
+  const urlSeed = resolveSeed();
+  const hullId = resolveHull();
+  const enemyPool = resolveEnemyPool();
+  const podWindowMs = resolvePodWindowMs();
+  const devSurface = resolveDevSurface();
+  const moduleOverride = resolveModuleOverride();
+  const reactorLevel = resolveReactorLevel();
 
   TextureSource.defaultOptions.scaleMode = 'nearest';
   const app = new Application();
@@ -199,180 +259,196 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const observer = new ResizeObserver(applyScale);
   observer.observe(host);
 
-  // ── Surface mode ──────────────────────────────────────────────────────────
-  if (gameMode === 'surface') {
-    const podWindowMs = resolvePodWindowMs();
-    let surfaceState: SurfaceState = createSurface(ROCKY_TEST_LEVEL, { podWindowMs });
-    const surfaceRenderer: SurfaceRenderer = createSurfaceRenderer(app);
+  const store = createSaveStore(window.localStorage);
 
-    // Held-key snapshot owned by main.ts; rising-edge detection is in clone.ts
-    const input: InputState = { left: false, right: false, jump: false, attack: false };
+  // ── Run state ───────────────────────────────────────────────────────────
+  /** Fresh run from the URL knobs — `?modules=` replaces the hull's loadout. */
+  const createRun = (): RunState => {
+    const next = createRunState(urlSeed, hullId);
+    if (moduleOverride !== null) {
+      next.modules = [...moduleOverride];
+    }
+    return next;
+  };
 
-    // Emit a SurfaceView only when it differs from the last one — once per
-    // discrete change (timer second, mining, deposit, launch), never per frame.
-    let lastView: SurfaceView | null = null;
-    const emitSurface = (): void => {
-      const view = buildSurfaceView(surfaceState);
-      if (lastView === null || !surfaceViewEquals(lastView, view)) {
-        lastView = view;
-        callbacks.onSurfaceUpdate?.(view);
-      }
-    };
+  let run: RunState = createRun();
+  let map: SectorMap = generateSectorMap(urlSeed, run.position.sector);
+  run.position.nodeId = map.startId;
 
-    // Keyboard listeners — removed in destroy()
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.repeat) return;
-      if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = true;
-      if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true;
-      if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') input.jump = true;
-      if (e.code === 'KeyX' || e.code === 'KeyJ') input.attack = true;
-    };
-    const onKeyUp = (e: KeyboardEvent): void => {
-      if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
-      if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
-      if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') input.jump = false;
-      if (e.code === 'KeyX' || e.code === 'KeyJ') input.attack = false;
-    };
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
+  let phase: GamePhase = 'map';
+  let combatMode: CombatMode | null = null;
+  let surfaceMode: SurfaceMode | null = null;
+  /** Node the active lane travels toward. */
+  let laneDestination: string | null = null;
+  /** Run loaded from storage, held until the title screen resolves. */
+  let savedRun: RunState | null = null;
 
-    // Fixed-timestep accumulator loop (ADR 004)
-    let acc = 0;
-    const tickFn = (ticker: { deltaMS: number }): void => {
-      acc += Math.min(ticker.deltaMS, MAX_FRAME_MS);
-      while (acc >= FIXED_DT_MS) {
-        updateSurface(surfaceState, input, FIXED_DT_MS);
-        acc -= FIXED_DT_MS;
-      }
-      surfaceRenderer.sync(surfaceState);
-      emitSurface();
-    };
-    app.ticker.add(tickFn);
+  const setPhase = (next: GamePhase): void => {
+    phase = next;
+    callbacks.onPhaseChange?.(next);
+  };
 
-    // Notify React once so it switches to surface UI, then seed the HUD
-    callbacks.onModeChange?.('surface');
-    emitSurface();
+  const emitMap = (): void => {
+    callbacks.onMapUpdate?.(buildMapView(map, run));
+  };
 
-    return {
-      seed,
-      mode: 'surface',
-      // Combat commands are no-ops in surface mode
-      playCard(): void {},
-      useInnate(): void {},
-      endTurn(): void {},
-      payToll(): void {},
-      continueTravel(): void {},
-      restartRun(): void {
-        // Fresh drop on the same level — the post-launch "Drop Again" button
-        if (surfaceState.outcome === 'ongoing') return;
-        surfaceState = createSurface(ROCKY_TEST_LEVEL, { podWindowMs });
-        lastView = null;
-        emitSurface();
+  const destroyModes = (): void => {
+    combatMode?.destroy();
+    combatMode = null;
+    surfaceMode?.destroy();
+    surfaceMode = null;
+  };
+
+  /** Node arrival is the save point (ADR 003) — including the run's first node. */
+  const enterMap = (): void => {
+    store.save(run);
+    emitMap();
+    setPhase('map');
+  };
+
+  const enterSurface = (): void => {
+    surfaceMode = startSurfaceMode(
+      app,
+      {
+        level: ROCKY_TEST_LEVEL,
+        podWindowMs,
+        loadout: projectLoadout(run.modules, reactorLevel),
       },
-      surfaceInput(action, pressed): void {
-        input[action] = pressed;
+      { onUpdate: (view) => callbacks.onSurfaceUpdate?.(view) },
+    );
+    setPhase('surface');
+  };
+
+  const startLane = (params: LaneParams): void => {
+    combatMode = startCombatMode(
+      app,
+      { run, lane: params, enemyPool },
+      {
+        onUpdate: (view) => callbacks.onCombatUpdate(view),
+        onArrival: (): void => {
+          destroyModes();
+          arriveAtNode();
+        },
+        onDefeat: (): void => {
+          destroyModes();
+          store.clear();
+          emitMap();
+          setPhase('run-over');
+        },
       },
-      destroy(): void {
-        app.ticker.remove(tickFn);
-        window.removeEventListener('keydown', onKeyDown);
-        window.removeEventListener('keyup', onKeyUp);
-        observer.disconnect();
-        surfaceRenderer.destroy();
-        app.destroy(true, { children: true, texture: true });
-      },
-    };
+    );
+    setPhase('lane');
+  };
+
+  const arriveAtNode = (): void => {
+    if (laneDestination === null) return;
+    const node = getNode(map, laneDestination);
+    run.position.nodeId = node.id;
+    laneDestination = null;
+    if (node.type === 'cache') {
+      run.resources.scrap += node.cacheScrap ?? 0;
+    }
+    if (node.type === 'planet') {
+      enterSurface();
+      return;
+    }
+    if (node.type === 'gate') {
+      store.clear();
+      emitMap();
+      setPhase('sector-complete');
+      return;
+    }
+    enterMap();
+  };
+
+  // ── Boot ────────────────────────────────────────────────────────────────
+  if (devSurface) {
+    enterSurface();
+  } else {
+    const saved = store.load();
+    if (saved !== null && saved.position.nodeId !== null) {
+      savedRun = saved;
+      const savedMap = generateSectorMap(saved.seed, saved.position.sector);
+      callbacks.onMapUpdate?.(buildMapView(savedMap, saved));
+      setPhase('title');
+    } else {
+      enterMap();
+    }
   }
 
-  // ── Combat mode ───────────────────────────────────────────────────────────
-  const renderer: SpaceRenderer = createSpaceRenderer(app);
-
-  const hullId = resolveHull();
-  const enemyPool = resolveEnemyPool();
-  let run: RunState = createRunState(seed, hullId);
-  let lane: LaneState = createLane(run, enemyPool);
-
-  // Travels to the next fight; on arrival the lane ends — systems reset (malfunctions
-  // gone with it) — and a fresh lane begins. A new lane always has an encounter ahead,
-  // so the loop terminates. Real arrival lands on a map node in 4.1; until then lanes
-  // chain directly.
-  const nextEncounter = (): CombatState => {
-    for (;;) {
-      const step = advanceLane(lane);
-      if (step.kind === 'encounter') {
-        return createCombat(run, step.enemyId, {
-          distance: lane.distance,
-          progressAtStart: lane.progress,
-          malfunctioning: lane.malfunctioning,
-        });
-      }
-      lane = createLane(run, enemyPool);
-    }
-  };
-
-  let combat: CombatState = nextEncounter();
-
-  const emit = (): void => {
-    const view = buildCombatView(combat);
-    renderer.sync(view);
-    callbacks.onCombatUpdate(view);
-  };
-
-  emit();
-  callbacks.onModeChange?.('combat');
-
   return {
-    seed,
-    mode: 'combat',
+    get seed(): string {
+      return run.seed;
+    },
     playCard(handIndex: number): void {
-      if (combat.outcome !== 'ongoing') return;
-      const card = combat.hand[handIndex];
-      if (card === undefined || !isCardPlayable(card) || cardPlayCost(combat, card) > combat.ap)
-        return;
-      playCard(combat, handIndex);
-      emit();
+      combatMode?.playCard(handIndex);
     },
     useInnate(handIndex?: number): void {
-      if (!canUseInnate(combat)) return;
-      const innate = getHull(combat.hullId).innateAbility;
-      if (innate.effect.kind === 'discard-to-draw') {
-        if (handIndex === undefined || combat.hand[handIndex] === undefined) return;
-        activateInnate(combat, handIndex);
-      } else {
-        activateInnate(combat);
-      }
-      emit();
+      combatMode?.useInnate(handIndex);
     },
     endTurn(): void {
-      if (combat.outcome !== 'ongoing') return;
-      endTurn(combat);
-      emit();
+      combatMode?.endTurn();
     },
     payToll(): void {
-      if (!canPayToll(combat)) return;
-      payToll(combat);
-      emit();
+      combatMode?.payToll();
     },
     continueTravel(): void {
-      if (combat.outcome !== 'victory' && combat.outcome !== 'escaped') return;
-      applyCombatResult(run, combat);
-      lane.progress = Math.min(lane.distance, lane.progress + combat.travelProgress);
-      lane.malfunctioning = [...combat.malfunctioning];
-      combat = nextEncounter();
-      emit();
+      combatMode?.continueTravel();
     },
-    restartRun(): void {
-      if (combat.outcome !== 'defeat') return;
-      run = createRunState(seed, hullId);
-      lane = createLane(run, enemyPool);
-      combat = nextEncounter();
-      emit();
+    selectNode(nodeId: string): void {
+      if (phase !== 'map' || run.position.nodeId === null) return;
+      const edge = edgesFrom(map, run.position.nodeId).find((e) => e.to === nodeId);
+      if (edge === undefined) return;
+      laneDestination = nodeId;
+      startLane(edge.lane);
     },
-    surfaceInput(): void {
-      // No-op in combat mode
+    launchPod(): void {
+      surfaceMode?.launchPod();
+    },
+    abandonSurface(): void {
+      surfaceMode?.abandon();
+    },
+    continueFromNode(): void {
+      if (phase !== 'surface' || surfaceMode === null) return;
+      const state = surfaceMode.state();
+      if (state.outcome === 'ongoing') return;
+      if (devSurface) {
+        // Dev knob has no run loop — Drop Again instead
+        destroyModes();
+        enterSurface();
+        return;
+      }
+      if (state.pod !== null) {
+        addResources(run.resources, state.pod.deposited);
+      }
+      destroyModes();
+      enterMap();
+    },
+    resumeRun(): void {
+      if (phase !== 'title' || savedRun === null) return;
+      run = savedRun;
+      savedRun = null;
+      map = generateSectorMap(run.seed, run.position.sector);
+      window.history.replaceState(null, '', seedToSearchParam(run.seed, window.location.search));
+      emitMap();
+      setPhase('map');
+    },
+    newRun(): void {
+      if (phase !== 'title' && phase !== 'run-over' && phase !== 'sector-complete') return;
+      destroyModes();
+      store.clear();
+      savedRun = null;
+      run = createRun();
+      map = generateSectorMap(urlSeed, run.position.sector);
+      run.position.nodeId = map.startId;
+      enterMap();
+    },
+    surfaceInput(action: SurfaceAction, pressed: boolean): void {
+      surfaceMode?.input(action, pressed);
     },
     destroy(): void {
+      destroyModes();
       observer.disconnect();
-      renderer.destroy();
       app.destroy(true, { children: true, texture: true });
     },
   };

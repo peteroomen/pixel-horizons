@@ -2,10 +2,12 @@
 
 import type { PointerEvent } from 'react';
 
-type SurfaceAction = 'left' | 'right' | 'jump' | 'attack';
+type SurfaceAction = 'left' | 'right' | 'jump' | 'attack' | 'dash';
 
 interface TouchControlsProps {
   onInput: (action: SurfaceAction, pressed: boolean) => void;
+  /** Render the DASH button only when the loadout projects a dash (GDD §6.3). */
+  hasDash?: boolean;
 }
 
 /**
@@ -20,7 +22,7 @@ interface TouchControlsProps {
  *
  * Pointer-up/leave/cancel anywhere on a button releases it so buttons can't stick.
  */
-export default function TouchControls({ onInput }: TouchControlsProps) {
+export default function TouchControls({ onInput, hasDash = false }: TouchControlsProps) {
   function makeHandlers(action: SurfaceAction) {
     return {
       onPointerDown(e: PointerEvent<HTMLButtonElement>) {
@@ -67,6 +69,15 @@ export default function TouchControls({ onInput }: TouchControlsProps) {
 
       {/* Action buttons — bottom-right */}
       <div className="pointer-events-none absolute bottom-6 right-4 flex gap-2">
+        {hasDash && (
+          <button
+            className={`${btnBase} pointer-events-auto h-12 w-12`}
+            aria-label="Dash"
+            {...makeHandlers('dash')}
+          >
+            D
+          </button>
+        )}
         <button
           className={`${btnBase} pointer-events-auto h-12 w-12`}
           aria-label="Attack"
