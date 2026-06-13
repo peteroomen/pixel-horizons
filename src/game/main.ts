@@ -4,7 +4,7 @@ import { ROCKY_TEST_LEVEL } from '@/game/data/levels';
 import { POD_WINDOW_MS } from '@/game/data/surface';
 import { computeScale, VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from '@/renderer/pixel-scale';
 import type { CombatView } from './combat-view';
-import { BASELINE_AP, getEnemy, getHull } from './data';
+import { BASELINE_AP, getEnemy, getHull, getModule } from './data';
 import type { EnemyId } from './data';
 import { buildMapView } from './map-view';
 import type { MapView } from './map-view';
@@ -123,6 +123,44 @@ function resolveHull(): string {
 }
 
 /**
+ * Dev/test knob until the Workbench lands (4.2): `?modules=mining-laser,thruster`
+ * overrides the hull's installed modules, so any item combination is testable
+ * without module acquisition. The `mod-` prefix is optional; unknown entries are
+ * dropped quietly (same fallback convention as the other knobs). The override is
+ * the whole ship — the combat deck and the surface items both project from it.
+ * An all-invalid or empty list falls back to the hull's defaults.
+ */
+function resolveModuleOverride(): string[] | null {
+  const param = new URLSearchParams(window.location.search).get('modules');
+  if (param === null) return null;
+  const ids: string[] = [];
+  for (const entry of param.split(',')) {
+    const name = entry.trim();
+    if (name === '') continue;
+    const id = name.startsWith('mod-') ? name : `mod-${name}`;
+    try {
+      ids.push(getModule(id).id);
+    } catch {
+      // Unknown module id — skipped quietly
+    }
+  }
+  return ids.length > 0 ? ids : null;
+}
+
+/**
+ * Dev/test knob: `?reactor=4` overrides the reactor level driving the surface
+ * item cap (GDD §4.3) — testing the cap shouldn't require Core Crystals.
+ * Combat AP stays at BASELINE_AP until reactor level lives on RunState (4.2+).
+ * Invalid values fall back quietly; 0 is valid (every equipment item inactive).
+ */
+function resolveReactorLevel(): number {
+  const param = new URLSearchParams(window.location.search).get('reactor');
+  if (param === null) return BASELINE_AP;
+  const level = Number.parseInt(param, 10);
+  return Number.isFinite(level) && level >= 0 ? level : BASELINE_AP;
+}
+
+/**
  * Dev/test knob: `?enemy=enemy-anchormaw` forces every lane encounter to one
  * enemy — each enemy must be reachable on demand for manual testing. Unknown
  * values fall back quietly.
@@ -192,6 +230,8 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const enemyPool = resolveEnemyPool();
   const podWindowMs = resolvePodWindowMs();
   const devSurface = resolveDevSurface();
+  const moduleOverride = resolveModuleOverride();
+  const reactorLevel = resolveReactorLevel();
 
   TextureSource.defaultOptions.scaleMode = 'nearest';
   const app = new Application();
@@ -222,7 +262,16 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const store = createSaveStore(window.localStorage);
 
   // ── Run state ───────────────────────────────────────────────────────────
-  let run: RunState = createRunState(urlSeed, hullId);
+  /** Fresh run from the URL knobs — `?modules=` replaces the hull's loadout. */
+  const createRun = (): RunState => {
+    const next = createRunState(urlSeed, hullId);
+    if (moduleOverride !== null) {
+      next.modules = [...moduleOverride];
+    }
+    return next;
+  };
+
+  let run: RunState = createRun();
   let map: SectorMap = generateSectorMap(urlSeed, run.position.sector);
   run.position.nodeId = map.startId;
 
@@ -263,7 +312,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       {
         level: ROCKY_TEST_LEVEL,
         podWindowMs,
-        loadout: projectLoadout(run.modules, BASELINE_AP),
+        loadout: projectLoadout(run.modules, reactorLevel),
       },
       { onUpdate: (view) => callbacks.onSurfaceUpdate?.(view) },
     );
@@ -389,7 +438,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       destroyModes();
       store.clear();
       savedRun = null;
-      run = createRunState(urlSeed, hullId);
+      run = createRun();
       map = generateSectorMap(urlSeed, run.position.sector);
       run.position.nodeId = map.startId;
       enterMap();
