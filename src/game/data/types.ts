@@ -154,6 +154,11 @@ export interface EnemyDef {
   pattern: 'cycle' | 'random';
   intents: EnemyIntentDef[];
   /**
+   * Scrap dropped on victory (GDD §6.4): rolled on the combat stream within the
+   * [min, max] band. The "minimum Scrap drop" guarantee — every won encounter pays.
+   */
+  scrapReward: { min: number; max: number };
+  /**
    * Blockade archetypes (GDD §5.7): a trait, not an intent — the latch is permanent
    * encounter state. Travel progress is halted while this enemy lives; paying the
    * Scrap toll ends the encounter without victory rewards.

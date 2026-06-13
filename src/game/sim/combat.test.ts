@@ -16,6 +16,7 @@ import {
   payToll,
   playCard,
   activateInnate,
+  rollVictoryScrap,
 } from './combat';
 import type { LaneContext } from './combat';
 import type { CombatCard } from './deck';
@@ -687,6 +688,44 @@ describe('applyCombatResult', () => {
     const secondOpening = ids([...second.hand, ...second.drawPile]);
     expect(secondOpening).not.toEqual(firstOpening);
     expect([...secondOpening].sort()).toEqual([...firstOpening].sort());
+  });
+});
+
+describe('rollVictoryScrap (GDD §6.4)', () => {
+  it('rolls a reward within the enemy scrapReward band', () => {
+    const run = gunshipRun('scrap-drop');
+    const state = createCombat(run, LAMPREY);
+    autoplay(state);
+    expect(state.outcome).toBe('victory');
+    const before = state.scrapGained;
+    rollVictoryScrap(state);
+    const reward = getEnemy(LAMPREY).scrapReward;
+    expect(state.scrapGained - before).toBeGreaterThanOrEqual(reward.min);
+    expect(state.scrapGained - before).toBeLessThanOrEqual(reward.max);
+  });
+
+  it('result is deterministic (same seed = same drop)', () => {
+    const run1 = gunshipRun('deterministic');
+    const s1 = createCombat(run1, LAMPREY);
+    autoplay(s1);
+    rollVictoryScrap(s1);
+
+    const run2 = gunshipRun('deterministic');
+    const s2 = createCombat(run2, LAMPREY);
+    autoplay(s2);
+    rollVictoryScrap(s2);
+
+    expect(s1.scrapGained).toBe(s2.scrapGained);
+  });
+
+  it('applyCombatResult folds the rolled scrap into the run', () => {
+    const run = gunshipRun('fold');
+    const state = createCombat(run, LAMPREY);
+    autoplay(state);
+    rollVictoryScrap(state);
+    const drop = state.scrapGained;
+    applyCombatResult(run, state);
+    expect(run.resources.scrap).toBe(drop);
   });
 });
 

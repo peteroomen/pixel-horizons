@@ -454,6 +454,18 @@ export function currentIntent(state: CombatState): EnemyIntentDef {
  * replaying it. Mutates `run` in place. Passive victory innates (Salvage Rig) land
  * here — "after every won encounter" is exactly this moment.
  */
+/**
+ * Roll the enemy's Scrap reward on the combat stream (GDD §6.4). Called once at
+ * victory; the rolled amount lands in `scrapGained` so the UI can show it and
+ * the commit path folds it into the run like all other Scrap.
+ */
+export function rollVictoryScrap(state: CombatState): void {
+  const reward = getEnemy(state.enemyId).scrapReward;
+  const rng = restoreRng(state.rng);
+  state.scrapGained += rng.int(reward.min, reward.max + 1);
+  state.rng = rng.getState();
+}
+
 export function applyCombatResult(run: RunState, state: CombatState): void {
   if (state.outcome === 'ongoing') {
     throw new Error('cannot apply combat result: combat is still ongoing');

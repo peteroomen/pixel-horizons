@@ -15,6 +15,7 @@ export const ENEMY_DEFS: readonly EnemyDef[] = [
     archetype: 'Raider',
     maxHp: 22,
     pattern: 'cycle',
+    scrapReward: { min: 5, max: 10 },
     intents: [
       { kind: 'attack', name: 'Feeding Frenzy', amount: 4, hits: 2 },
       { kind: 'attack', name: 'Lash', amount: 7 },
@@ -27,6 +28,7 @@ export const ENEMY_DEFS: readonly EnemyDef[] = [
     archetype: 'Hunter',
     maxHp: 18,
     pattern: 'cycle',
+    scrapReward: { min: 4, max: 8 },
     intents: [
       { kind: 'attack-module', name: 'Burrow', amount: 3, targeting: 'highest-value' },
       { kind: 'attack', name: 'Tail Whip', amount: 5 },
@@ -39,6 +41,7 @@ export const ENEMY_DEFS: readonly EnemyDef[] = [
     archetype: 'Bulwark',
     maxHp: 30,
     pattern: 'cycle',
+    scrapReward: { min: 8, max: 15 },
     armor: { amount: 5, regen: 2 },
     intents: [
       { kind: 'attack', name: 'Shell Ram', amount: 6 },
@@ -52,6 +55,7 @@ export const ENEMY_DEFS: readonly EnemyDef[] = [
     archetype: 'Scrambler',
     maxHp: 20,
     pattern: 'cycle',
+    scrapReward: { min: 6, max: 12 },
     intents: [
       { kind: 'inject', name: 'Spore Burst', cardId: 'card-spore-cluster', count: 2 },
       { kind: 'attack', name: 'Tendril Slap', amount: 5 },
@@ -65,6 +69,7 @@ export const ENEMY_DEFS: readonly EnemyDef[] = [
     archetype: 'Blockade',
     maxHp: 26,
     pattern: 'cycle',
+    scrapReward: { min: 7, max: 12 },
     anchor: { tollScrap: 5 },
     intents: [
       { kind: 'attack', name: 'Constrict', amount: 5 },

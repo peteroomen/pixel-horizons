@@ -17,6 +17,7 @@ import {
   isCardPlayable,
   payToll,
   playCard,
+  rollVictoryScrap,
 } from '../sim/combat';
 import type { CombatState } from '../sim/combat';
 import type { LaneParams } from '../sim/map-gen';
@@ -128,6 +129,9 @@ export function startCombatMode(
     continueTravel(): void {
       if (combat === null) return;
       if (combat.outcome !== 'victory' && combat.outcome !== 'escaped') return;
+      if (combat.outcome === 'victory') {
+        rollVictoryScrap(combat);
+      }
       applyCombatResult(run, combat);
       lane.progress = Math.min(lane.distance, lane.progress + combat.travelProgress);
       lane.malfunctioning = [...combat.malfunctioning];
