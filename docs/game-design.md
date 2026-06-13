@@ -106,7 +106,7 @@ Modules are the atomic unit of the game. Each module:
 |--------|--------------------------|--------------------------|
 | **Standard Print Matrix** | Baseline clone (3 HP) | 1× Telemetry Sync (1 AP, draw 1) |
 | **Scavenger Matrix** | +15% mining yield, 2 HP | 1× Resource Ping (0 AP, gain 1 Scrap, exhaust) |
-| **Enforcer Matrix** | +1 melee damage, -10% speed | 1× Combat Sim (1 AP, next attack +3 dmg) |
+| **Enforcer Matrix** | +1 melee damage (deals 2 dmg/hit; one-shots Scrap Grubbers), 2 HP, -10% speed | 1× Combat Sim (1 AP, next attack +3 dmg) |
 | **Repair Matrix** | Carries field-patch kit (slow self-heal) | 1× Repair Clone (2 AP, fix ALL malfunctioning modules — alternative to playing each Malfunction card) |
 | **Assault Matrix** | +ranged attack, 2 HP | 1× Boarding Clone (2 AP, 5 dmg, teleports through shields — ignores layers) |
 
@@ -213,7 +213,7 @@ Single source of truth for example modules. All numbers tunable.
 | **Missile Pod** | Weapon | 1× Missile Salvo (2 AP, 8 dmg), 1× Lock-On (1 AP, next attack +3 dmg) | TBD | — | TBD |
 | **Autocannon** | Weapon | 2× Cannon Burst (1 AP, 3 dmg ×2 hits) | TBD | — | TBD |
 | **Phase Shifter** | Utility | 2× Ghost Shift (1 AP, 50% dodge), 1× Desync Hull (0 AP, retain 1 card) | + 1× Phase Walk (1 AP, untargetable 1 turn) | Phase Dash (blink through walls) | + Phase Vision (see through walls briefly) |
-| **Shield Generator** | Utility | 2 shield layers (2-turn recharge); 2× Reinforce (1 AP, restore 1 layer), 1× Emergency Barrier (0 AP, +1 temp layer, exhaust) | 3 layers; improved cards TBD | Shield Bubble item (absorbs 1 hit, 30s cooldown) | TBD |
+| **Shield Generator** | Utility | 2 shield layers (2-turn recharge); 2× Reinforce (1 AP, restore 1 layer), 1× Emergency Barrier (0 AP, +1 temp layer, exhaust) | 3 layers; improved cards TBD | Shield Bubble item (absorbs 1 hit; kinetic recharge: run 45 tiles at ≥3.0 m/s — no passive regen while standing still) | TBD |
 | **Cargo Scanner** | Utility | 1× Deep Scan (1 AP, reveal enemy intent next turn) | TBD | Resource Scanner (highlights hidden deposits) | TBD |
 | **Thruster** | Engine | 2× Burn (1 AP, +2 travel), 1× Afterburner (2 AP, +5 travel) | 2× Hard Burn (1 AP, +3 travel), 1× Emergency Boost (0 AP, +2 travel, exhaust) | Double Jump | + Air Dash, + Hover (brief) |
 | **Hauler Engine** | Engine | 1× Burn (1 AP, +2 travel), 1× Cargo Thrust (2 AP, +3 travel, +1 temp shield layer) | TBD | High Jump (taller single jump, no double jump) | TBD |
@@ -252,9 +252,30 @@ The captain never leaves the ship. A printed clone (defined by the Clone Bay mat
 
 The clone should feel deliberately incomplete based on your ship config. A Gunship player has orbital strikes but can barely jump. A Scout player is agile but has minimal firepower. Your ship build creates your platformer experience. There are no character-level upgrades separate from the ship — clone variation lives in the Clone Bay module.
 
+**Clone HP by matrix:** Standard Print Matrix = 3 HP; Scavenger Matrix = 2 HP; Enforcer Matrix = 2 HP. All Sector 1 enemies and hazards deal exactly 1 HP per hit.
+
+**Invincibility frames (iFrames):** 1.5 s (90 frames at 60 Hz) after taking damage. Sprite blinks at 10 Hz during this window. iFrames activate during the freeze-frame phase (§6.10), preventing chain hits from adjacent hazards. Hit-stun eats 0.20 s of input lock; momentum-based knockback also eats pod-timer seconds.
+
+**Moveset matrix:**
+
+| State | Available Inputs |
+|-------|-----------------|
+| Ground | Run · Jump · Ground Melee Swipe |
+| Airborne | Air Spin (one per airborne sequence; jump-button tap) |
+
+*Ground Melee Swipe:* 24 × 16 px hitbox, front-facing. 3f startup / 4f active / 5f recovery (<0.25 s total). 0.4 s cooldown between swings. Deals 1 HP + minor knockback; Enforcer Matrix scales to 2 HP (one-shots Scrap Grubbers). Passes through wall tiles — no recoil on terrain contact.
+
+*Air Spin:* exclusive to the airborne state. 0.15 s gravity clamp; ±1.5 m/s horizontal drift. One per airborne sequence; refreshes on: solid floor landing, wall-slide contact, or successful enemy bounce.
+
+**Module-item composition:**
+
+- *Double Jump + Air Spin:* jump → double-jump at apex → Spin for hover/drift. Spin refreshes after each double-jump sequence.
+- *Phase Dash + Air Spin:* complete the blink, then tap Spin while still airborne. Input priority: Phase Dash wins over simultaneous Spin input; Spin becomes Available once the dash exits.
+- *Phase Dash distinction:* invincible horizontal blink *through* tiles and enemies; Air Spin deflects enemies on contact. They are separate states, not alternatives.
+
 ### 6.4 Death Penalty
 
-- **Clone dies:** NOT a run-ender. Consciousness snaps back to orbit. Backpack resources drop at the death point. **First clone print per planet visit is free; re-prints cost Scrap.** You can redeploy (within the remaining pod window) to corpse-run your dropped loot.
+- **Clone dies:** NOT a run-ender. Consciousness snaps back to orbit. Backpack resources drop at the death point. **First clone print per planet visit is free; re-prints cost Scrap.** You can redeploy (within the remaining pod window) to corpse-run your dropped loot (see §6.10 for corpse marker lifecycle).
 - **Ship destroyed (space combat):** Immediate Game Over. Run terminates.
 
 This asymmetry is key: planet risks are recoverable, space risks are fatal. It encourages bold exploration but careful combat. Minimum Scrap drops from every won encounter guarantee the economy can't fully bottom out.
@@ -267,6 +288,8 @@ This asymmetry is key: planet risks are recoverable, space risks are fatal. It e
 | **Biominerals** | Planet subsurface layers (mining) | Module upgrades, specialization branches |
 | **Core Crystals** | Deep caves on high-difficulty planets only | Reactor upgrades (+1 AP). Extremely rare. Also one of the three boss reward choices. |
 | **Blueprint Matrices** | Hidden in deep caves, anomalous ruins | Unlock new module variants at the workbench |
+
+**Surface enemy drops** go into the clone's **backpack** — not direct-banked — preserving the risk/reward tension of the pod timer. A full backpack causes drops to bounce to the nearest valid floor position as world items; pickup magnetism radius is 2.5 tiles. See §6.7 for enemy rosters, §6.9 for corpse mechanics.
 
 Planet type determines what resources are available and in what quantities:
 
@@ -286,6 +309,87 @@ Beyond raw resources, planets can yield:
 - **Module modifiers:** Found in ruins or reward caches, or applied by a rare **Tinkerer** character (event/shop encounter) who hack-customizes a module. Modifiers attach to the *module* (not the abstract card), persist through Mk upgrades, and leave with the module if it's sold. Examples: -1 AP cost on one of its cards, "starts in hand," "draw 1 when played."
 - **Random events:** Distress signals, alien encounters, environmental puzzles. Can yield unique modules, resources, or information about the sector.
 - **Environmental intel:** Scanning certain formations reveals information about upcoming nodes (enemy types, shop inventory, hazard warnings).
+
+### 6.7 Surface Enemies (Sector 1 Roster)
+
+Three enemy types appear on Rocky/Desert planets in Sector 1. All deal 1 HP per hit.
+
+| Enemy | Behavior | Drop |
+|-------|----------|------|
+| **Bloom Hopper** | Ground patrol; 3-tile horizontal range; leaps toward clone when within 5 tiles | 1 Scrap |
+| **Scrap Grubber** | Slow-moving ground scavenger; attacks only if cornered or attacked first | 2 Scrap (each item takes 1 backpack slot) |
+| **Ceiling Dropper** | Clings to ceiling; drops when clone passes beneath; brief stun on landing; thrown upward 1.0 s on Shield Bubble pop | 1 Scrap |
+
+**Spawn rules:**
+- Chunk size: 16 × 10 tiles (one viewport). Maximum 2 enemies per chunk.
+- Minimum 5-tile separation between enemy spawn points.
+- 8-tile zero-spawn radius around the Drop Pod.
+- Enemies weighted to spawn within 3 tiles of high-value deposits.
+- No vertical stacking: Ceiling Dropper cannot spawn above a Bloom Hopper in the same column.
+- Enemies do **not** respawn once killed — dead state persists for the current pod window.
+
+All enemy drops land in the clone's **backpack** (not direct-banked). Full backpack: drops bounce to the nearest valid floor position as world items. Boundary drops use the nearest valid floor position to prevent items stuck in geometry. Pickup magnetism radius: 2.5 tiles.
+
+### 6.8 Environmental Hazards (Sector 1)
+
+| Hazard | Tile Token | Behavior | Notes |
+|--------|-----------|----------|-------|
+| **Spike Bramble** | H1 | Stationary; deals 1 HP on contact | iFrames from the triggering hit allow a recovery jump or wall-kick out of a bramble pit |
+| **Crumbling Sandstone** | — | Breaks 0.5 s after standing contact; re-forms after 8 s | Requires movement across or a timed jump-chain |
+| **Sandstorm Vent** | V1 | ±2 m/s horizontal impulse push while active; visual dust column | Cycles on/off with a clearly telegraphed timing window |
+
+Shield Bubble absorbs all damage types including environmental hazards (1 hit, then pops — see §6.10 for visual states and recharge). Knockback into a Spike Bramble: existing iFrames remain active, giving the full 1.5 s window to escape.
+
+### 6.9 Level Design Grammar
+
+Levels are assembled from named chunk templates and validated before serving to the player.
+
+**Chunk templates (Sector 1 — Rocky/Desert):**
+
+| Template | Dimensions | Focus | Typical Enemies |
+|----------|-----------|-------|-----------------|
+| **A — Open Mining Cave** | 32 × 10 tiles | Horizontal, Biomineral-rich | Scrap Grubbers |
+| **B — Vertical Shaft** | 10 × 30 tiles | Wall-kicks required for full traversal | Bloom Hoppers |
+| **C — Choke Point Corridor** | Variable; 2-tile ceiling height | Tight space, limited dodge room | Ceiling Droppers |
+
+**Tile spawn tokens:**
+
+| Token | Meaning |
+|-------|---------|
+| E1 | Bloom Hopper spawn point |
+| E2 | Scrap Grubber spawn point |
+| E3 | Ceiling Dropper spawn point |
+| H1 | Spike Bramble hazard tile |
+| V1 | Sandstorm Vent |
+
+**Flood-fill validation:** After assembly, a flood-fill runs from the Drop Pod tile to every resource node (deposits, caches). Any node unreachable without module-gated abilities (double jump, phase dash) causes the level to be rejected and a new one generated. This guarantees all resources are attainable by any starting loadout.
+
+### 6.10 Damage Feedback & Death Sequence
+
+**Per-hit feedback sequence:**
+
+1. 0.05 s freeze-frame — iFrames begin here, blocking chain hits from adjacent hazards
+2. 12-frame camera shake
+3. 0.1 s red-flash screen overlay
+4. Knockback: 4-tile horizontal impulse + 2-tile vertical lift
+5. 0.20 s (12 frames) complete input lock
+6. Sprite blinks at 10 Hz for the remainder of the 1.5 s iFrame window
+
+**Death sequence (HP reaches 0):**
+
+1. 1.5 s fade-to-black with pixel-collapse animation
+2. Orbital Cloning Bay menu overlay appears
+3. Backpack contents drop at the death point as a **corpse marker**
+4. First re-print per planet visit is free; subsequent re-prints cost Scrap
+
+**Corpse marker lifecycle:**
+- **Single-instance rule:** a second death deletes the first marker; all its items are permanently lost.
+- Pickup radius: 1.5 tiles. HUD shows a neon-green edge beacon when the marker is >10 tiles away.
+- **Partial pickup:** if the backpack cannot hold everything, the marker persists with the remaining items.
+- **Auto-nudge:** if an enemy overlaps the marker, it shifts 2 tiles horizontally.
+- Persists across re-prints within the same pod window; vanishes when the pod launches to orbit.
+
+**Shield Bubble visual states:** Ready (blue ring) · Popped (ripple + camera shake) · Charging (meter above clone's head). No passive recharge — standing still accumulates no charge.
 
 ---
 
@@ -467,7 +571,7 @@ Planet visuals and properties are driven by the Deep-Fold Pixel Planet Generator
 1. **Game verbiage/glossary** — final names for Malfunction/Infestation cards, the Bloom, hyperspace runs, etc. Placeholder names throughout.
 2. **Hyperspace run tuning** — encounter spacing, whether travel progress carries between encounters in a lane, what happens to encounter rewards on escape-by-arrival
 3. **Exact card balance numbers** — AP costs, damage values, shield layer counts need playtesting
-4. **Platformer enemy design** — types, behaviors, threat level by biome; currently the thinnest part of the doc
+4. **Platformer enemy design (Sector 1 resolved)** — Bloom Hopper, Scrap Grubber, Ceiling Dropper specified in §6.7; hazards (Spike Bramble, Crumbling Sandstone, Sandstorm Vent) in §6.8. Enemy types for Sectors 2–3 and non-Rocky biomes are still TBD.
 5. **Secret Sector details** — unlock condition, unique mechanics, story implications
 6. **Module modifier system depth** — how many modifier types, stacking rules, rarity; Tinkerer encounter design
 7. **Pod-defense events** — frequency, mechanics, interaction with the pod timer

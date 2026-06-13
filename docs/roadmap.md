@@ -34,7 +34,7 @@
 - [ ] **3.1 Platformer core** — Fixed-timestep loop, AABB physics, run/jump/melee, tilemap collision + render (one hand-made Rocky test level). Keyboard + touch controls.
 - [ ] **3.2 Mining + drop pod** — Deposits, backpack, deposit-at-pod, pod timer + auto-launch, miss-the-window consequence.
 - [ ] **3.3 Module item projection** — Items derived from installed ship modules (double jump, phase dash, scanner, shield bubble…), reactor item cap. *This is the slice where the north star becomes real — test with multiple loadouts.*
-- [ ] **3.4 Clone death + hazards** — Death/backpack drop/corpse run, free first print + Scrap re-prints, basic surface enemies + Rocky-biome hazards.
+- [ ] **3.4 Clone death + hazards** — Death/backpack drop/corpse run, free first print + Scrap re-prints, basic surface enemies + Rocky-biome hazards. *Design complete — see GDD §6.3, §6.7–6.10.*
 
 ## Phase 4 — The Run Loop
 
