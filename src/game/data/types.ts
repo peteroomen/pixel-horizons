@@ -139,6 +139,36 @@ export interface ModifierDef {
   bonusEffects?: CardEffect[];
 }
 
+export type ResourceKind = 'scrap' | 'biominerals' | 'coreCrystals' | 'blueprints';
+
+/**
+ * One consequence of an event choice (GDD §6.6 / §4.4) — interpreted by sim/events.ts.
+ * `attach-modifier` needs a target module the player picks; the choice flags that.
+ */
+export type EventOutcome =
+  | { kind: 'gain-resources'; resource: ResourceKind; amount: number }
+  | { kind: 'lose-resources'; resource: ResourceKind; amount: number }
+  | { kind: 'gain-module-to-cargo'; moduleId: ModuleId }
+  | { kind: 'repair-hull'; amount: number }
+  | { kind: 'damage-hull'; amount: number }
+  | { kind: 'attach-modifier'; modifierId: ModifierId }
+  | { kind: 'nothing' };
+
+export interface EventChoice {
+  label: string;
+  description: string;
+  outcomes: EventOutcome[];
+  /** True when an outcome (attach-modifier) needs the player to pick an installed module. */
+  requiresModuleTarget?: boolean;
+}
+
+export interface EventDef {
+  id: string;
+  title: string;
+  body: string;
+  choices: EventChoice[];
+}
+
 export type EnemyId = string;
 
 /**
