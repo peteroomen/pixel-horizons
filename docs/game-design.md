@@ -162,7 +162,7 @@ Every card falls into one of three tactical categories. A hand of 5 cards forces
 
 The balance of these three axes in your deck depends entirely on your module loadout.
 
-> **Design question (travel cards vs. boss fights):** Engine cards are dead draws during the sector boss — there is no lane distance to shorten at the gate. Three paths to resolve before Act 1 balance lock: (a) **dual-mode Thruster cards** — add a secondary combat effect (e.g. weak shield, Draw 1, 1 AP refund on discard) so they're never fully useless; (b) **Jettison keyword** — any card with Jettison can be discarded for a small benefit (Draw 1, or +1 AP) even if its primary effect is inapplicable; (c) **intentional tension** — speed costs combat power by design, but this only works if players had a real choice about installing Engine modules (valid with hull variety). See roadmap 5.5.
+> **Design question (travel cards vs. boss fights) — RESOLVED (mega-slice 4): (a) dual-mode + (b) Jettison, both.** Every Engine card now carries an on-play `Draw 1` *and* the Jettison keyword, so engine cards are a net positive in any fight and never fully dead at the gate. (Original options for the record: (a) dual-mode Thruster cards; (b) Jettison keyword; (c) intentional tension — rejected, only valid with real hull choice, and hull select is still a knob.)
 
 ### 5.5 Turn Structure
 
@@ -599,6 +599,7 @@ Planet visuals and properties are driven by the Deep-Fold Pixel Planet Generator
 11. **Audio/music direction** — style, adaptive music between modes
 12. **Exact shop pricing economy** — Scrap values, Biomineral costs, inflation across sectors
 13. **Multiplayer/sharing** — co-op potential beyond seeded-run sharing, or purely single-player?
-14. **Travel card design at boss fights** — dual-mode Thruster cards, Jettison keyword, or intentional tension? (See §5.4, §5.9, roadmap 5.5.)
-15. **Starting deck size** — are there too many starting modules? Fewer starting slots means each new module has higher relative impact on the deck. Evaluate after 4.6 keyword pass.
-16. **Module acquisition pacing** — are shop/engineer encounters frequent enough? Events (4.4) are the primary mid-run injection point; their timing relative to 4.3 may need adjustment based on playtesting.
+14. ~~**Travel card design at boss fights**~~ — RESOLVED (mega-slice 4): dual-mode (`Draw 1`) + Jettison on every Engine card. See §5.4.
+15. **Starting deck size** — are there too many starting modules? Fewer starting slots means each new module has higher relative impact on the deck. The keyword pass (mega-slice 4) deferred the starting-loadout audit to the 5.5 balance pass; evaluate then with the keyword identity in place.
+16. **Module acquisition pacing** — are shop/engineer/event encounters frequent enough? Events (shipped mega-slice 4, weight 2) are the primary mid-run injection point; tune timing in playtest.
+17. **Multi-enemy encounters** — the boss-organ work (mega-slice 4) seeded a multi-target combat UI. Should lanes ever present 2+ enemies at once? This contradicts the current §5.1/§5.7 "single-enemy fights only" commitment — resolve before building (roadmap 5.x).

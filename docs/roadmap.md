@@ -42,13 +42,14 @@
 - [ ] **4.1 Sector map** — Seeded map-gen (branching nodes, lane modifiers), map screen, path choice, node entry → correct mode.
 - [ ] **4.2 Workbench** — Install/swap/craft modules, deck regenerates next combat, blueprint + resource costs.
 - [ ] **4.3 Shops + economy** — Merchant and Engineer nodes, hull repair for Scrap, module purchases, sell resources, minimum-Scrap drops.
-- [ ] **4.4 Events + discoveries** — Text event nodes, module modifiers (attach-to-module), Tinkerer encounter. *(⚠️ Hard dependency for deckbuilding feel — events are the primary mid-run module injection point. Prioritize alongside or before 4.3 if the deck variety problem persists after 4.6.)*
+- [x] **4.4 Events + discoveries** — Text event nodes, module modifiers (attach-to-module), Tinkerer encounter. *(Shipped in THE ARSENAL, mega-slice 4.)*
 - [ ] **4.5 Save/resume** — Full RunState persistence at node boundaries, resume from main screen, abandon run.
-- [ ] **4.6 Card keywords & deckbuilding depth** — Define and implement keyword vocabulary (Draw N, Discard-to-trigger, Retain, Exhaust, on-play, on-draw effects). Redesign/extend the module card catalog so each module's cards have distinct mechanical identity and interact with other cards. Audit starting deck size: consider fewer starting modules or more empty hull slots so each new acquisition is a bigger relative change. This is the deckbuilder's identity layer — arguably the most important feel problem to solve. *Coordinate with 4.3/4.4 on acquisition pacing.*
+- [x] **4.6 Card keywords & deckbuilding depth** — Keyword vocabulary (Draw, Retain, Jettison, Discard, Exhaust, Cleave, on-play, on-draw) + signature keyword per module slot; per-card malfunction repair fix; travel-card-at-boss fix. *(Shipped in THE ARSENAL, mega-slice 4.)* **Deferred:** the starting-deck-size audit (A5) — pure data, left for the 5.5 balance pass; `starts-in-hand` modifier.
 
 ## Phase 5 — Act 1 Complete
 
-- [ ] **5.1 Elite encounters** — Souped-up variants, better rewards.
+- [ ] **5.1 Elite encounters** — Souped-up variants, better rewards. Elites can grow targetable organs (the seam exists from mega-slice 4) + an elite-lane modifier weight.
+- [ ] **5.x Multi-enemy encounters & lane danger** — Face 2+ Bloom organisms in one encounter for variety/difficulty. ⚠️ **Contradicts the current GDD commitment** (§5.1/§5.7: "single-enemy fights only — no fleet battles") — resolve that design tension first. The boss-organ work (mega-slice 4) deliberately seeded the multi-target combat UI (target selection, multiple HP bars, Cleave) this would reuse, so it is a natural follow-on, not a rewrite. Also covers richer per-lane encounter sequencing (infested/elite lanes).
 - [ ] **5.2 Sector boss + gate** — Multi-phase Bloom gate-guardian, boss reward choice (Core Crystal / Mk II module / Blueprint cache), gate destruction.
 - [ ] **5.3 Biomes 2–3** — Volcanic + Ice: hazards, tileset recolor pipeline driven by generated planet colors (`palette.ts`).
 - [ ] **5.4 Meta shell** — Main menu, hull select, localStorage unlocks (hulls, modules, clone matrices), run summary screen, wreckage salvage node.

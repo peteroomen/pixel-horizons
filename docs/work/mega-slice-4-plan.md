@@ -474,13 +474,45 @@ redesign + keyword UI + travel-card-at-boss fix. The most important feel problem
 
 ## What actually happened
 
+Executed as planned across 8 layer-ordered commits on `feature/the-arsenal`, each green
+(`lint` + `type-check` + `test`); 419 tests at the end (from 385). Sim-first; the per-card
+malfunction refactor landed first and alone behind the 900-line `combat.test.ts` net.
+
+Deviations, all sanctioned by the plan's own cut order:
+
+- **Starting-loadout audit (A5) deferred** to the 5.5 balance pass — pure data, but it
+  shifts module indices and would churn tuned combat/scout tests. Cut order item #4. The
+  keyword *identity* pass (A3) shipped in full.
+- **Two module modifiers shipped, not three:** `cost-reduction` (Tuned Capacitors) and
+  `draw-on-play` (Feedback Loop), as per-instance `CombatCard` overrides. `starts-in-hand`
+  deferred (needs opening-hand seeding). The Tinkerer uses cost-reduction.
+- Salvage Round + an Autocannon Mk II tier were added in the engine step so the Discard
+  engine had a real card to test against the orphan-card guard.
+- **Pixi organ-targeting indicator (C2) deferred** — DOM organ bars carry the function;
+  `amplify-attacks` organ ability unimplemented (no enemy uses it).
+- Event/shop/engineer resume lands on the map at the node (existing convention); an event
+  resolves straight to the map (no outcome overlay).
+
 ## Files created / modified
 
+**New:** `data/modifiers.ts`, `data/events.ts`, `sim/events.ts` (+test), `event-view.ts`
+(+test), `components/EventScreen.tsx`, ADRs `006-card-keywords-and-modifiers.md`,
+`007-enemy-organs.md`. **Modified (sim/data):** `data/types.ts`, `cards.ts`, `modules.ts`,
+`enemies.ts`, `constants.ts`, `index.ts`, `sim/combat.ts`, `deck.ts`, `run-state.ts` (v3),
+`map-gen.ts`, `combat-view.ts`, `modes/combat-mode.ts`, `main.ts`. **Modified (UI):**
+`CombatCard.tsx`, `CombatHand.tsx`, `EnemyPlate.tsx`, `HUD.tsx`, `GameCanvas.tsx`,
+`SectorMap.tsx`, `app/page.tsx`. **Tests updated:** `combat`, `combat-view`, `deck`,
+`run-state`, `map-gen`. **Docs:** `roadmap.md`, `CLAUDE.md`.
+
 ## Deferred to next session
+
+A5 starting-loadout audit (5.5); `starts-in-hand` modifier; Pixi organ-targeting indicator
++ `amplify-attacks`; event outcome overlay; **Slice 3.4** (clone death/hazards/surface
+enemies — its own design-led PR, see handoff). Pre-existing: ADR 005 is cited in code
+(map-gen/events determinism keystone) but was never written by THE RUN.
 
 ## Status
 
 - [ ] In progress
-- [ ] Complete
+- [x] Complete
 - [ ] Partial — see deferred
-```
