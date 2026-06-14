@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { BASELINE_AP, getEnemy, HAND_SIZE, MALFUNCTION_REPAIR_AP } from '../data';
+import { BASELINE_AP, getCard, getEnemy, HAND_SIZE, MALFUNCTION_REPAIR_AP } from '../data';
 import type { CombatState } from './combat';
 import {
   applyCombatResult,
@@ -320,6 +320,15 @@ describe('Discard keyword (GDD §5.9)', () => {
     expect(() => playCard(state, 0)).toThrow('discards exactly 1'); // no targets supplied
     expect(() => playCard(state, 0, [0])).toThrow('cannot pay its own discard cost');
     expect(() => playCard(state, 0, [5])).toThrow('no card at discard index');
+  });
+});
+
+describe('Cleave keyword (GDD §5.9)', () => {
+  it('hits the core like any attack while the enemy has no organs', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    state.hand = hand('card-scatter-shell'); // Deal 6 to all · piercing
+    playCard(state, 0);
+    expect(state.enemyHp).toBe(getEnemy(LAMPREY).maxHp - 6);
   });
 });
 
@@ -679,15 +688,22 @@ describe('shields and the enemy phase', () => {
 });
 
 describe('turn structure (GDD §5.5)', () => {
-  it('discards unplayed cards and redraws to 5', () => {
+  it('discards unplayed cards and redraws to 5 — but keeps Retain cards in hand', () => {
     const state = createCombat(gunshipRun(), LAMPREY);
-    const unplayed = ids(state.hand);
+    const unplayed = state.hand.map((c) => c.cardId);
+    const retained = state.hand
+      .filter((c) => getCard(c.cardId).retain === true)
+      .map((c) => c.cardId);
     endTurn(state);
     expect(state.hand.length).toBe(HAND_SIZE);
     expect(state.turn).toBe(2);
     expect(state.ap).toBe(BASELINE_AP);
     for (const cardId of unplayed) {
-      expect(ids(state.discardPile)).toContain(cardId);
+      if (retained.includes(cardId)) {
+        expect(ids(state.hand)).toContain(cardId); // Retain (e.g. Reinforce) stayed
+      } else {
+        expect(ids(state.discardPile)).toContain(cardId);
+      }
     }
   });
 

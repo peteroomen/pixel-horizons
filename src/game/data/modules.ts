@@ -27,7 +27,8 @@ export const MODULE_DEFS: readonly ModuleDef[] = [
     tiers: {
       mk1: { cards: ['card-flak-volley', 'card-flak-volley', 'card-tracer-lock'] },
       mk2: {
-        cards: ['card-heavy-flak', 'card-heavy-flak', 'card-kinetic-shred'],
+        // Mk II earns an AoE identity: a Cleave shell alongside the heavy hits (GDD §5.9).
+        cards: ['card-heavy-flak', 'card-scatter-shell', 'card-kinetic-shred'],
         planetItem: {
           name: 'Reactive Plating',
           description: 'Passive: +3 temp shield at combat start.',

@@ -24,6 +24,8 @@ export const CARD_DEFS: readonly CardDef[] = [
     name: 'Overcharge',
     apCost: 0,
     effects: [{ kind: 'amplify-next-attack', multiplier: 2 }],
+    // Weapon signature (GDD §5.9): a one-shot spike that doesn't dilute the deck.
+    exhaust: true,
   },
   {
     id: 'card-flak-volley',
@@ -54,6 +56,8 @@ export const CARD_DEFS: readonly CardDef[] = [
     name: 'Railgun Shot',
     apCost: 3,
     effects: [{ kind: 'damage', amount: 20, piercing: true }],
+    // Weapon signature (GDD §5.9): a one-shot nuke, gone after one play this combat.
+    exhaust: true,
   },
   {
     id: 'card-charge-capacitor',
@@ -102,6 +106,13 @@ export const CARD_DEFS: readonly CardDef[] = [
     effects: [{ kind: 'damage', amount: 9 }],
     discardCost: 1,
   },
+  {
+    id: 'card-scatter-shell',
+    name: 'Scatter Shell',
+    apCost: 2,
+    // Cleave keyword (GDD §5.9 / §5.4): hits the core and every living organ at once.
+    effects: [{ kind: 'damage', amount: 6, piercing: true, target: 'all' }],
+  },
 
   // Utility
   {
@@ -122,12 +133,16 @@ export const CARD_DEFS: readonly CardDef[] = [
     name: 'Phase Walk',
     apCost: 1,
     effects: [{ kind: 'untargetable', turns: 1 }],
+    // Utility signature (GDD §5.9): bank the dodge, spend it when the hit is telegraphed.
+    retain: true,
   },
   {
     id: 'card-reinforce',
     name: 'Reinforce',
     apCost: 1,
     effects: [{ kind: 'restore-shield-layer', count: 1 }],
+    // Shield signature (GDD §5.9): hold the heal in hand until the layer is actually down.
+    retain: true,
   },
   {
     id: 'card-emergency-barrier',
@@ -140,7 +155,8 @@ export const CARD_DEFS: readonly CardDef[] = [
     id: 'card-deep-scan',
     name: 'Deep Scan',
     apCost: 1,
-    effects: [{ kind: 'reveal-intent' }],
+    // Cargo Scanner pulls its weight in combat: read the intent and refill the hand.
+    effects: [{ kind: 'reveal-intent' }, { kind: 'draw', count: 1 }],
   },
 
   // Engines
@@ -148,13 +164,21 @@ export const CARD_DEFS: readonly CardDef[] = [
     id: 'card-burn',
     name: 'Burn',
     apCost: 1,
-    effects: [{ kind: 'travel', amount: 2 }],
+    // Engine signature (GDD §5.9): dual-mode — travel *and* hand flow, live at the boss.
+    effects: [
+      { kind: 'travel', amount: 2 },
+      { kind: 'draw', count: 1 },
+    ],
+    jettison: { benefit: 'ap', amount: 1 },
   },
   {
     id: 'card-afterburner',
     name: 'Afterburner',
     apCost: 2,
-    effects: [{ kind: 'travel', amount: 5 }],
+    effects: [
+      { kind: 'travel', amount: 5 },
+      { kind: 'draw', count: 1 },
+    ],
     // Jettison (GDD §5.9 / §5.4): never a dead draw at the boss — trade it for energy.
     jettison: { benefit: 'ap', amount: 1 },
   },
@@ -162,7 +186,11 @@ export const CARD_DEFS: readonly CardDef[] = [
     id: 'card-hard-burn',
     name: 'Hard Burn',
     apCost: 1,
-    effects: [{ kind: 'travel', amount: 3 }],
+    effects: [
+      { kind: 'travel', amount: 3 },
+      { kind: 'draw', count: 1 },
+    ],
+    jettison: { benefit: 'ap', amount: 1 },
   },
   {
     id: 'card-emergency-boost',
@@ -179,6 +207,8 @@ export const CARD_DEFS: readonly CardDef[] = [
       { kind: 'travel', amount: 3 },
       { kind: 'temp-shield-layer', count: 1 },
     ],
+    // Already combat-useful (temp shield); Jettison is the floor when travel is moot.
+    jettison: { benefit: 'ap', amount: 1 },
   },
 
   // Infestations (GDD §5.6) — injected by enemies mid-fight, never in a module's

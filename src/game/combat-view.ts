@@ -254,8 +254,11 @@ function describeOnDraw(effect: OnDrawEffect): string {
 
 function describeEffect(effect: CardEffect): string {
   switch (effect.kind) {
-    case 'damage':
-      return effect.piercing === true ? `Deal ${effect.amount} piercing` : `Deal ${effect.amount}`;
+    case 'damage': {
+      const all = effect.target === 'all' ? ' to all' : '';
+      const pierce = effect.piercing === true ? ' piercing' : '';
+      return `Deal ${effect.amount}${all}${pierce}`;
+    }
     case 'travel':
       return `+${effect.amount} travel`;
     case 'restore-shield-layer':
