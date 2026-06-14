@@ -1,4 +1,5 @@
-import { getHull } from '../data';
+import { BASELINE_AP, getHull } from '../data';
+import type { ModuleInstance } from '../data';
 import type { RngState } from './rng';
 import { deriveRng } from './rng';
 
@@ -7,7 +8,7 @@ import { deriveRng } from './rng';
  * serializes losslessly for saves and shareable seeds.
  */
 
-export const RUN_STATE_VERSION = 1;
+export const RUN_STATE_VERSION = 2;
 
 export const RNG_STREAMS = ['map-gen', 'combat', 'surface'] as const;
 export type RngStream = (typeof RNG_STREAMS)[number];
@@ -30,12 +31,18 @@ export interface RunState {
   hullId: string;
   hullHp: number;
   resources: Resources;
-  modules: string[];
+  modules: ModuleInstance[];
+  cargo: ModuleInstance[];
+  reactorLevel: number;
   position: RunPosition;
   rng: Record<RngStream, RngState>;
 }
 
 export const STARTING_HULL_HP = 100;
+
+function toInstances(moduleIds: readonly string[]): ModuleInstance[] {
+  return moduleIds.map((id) => ({ id, tier: 1 }));
+}
 
 export function createRunState(seed: string, hullId = 'hull-scout'): RunState {
   const rng = {} as Record<RngStream, RngState>;
@@ -48,7 +55,9 @@ export function createRunState(seed: string, hullId = 'hull-scout'): RunState {
     hullId,
     hullHp: STARTING_HULL_HP,
     resources: { scrap: 0, biominerals: 0, coreCrystals: 0, blueprints: 0 },
-    modules: [...getHull(hullId).startingModules],
+    modules: toInstances(getHull(hullId).startingModules),
+    cargo: [],
+    reactorLevel: BASELINE_AP,
     position: { sector: 1, nodeId: null },
     rng,
   };
@@ -68,6 +77,10 @@ function isFiniteNumber(value: unknown): value is number {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
+}
+
+function isModuleInstance(value: unknown): value is ModuleInstance {
+  return isRecord(value) && isNonEmptyString(value.id) && (value.tier === 1 || value.tier === 2);
 }
 
 function parseRngState(value: unknown): RngState | null {
@@ -108,9 +121,19 @@ export function deserializeRunState(json: string): RunState | null {
     return null;
   }
 
-  if (!Array.isArray(modules) || !modules.every((m) => isNonEmptyString(m))) {
+  if (!Array.isArray(modules) || !modules.every(isModuleInstance)) {
     return null;
   }
+
+  if (!Array.isArray(parsed.cargo) || !(parsed.cargo as unknown[]).every(isModuleInstance)) {
+    return null;
+  }
+  const cargo = parsed.cargo as ModuleInstance[];
+
+  if (!isFiniteNumber(parsed.reactorLevel) || parsed.reactorLevel < 0) {
+    return null;
+  }
+  const reactorLevel = parsed.reactorLevel;
 
   if (
     !isRecord(position) ||
@@ -143,7 +166,9 @@ export function deserializeRunState(json: string): RunState | null {
       coreCrystals: resources.coreCrystals,
       blueprints: resources.blueprints,
     },
-    modules: [...modules],
+    modules: (modules as ModuleInstance[]).map((m) => ({ id: m.id, tier: m.tier })),
+    cargo: cargo.map((m) => ({ id: m.id, tier: m.tier })),
+    reactorLevel,
     position: { sector: position.sector, nodeId: position.nodeId },
     rng: rngStates,
   };

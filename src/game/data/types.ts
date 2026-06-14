@@ -11,6 +11,13 @@ export type CardId = string;
 export type ModuleId = string;
 export type HullId = string;
 
+export type ModuleTierLevel = 1 | 2;
+
+export interface ModuleInstance {
+  id: ModuleId;
+  tier: ModuleTierLevel;
+}
+
 export type CardEffect =
   | { kind: 'damage'; amount: number; piercing?: boolean }
   | { kind: 'travel'; amount: number }
@@ -147,6 +154,17 @@ export interface EnemyDef {
   pattern: 'cycle' | 'random';
   intents: EnemyIntentDef[];
   /**
+   * Scrap dropped on victory (GDD §6.4): rolled on the combat stream within the
+   * [min, max] band. The "minimum Scrap drop" guarantee — every won encounter pays.
+   */
+  scrapReward: { min: number; max: number };
+  /**
+   * Multi-phase bosses (GDD §7.5): when HP drops below the threshold, the enemy
+   * switches to a new intent table. Phases are checked in order; once entered,
+   * a phase is permanent (no re-checking earlier thresholds).
+   */
+  phases?: EnemyPhase[];
+  /**
    * Blockade archetypes (GDD §5.7): a trait, not an intent — the latch is permanent
    * encounter state. Travel progress is halted while this enemy lives; paying the
    * Scrap toll ends the encounter without victory rewards.
@@ -157,6 +175,12 @@ export interface EnemyDef {
    * HP, regrowing `regen` (capped at `amount`) at the end of each enemy phase —
    * sustained damage within one turn breaks through, chip across turns is eaten.
    */
+  armor?: { amount: number; regen: number };
+}
+
+export interface EnemyPhase {
+  belowHpFraction: number;
+  intents: EnemyIntentDef[];
   armor?: { amount: number; regen: number };
 }
 

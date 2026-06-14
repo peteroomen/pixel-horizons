@@ -4,7 +4,7 @@ import { createSpaceRenderer } from '@/renderer/space-renderer';
 import type { SpaceRenderer } from '@/renderer/space-renderer';
 import { buildCombatView } from '../combat-view';
 import type { CombatView } from '../combat-view';
-import { getHull } from '../data';
+import { ENEMY_DEFS, getHull } from '../data';
 import type { EnemyId } from '../data';
 import {
   activateInnate,
@@ -17,6 +17,7 @@ import {
   isCardPlayable,
   payToll,
   playCard,
+  rollVictoryScrap,
 } from '../sim/combat';
 import type { CombatState } from '../sim/combat';
 import type { LaneParams } from '../sim/map-gen';
@@ -44,7 +45,8 @@ export interface CombatModeCallbacks {
 
 export interface CombatModeOptions {
   run: RunState;
-  lane: LaneParams;
+  /** Null for no-lane combat (boss fights) — no travel, one forced encounter. */
+  lane: LaneParams | null;
   enemyPool?: readonly EnemyId[];
 }
 
@@ -64,9 +66,13 @@ export function startCombatMode(
 ): CombatMode {
   const { run, enemyPool } = options;
   const renderer: SpaceRenderer = createSpaceRenderer(app);
-  const lane: LaneState = createLane(run, options.lane, enemyPool);
+
+  // No-lane combat (boss fights): a single forced encounter with no travel.
+  const lane: LaneState | null =
+    options.lane !== null ? createLane(run, options.lane, enemyPool) : null;
 
   const nextEncounter = (): CombatState | null => {
+    if (lane === null) return null;
     const step = advanceLane(lane);
     if (step.kind === 'arrived') return null;
     return createCombat(run, step.enemyId, {
@@ -76,11 +82,16 @@ export function startCombatMode(
     });
   };
 
-  // Encounter positions are rolled strictly inside the lane, so a fresh lane
-  // can never open on an arrival.
-  let combat: CombatState | null = nextEncounter();
-  if (combat === null) {
-    throw new Error('combat-mode: lane opened with no encounters');
+  let combat: CombatState | null;
+  if (lane === null) {
+    // Boss fight: single encounter, no lane context
+    const pool = enemyPool ?? ENEMY_DEFS.map((e) => e.id);
+    combat = createCombat(run, pool[0]);
+  } else {
+    combat = nextEncounter();
+    if (combat === null) {
+      throw new Error('combat-mode: lane opened with no encounters');
+    }
   }
 
   const emit = (): void => {
@@ -128,12 +139,20 @@ export function startCombatMode(
     continueTravel(): void {
       if (combat === null) return;
       if (combat.outcome !== 'victory' && combat.outcome !== 'escaped') return;
+      if (combat.outcome === 'victory') {
+        rollVictoryScrap(combat);
+      }
       applyCombatResult(run, combat);
+      if (lane === null) {
+        // No-lane combat (boss fight) — single encounter, arrival on victory.
+        combat = null;
+        callbacks.onArrival();
+        return;
+      }
       lane.progress = Math.min(lane.distance, lane.progress + combat.travelProgress);
       lane.malfunctioning = [...combat.malfunctioning];
       combat = nextEncounter();
       if (combat === null) {
-        // Arrival in realspace — systems reset; the orchestrator takes over.
         callbacks.onArrival();
         return;
       }

@@ -25,7 +25,13 @@ export default function EnemyPlate({ view }: EnemyPlateProps) {
         {/* Name + armor + HP row */}
         <div className="flex items-baseline justify-between gap-2">
           <span className="font-label text-[8px] sm:text-fd-label text-fd-muted uppercase">
+            {view.boss && <span className="mr-1 text-fd-red">BOSS · </span>}
             {view.enemyName}
+            {view.bossPhase !== null && view.bossPhase >= 0 && (
+              <span className="ml-1 text-fd-red text-[7px] sm:text-[9px]">
+                P{view.bossPhase + 2}
+              </span>
+            )}
           </span>
           <span className="flex items-baseline gap-1.5 sm:gap-2">
             {view.enemyArmor > 0 && (

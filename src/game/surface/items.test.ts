@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
 import { getHull } from '@/game/data';
+import type { ModuleInstance } from '@/game/data';
 import { BACKPACK_CAPACITY, POD_WINDOW_PER_ENGINE_MS } from '@/game/data/surface';
+import { moduleIds } from '@/game/sim/deck';
 import { BASELINE_CAPABILITIES, projectLoadout } from './items';
 
 const REACTOR = 3;
 
+function mk1(ids: string[]): ModuleInstance[] {
+  return moduleIds(ids);
+}
+
 function hullLoadout(hullId: string) {
-  return projectLoadout(getHull(hullId).startingModules, REACTOR);
+  return projectLoadout(mk1(getHull(hullId).startingModules), REACTOR);
 }
 
 describe('projectLoadout — per-hull identities (GDD §6.3)', () => {
@@ -58,12 +64,12 @@ describe('projectLoadout — reactor item cap (GDD §4.3)', () => {
   ];
 
   it('caps active items at reactor level in install order', () => {
-    const loadout = projectLoadout(FOUR_ITEM_MODULES, 2);
+    const loadout = projectLoadout(mk1(FOUR_ITEM_MODULES), 2);
     expect(loadout.items.map((i) => i.active)).toEqual([true, true, false, false]);
   });
 
   it('inactive items contribute no effects', () => {
-    const loadout = projectLoadout(FOUR_ITEM_MODULES, 2);
+    const loadout = projectLoadout(mk1(FOUR_ITEM_MODULES), 2);
     expect(loadout.scanner).toBe(false);
     expect(loadout.shieldBubble).toBeNull();
     expect(loadout.capabilities.dash).not.toBeNull();
@@ -71,13 +77,13 @@ describe('projectLoadout — reactor item cap (GDD §4.3)', () => {
 
   it('itemless modules do not consume cap slots', () => {
     // Autocannon has no planet item — the scanner behind it must still equip.
-    const loadout = projectLoadout(['mod-thruster', 'mod-autocannon', 'mod-cargo-scanner'], 2);
+    const loadout = projectLoadout(mk1(['mod-thruster', 'mod-autocannon', 'mod-cargo-scanner']), 2);
     expect(loadout.scanner).toBe(true);
     expect(loadout.items).toHaveLength(2);
   });
 
   it('chassis items bypass the cap and stay active', () => {
-    const loadout = projectLoadout([...FOUR_ITEM_MODULES, 'mod-scavenger-matrix'], 1);
+    const loadout = projectLoadout(mk1([...FOUR_ITEM_MODULES, 'mod-scavenger-matrix']), 1);
     const chassis = loadout.items.find((i) => i.chassis);
     expect(chassis?.active).toBe(true);
     expect(loadout.yieldMultiplier).toBeCloseTo(1.15);
@@ -86,12 +92,12 @@ describe('projectLoadout — reactor item cap (GDD §4.3)', () => {
 
 describe('projectLoadout — effect combination', () => {
   it('mining multipliers and yield bonuses combine multiplicatively', () => {
-    const loadout = projectLoadout(['mod-mining-laser', 'mod-scavenger-matrix'], REACTOR);
+    const loadout = projectLoadout(mk1(['mod-mining-laser', 'mod-scavenger-matrix']), REACTOR);
     expect(loadout.yieldMultiplier).toBeCloseTo(2.3);
   });
 
   it('enforcer matrix slows the clone', () => {
-    const loadout = projectLoadout(['mod-enforcer-matrix'], REACTOR);
+    const loadout = projectLoadout(mk1(['mod-enforcer-matrix']), REACTOR);
     expect(loadout.capabilities.moveSpeedMultiplier).toBeCloseTo(0.9);
   });
 
@@ -102,5 +108,39 @@ describe('projectLoadout — effect combination', () => {
     expect(loadout.yieldMultiplier).toBe(1);
     expect(loadout.backpackCapacity).toBe(BACKPACK_CAPACITY);
     expect(loadout.podWindowBonusMs).toBe(0);
+  });
+});
+
+describe('projectLoadout — tier 2 items', () => {
+  it('Mining Laser Mk II projects 2× yield + deposit scanner', () => {
+    const loadout = projectLoadout([{ id: 'mod-mining-laser', tier: 2 }], REACTOR);
+    expect(loadout.yieldMultiplier).toBe(2);
+    expect(loadout.scanner).toBe(true);
+  });
+
+  it('Thruster Mk II keeps double jump and adds high jump', () => {
+    const loadout = projectLoadout([{ id: 'mod-thruster', tier: 2 }], REACTOR);
+    expect(loadout.capabilities.maxAirJumps).toBe(1);
+    expect(loadout.capabilities.jumpVelocityMultiplier).toBe(1.15);
+  });
+
+  it('Phase Shifter Mk II has a stronger dash (longer range, shorter cooldown)', () => {
+    const mk1 = projectLoadout([{ id: 'mod-phase-shifter', tier: 1 }], REACTOR);
+    const mk2 = projectLoadout([{ id: 'mod-phase-shifter', tier: 2 }], REACTOR);
+    expect(mk2.capabilities.dash).toEqual({ distancePx: 64, cooldownMs: 1200 });
+    expect(mk2.capabilities.dash!.distancePx).toBeGreaterThan(mk1.capabilities.dash!.distancePx);
+  });
+
+  it('tier 2 falls back to mk1 item when mk2 has no planet item', () => {
+    const mk1 = projectLoadout([{ id: 'mod-cargo-scanner', tier: 1 }], REACTOR);
+    const mk2 = projectLoadout([{ id: 'mod-cargo-scanner', tier: 2 }], REACTOR);
+    expect(mk2.scanner).toBe(true);
+    expect(mk2.items[0].name).toBe(mk1.items[0].name);
+  });
+
+  it('an upgrade never loses a working effect', () => {
+    const mk1 = projectLoadout([{ id: 'mod-mining-laser', tier: 1 }], REACTOR);
+    const mk2 = projectLoadout([{ id: 'mod-mining-laser', tier: 2 }], REACTOR);
+    expect(mk2.yieldMultiplier).toBeGreaterThanOrEqual(mk1.yieldMultiplier);
   });
 });

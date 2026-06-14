@@ -73,8 +73,7 @@ describe('generateSectorMap', () => {
         expect(column.length).toBeGreaterThanOrEqual(MAP_COLUMN_NODES_MIN);
         expect(column.length).toBeLessThanOrEqual(MAP_COLUMN_NODES_MAX);
         for (const node of column) {
-          // Nodes are realspace destinations — combat exists only on lanes
-          expect(['planet', 'cache']).toContain(node.type);
+          expect(['planet', 'cache', 'shop', 'engineer']).toContain(node.type);
         }
       }
     }
@@ -85,6 +84,16 @@ describe('generateSectorMap', () => {
       const map = generateSectorMap(seed, 1);
       expect(
         map.nodes.some((n) => n.type === 'planet'),
+        seed,
+      ).toBe(true);
+    }
+  });
+
+  it('guarantees at least one engineer node per sector', () => {
+    for (const seed of SEEDS) {
+      const map = generateSectorMap(seed, 1);
+      expect(
+        map.nodes.some((n) => n.type === 'engineer'),
         seed,
       ).toBe(true);
     }

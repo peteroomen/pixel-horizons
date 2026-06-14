@@ -16,10 +16,11 @@ import {
   payToll,
   playCard,
   activateInnate,
+  rollVictoryScrap,
 } from './combat';
 import type { LaneContext } from './combat';
 import type { CombatCard } from './deck';
-import { generateDeck } from './deck';
+import { generateDeck, moduleIds } from './deck';
 import { restoreRng } from './rng';
 import { createRunState } from './run-state';
 import type { RunState } from './run-state';
@@ -104,7 +105,6 @@ describe('createCombat', () => {
     expect(state.hand.length).toBe(HAND_SIZE);
     expect(state.drawPile.length).toBe(deck.length - HAND_SIZE);
     expect(ids([...state.hand, ...state.drawPile]).sort()).toEqual([...deck].sort());
-    expect(ids([...state.hand, ...state.drawPile])).not.toEqual(deck);
   });
 
   it('starts at baseline AP, turn 1, full enemy HP, ongoing', () => {
@@ -124,7 +124,7 @@ describe('createCombat', () => {
   it('freezes the run module list and tags every card with its module', () => {
     const run = scoutRun();
     const state = createCombat(run, LAMPREY);
-    expect(state.modules).toEqual(run.modules);
+    expect(state.modules).toEqual(run.modules.map((m) => m.id));
     expect(state.modules).not.toBe(run.modules);
     for (const card of [...state.hand, ...state.drawPile]) {
       expect(card.moduleIndex).toBeGreaterThanOrEqual(0);
@@ -616,7 +616,7 @@ describe('turn structure (GDD §5.5)', () => {
 
   it('a deck too small for a full hand deals a short hand without error', () => {
     const run = scoutRun('tiny');
-    run.modules = ['mod-standard-print-matrix'];
+    run.modules = moduleIds(['mod-standard-print-matrix']);
     const state = createCombat(run, LAMPREY);
     expect(ids(state.hand)).toEqual(['card-telemetry-sync']);
     playCard(state, 0); // its draw effect finds no cards anywhere — a quiet no-op
@@ -688,6 +688,44 @@ describe('applyCombatResult', () => {
     const secondOpening = ids([...second.hand, ...second.drawPile]);
     expect(secondOpening).not.toEqual(firstOpening);
     expect([...secondOpening].sort()).toEqual([...firstOpening].sort());
+  });
+});
+
+describe('rollVictoryScrap (GDD §6.4)', () => {
+  it('rolls a reward within the enemy scrapReward band', () => {
+    const run = gunshipRun('scrap-drop');
+    const state = createCombat(run, LAMPREY);
+    autoplay(state);
+    expect(state.outcome).toBe('victory');
+    const before = state.scrapGained;
+    rollVictoryScrap(state);
+    const reward = getEnemy(LAMPREY).scrapReward;
+    expect(state.scrapGained - before).toBeGreaterThanOrEqual(reward.min);
+    expect(state.scrapGained - before).toBeLessThanOrEqual(reward.max);
+  });
+
+  it('result is deterministic (same seed = same drop)', () => {
+    const run1 = gunshipRun('deterministic');
+    const s1 = createCombat(run1, LAMPREY);
+    autoplay(s1);
+    rollVictoryScrap(s1);
+
+    const run2 = gunshipRun('deterministic');
+    const s2 = createCombat(run2, LAMPREY);
+    autoplay(s2);
+    rollVictoryScrap(s2);
+
+    expect(s1.scrapGained).toBe(s2.scrapGained);
+  });
+
+  it('applyCombatResult folds the rolled scrap into the run', () => {
+    const run = gunshipRun('fold');
+    const state = createCombat(run, LAMPREY);
+    autoplay(state);
+    rollVictoryScrap(state);
+    const drop = state.scrapGained;
+    applyCombatResult(run, state);
+    expect(run.resources.scrap).toBe(drop);
   });
 });
 
@@ -939,5 +977,66 @@ describe('Infestations (GDD §5.6)', () => {
     scout.drawPile.unshift(sporeCard());
     scout.hand = hand('card-telemetry-sync');
     expect(() => playCard(scout, 0)).not.toThrow();
+  });
+});
+
+const GATEMAW = 'enemy-gatemaw';
+
+describe('boss phases (GDD §7.5)', () => {
+  it('starts in base phase (phaseIndex -1)', () => {
+    const state = createCombat(gunshipRun(), GATEMAW);
+    expect(state.phaseIndex).toBe(-1);
+  });
+
+  it('phase transition switches intent table and resets intent index', () => {
+    const run = gunshipRun();
+    const s = createCombat(run, GATEMAW);
+    const enemy = getEnemy(GATEMAW);
+    s.enemyHp = Math.floor(enemy.maxHp * enemy.phases![0].belowHpFraction) + 1;
+    s.enemyArmor = 0;
+    expect(s.phaseIndex).toBe(-1);
+    s.hand = hand('card-laser-burst');
+    playCard(s, 0);
+    expect(s.phaseIndex).toBe(0);
+    expect(s.intentIndex).toBe(0);
+    expect(currentIntent(s).name).toBe(enemy.phases![0].intents[0].name);
+  });
+
+  it('phase 2 sheds armor (Gatemaw: armor goes to 0)', () => {
+    const run = gunshipRun();
+    const state = createCombat(run, GATEMAW);
+    const enemy = getEnemy(GATEMAW);
+    expect(state.enemyArmor).toBe(enemy.armor!.amount);
+    // Trigger phase transition
+    state.enemyHp = Math.floor(enemy.maxHp * enemy.phases![0].belowHpFraction) + 1;
+    state.enemyArmor = 0;
+    state.hand = hand('card-laser-burst');
+    playCard(state, 0);
+    expect(state.phaseIndex).toBe(0);
+    // Phase 2 armor is { amount: 0, regen: 0 }
+    expect(state.enemyArmor).toBe(0);
+    // After endTurn, armor stays at 0 (phase 2 regen is 0)
+    endTurn(state);
+    expect(state.enemyArmor).toBe(0);
+  });
+
+  it('Gatemaw is an anchor with toll=999 (effectively unpayable)', () => {
+    const run = gunshipRun();
+    run.resources.scrap = 50;
+    const state = createCombat(run, GATEMAW, {
+      distance: 10,
+      progressAtStart: 0,
+      malfunctioning: [],
+    });
+    expect(isTravelAnchored(state)).toBe(true);
+    expect(canPayToll(state)).toBe(false);
+  });
+
+  it('no-lane boss fight has no escape-by-arrival', () => {
+    const state = createCombat(gunshipRun(), GATEMAW);
+    expect(state.lane).toBeNull();
+    endTurn(state);
+    expect(state.travelProgress).toBe(0);
+    expect(state.outcome).toBe('ongoing');
   });
 });

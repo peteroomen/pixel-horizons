@@ -4,8 +4,8 @@ import { ROCKY_TEST_LEVEL } from '@/game/data/levels';
 import { POD_WINDOW_MS } from '@/game/data/surface';
 import { computeScale, VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from '@/renderer/pixel-scale';
 import type { CombatView } from './combat-view';
-import { BASELINE_AP, getEnemy, getHull, getModule } from './data';
-import type { EnemyId } from './data';
+import { getEnemy, getHull, getModule } from './data';
+import type { EnemyId, ModuleInstance } from './data';
 import { buildMapView } from './map-view';
 import type { MapView } from './map-view';
 import { startCombatMode } from './modes/combat-mode';
@@ -13,11 +13,27 @@ import type { CombatMode } from './modes/combat-mode';
 import { startSurfaceMode } from './modes/surface-mode';
 import type { SurfaceAction, SurfaceMode } from './modes/surface-mode';
 import { createSaveStore } from './save';
+import {
+  buyModule,
+  craftModule,
+  installModule,
+  repairHull,
+  sellBiominerals,
+  uninstallModule,
+  upgradeModule,
+  upgradeReactor,
+} from './sim/economy';
 import { generateSectorMap, getNode, edgesFrom } from './sim/map-gen';
 import type { LaneParams, SectorMap } from './sim/map-gen';
 import { createRunState } from './sim/run-state';
 import type { Resources, RunState } from './sim/run-state';
+import { deriveRng } from './sim/rng';
 import { parseSeedParam, seedToSearchParam } from './sim/seed-url';
+import { generateShopOffers } from './sim/shop-inventory';
+import { buildShipView } from './ship-view';
+import type { ShipView } from './ship-view';
+import { buildMerchantView, buildEngineerView } from './station-view';
+import type { StationView } from './station-view';
 import { projectLoadout } from './surface/items';
 import type { SurfaceView } from './surface-view';
 
@@ -32,12 +48,16 @@ import type { SurfaceView } from './surface-view';
  *
  *   title ──new/resume──▶ map ──selectNode──▶ lane ──onArrival──▶ node entry
  *   node entry: cache → map · planet → surface ──continueFromNode──▶ map ·
- *               gate → sector-complete
+ *               shop → shop ──leaveStation──▶ map ·
+ *               engineer → engineer ──leaveStation──▶ map ·
+ *               gate → boss fight (lane:null) ──victory──▶ boss-reward
+ *                  ──chooseBossReward──▶ sector-complete
  *   lane ──onDefeat──▶ run-over · run-over/sector-complete ──newRun──▶ map
  *
  *   Combat lives in the lanes and only the lanes (GDD §2/§5.1): nodes are
  *   realspace, where the Bloom can't follow — arrival always resolves straight
- *   to the node's screen.
+ *   to the node's screen. The gate is the exception: the Gatemaw is a no-lane
+ *   combat (lane:null — no escape-by-arrival).
  *
  * Command methods guard instead of throwing: a double-tap racing a phase change
  * is normal pointer input and must be a quiet no-op.
@@ -54,8 +74,27 @@ export type {
 } from './combat-view';
 export type { SurfaceItemView, SurfaceView } from './surface-view';
 export type { MapEdgeView, MapNodeView, MapView } from './map-view';
+export type { ShipModuleView, CargoModuleView, ShipView } from './ship-view';
+export type {
+  ShopOfferView,
+  UpgradeOfferView,
+  MerchantView,
+  EngineerView,
+  StationView,
+} from './station-view';
 
-export type GamePhase = 'title' | 'map' | 'lane' | 'surface' | 'run-over' | 'sector-complete';
+export type BossRewardOption = 'core-crystal' | 'mk2-module' | 'blueprint-cache';
+
+export type GamePhase =
+  | 'title'
+  | 'map'
+  | 'lane'
+  | 'surface'
+  | 'shop'
+  | 'engineer'
+  | 'boss-reward'
+  | 'run-over'
+  | 'sector-complete';
 
 export interface GameCallbacks {
   onCombatUpdate(view: CombatView): void;
@@ -69,6 +108,10 @@ export interface GameCallbacks {
   onSurfaceUpdate?(view: SurfaceView): void;
   /** Fired on map entry and at run end states (the end screens read run totals from it). */
   onMapUpdate?(view: MapView): void;
+  /** Fired once per economy transaction — workbench/station screens read this. */
+  onShipUpdate?(view: ShipView): void;
+  /** Fired on shop/engineer phase entry and after each station transaction. */
+  onStationUpdate?(view: StationView): void;
 }
 
 export interface GameHandle {
@@ -100,6 +143,30 @@ export interface GameHandle {
   newRun(): void;
   /** Surface phase input: called by TouchControls on pointer events. */
   surfaceInput(action: SurfaceAction, pressed: boolean): void;
+  /** Map phase: open the workbench overlay. */
+  openWorkbench(): void;
+  /** Map phase: close the workbench overlay. */
+  closeWorkbench(): void;
+  /** Workbench: move a cargo module into the installed list. */
+  installModule(cargoIndex: number): void;
+  /** Workbench: move an installed module to cargo. */
+  uninstallModule(moduleIndex: number): void;
+  /** Workbench: craft a new module from resources. */
+  craftModule(moduleId: string): void;
+  /** Workbench: spend a Core Crystal to raise the reactor level. */
+  upgradeReactor(): void;
+  /** Merchant: buy a module by shop offer index. */
+  buyModule(offerIndex: number): void;
+  /** Merchant: sell biominerals for scrap. */
+  sellBiominerals(count: number): void;
+  /** Engineer: repair hull in fixed chunks. */
+  repairHull(): void;
+  /** Engineer: upgrade an installed module to Mk II. */
+  upgradeModule(moduleIndex: number): void;
+  /** Shop/engineer: leave the station and return to the map. */
+  leaveStation(): void;
+  /** Boss reward phase: pick one of the three options. */
+  chooseBossReward(option: BossRewardOption): void;
   destroy(): void;
 }
 
@@ -130,34 +197,33 @@ function resolveHull(): string {
  * the whole ship — the combat deck and the surface items both project from it.
  * An all-invalid or empty list falls back to the hull's defaults.
  */
-function resolveModuleOverride(): string[] | null {
+function resolveModuleOverride(): ModuleInstance[] | null {
   const param = new URLSearchParams(window.location.search).get('modules');
   if (param === null) return null;
-  const ids: string[] = [];
+  const modules: ModuleInstance[] = [];
   for (const entry of param.split(',')) {
     const name = entry.trim();
     if (name === '') continue;
     const id = name.startsWith('mod-') ? name : `mod-${name}`;
     try {
-      ids.push(getModule(id).id);
+      modules.push({ id: getModule(id).id, tier: 1 });
     } catch {
       // Unknown module id — skipped quietly
     }
   }
-  return ids.length > 0 ? ids : null;
+  return modules.length > 0 ? modules : null;
 }
 
 /**
- * Dev/test knob: `?reactor=4` overrides the reactor level driving the surface
- * item cap (GDD §4.3) — testing the cap shouldn't require Core Crystals.
- * Combat AP stays at BASELINE_AP until reactor level lives on RunState (4.2+).
- * Invalid values fall back quietly; 0 is valid (every equipment item inactive).
+ * Dev/test knob: `?reactor=4` overrides the reactor level on the RunState —
+ * testing the cap shouldn't require Core Crystals. Null means "use the
+ * RunState's actual reactorLevel" (the normal path).
  */
-function resolveReactorLevel(): number {
+function resolveReactorOverride(): number | null {
   const param = new URLSearchParams(window.location.search).get('reactor');
-  if (param === null) return BASELINE_AP;
+  if (param === null) return null;
   const level = Number.parseInt(param, 10);
-  return Number.isFinite(level) && level >= 0 ? level : BASELINE_AP;
+  return Number.isFinite(level) && level >= 0 ? level : null;
 }
 
 /**
@@ -217,6 +283,10 @@ function generateSeed(): string {
   return Array.from(bytes, (b) => b.toString(36).padStart(2, '0')).join('');
 }
 
+function deriveRewardRng(run: RunState) {
+  return deriveRng(run.seed, `boss-reward-${run.position.sector}`);
+}
+
 function addResources(target: Resources, delta: Resources): void {
   target.scrap += delta.scrap;
   target.biominerals += delta.biominerals;
@@ -231,7 +301,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const podWindowMs = resolvePodWindowMs();
   const devSurface = resolveDevSurface();
   const moduleOverride = resolveModuleOverride();
-  const reactorLevel = resolveReactorLevel();
+  const reactorOverride = resolveReactorOverride();
 
   TextureSource.defaultOptions.scaleMode = 'nearest';
   const app = new Application();
@@ -267,6 +337,9 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     const next = createRunState(urlSeed, hullId);
     if (moduleOverride !== null) {
       next.modules = [...moduleOverride];
+    }
+    if (reactorOverride !== null) {
+      next.reactorLevel = reactorOverride;
     }
     return next;
   };
@@ -312,7 +385,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       {
         level: ROCKY_TEST_LEVEL,
         podWindowMs,
-        loadout: projectLoadout(run.modules, reactorLevel),
+        loadout: projectLoadout(run.modules, run.reactorLevel),
       },
       { onUpdate: (view) => callbacks.onSurfaceUpdate?.(view) },
     );
@@ -340,6 +413,53 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     setPhase('lane');
   };
 
+  const enterShop = (): void => {
+    store.save(run);
+    callbacks.onStationUpdate?.(buildMerchantView(run));
+    callbacks.onShipUpdate?.(buildShipView(run));
+    setPhase('shop');
+  };
+
+  const enterEngineer = (): void => {
+    store.save(run);
+    callbacks.onStationUpdate?.(buildEngineerView(run));
+    callbacks.onShipUpdate?.(buildShipView(run));
+    setPhase('engineer');
+  };
+
+  const emitShipAndStation = (): void => {
+    callbacks.onShipUpdate?.(buildShipView(run));
+    if (phase === 'shop') {
+      callbacks.onStationUpdate?.(buildMerchantView(run));
+    } else if (phase === 'engineer') {
+      callbacks.onStationUpdate?.(buildEngineerView(run));
+    }
+  };
+
+  const startBossFight = (): void => {
+    combatMode = startCombatMode(
+      app,
+      { run, lane: null, enemyPool: ['enemy-gatemaw'] },
+      {
+        onUpdate: (view) => callbacks.onCombatUpdate(view),
+        onArrival: (): void => {
+          // Boss fight is no-lane — arrival means victory
+          destroyModes();
+          store.save(run);
+          emitMap();
+          setPhase('boss-reward');
+        },
+        onDefeat: (): void => {
+          destroyModes();
+          store.clear();
+          emitMap();
+          setPhase('run-over');
+        },
+      },
+    );
+    setPhase('lane');
+  };
+
   const arriveAtNode = (): void => {
     if (laneDestination === null) return;
     const node = getNode(map, laneDestination);
@@ -352,10 +472,16 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       enterSurface();
       return;
     }
+    if (node.type === 'shop') {
+      enterShop();
+      return;
+    }
+    if (node.type === 'engineer') {
+      enterEngineer();
+      return;
+    }
     if (node.type === 'gate') {
-      store.clear();
-      emitMap();
-      setPhase('sector-complete');
+      startBossFight();
       return;
     }
     enterMap();
@@ -445,6 +571,105 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     },
     surfaceInput(action: SurfaceAction, pressed: boolean): void {
       surfaceMode?.input(action, pressed);
+    },
+    openWorkbench(): void {
+      if (phase !== 'map') return;
+      callbacks.onShipUpdate?.(buildShipView(run));
+    },
+    closeWorkbench(): void {
+      // React controls its own overlay state — this is the sim-side hook.
+      // No state to clear; the map phase continues.
+    },
+    installModule(cargoIndex: number): void {
+      if (phase !== 'map' && phase !== 'shop' && phase !== 'engineer') return;
+      const result = installModule(run, cargoIndex);
+      if (!result.ok) return;
+      store.save(run);
+      emitShipAndStation();
+    },
+    uninstallModule(moduleIndex: number): void {
+      if (phase !== 'map' && phase !== 'shop' && phase !== 'engineer') return;
+      const result = uninstallModule(run, moduleIndex);
+      if (!result.ok) return;
+      store.save(run);
+      emitShipAndStation();
+    },
+    craftModule(moduleId: string): void {
+      if (phase !== 'map') return;
+      const result = craftModule(run, moduleId);
+      if (!result.ok) return;
+      store.save(run);
+      callbacks.onShipUpdate?.(buildShipView(run));
+    },
+    upgradeReactor(): void {
+      if (phase !== 'map') return;
+      const result = upgradeReactor(run);
+      if (!result.ok) return;
+      store.save(run);
+      callbacks.onShipUpdate?.(buildShipView(run));
+    },
+    buyModule(offerIndex: number): void {
+      if (phase !== 'shop') return;
+      const offers = generateShopOffers(run.seed, run.position.sector, run.position.nodeId!);
+      const offer = offers[offerIndex];
+      if (offer === undefined) return;
+      const result = buyModule(run, offer.moduleId);
+      if (!result.ok) return;
+      store.save(run);
+      emitShipAndStation();
+    },
+    sellBiominerals(count: number): void {
+      if (phase !== 'shop') return;
+      const result = sellBiominerals(run, count);
+      if (!result.ok) return;
+      store.save(run);
+      emitShipAndStation();
+    },
+    repairHull(): void {
+      if (phase !== 'engineer') return;
+      const result = repairHull(run);
+      if (!result.ok) return;
+      store.save(run);
+      emitShipAndStation();
+    },
+    upgradeModule(moduleIndex: number): void {
+      if (phase !== 'engineer') return;
+      const result = upgradeModule(run, moduleIndex);
+      if (!result.ok) return;
+      store.save(run);
+      emitShipAndStation();
+    },
+    leaveStation(): void {
+      if (phase !== 'shop' && phase !== 'engineer') return;
+      enterMap();
+    },
+    chooseBossReward(option: BossRewardOption): void {
+      if (phase !== 'boss-reward') return;
+      switch (option) {
+        case 'core-crystal':
+          run.resources.coreCrystals += 1;
+          break;
+        case 'mk2-module': {
+          const rng = deriveRewardRng(run);
+          const upgradeable = run.modules.filter(
+            (m) => m.tier === 1 && getModule(m.id).tiers.mk2 !== undefined,
+          );
+          if (upgradeable.length > 0) {
+            const pick = upgradeable[rng.int(0, upgradeable.length)];
+            run.cargo.push({ id: pick.id, tier: 2 });
+          } else {
+            run.resources.coreCrystals += 1;
+          }
+          break;
+        }
+        case 'blueprint-cache':
+          run.resources.blueprints += 2;
+          run.resources.scrap += 15;
+          break;
+      }
+      store.clear();
+      emitMap();
+      setPhase('sector-complete');
     },
     destroy(): void {
       destroyModes();

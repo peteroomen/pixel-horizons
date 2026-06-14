@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getHull, HULL_DEFS } from '../data';
+import { getHull, HULL_DEFS, BASELINE_AP } from '../data';
 import {
   createRunState,
   deserializeRunState,
@@ -21,18 +21,23 @@ describe('createRunState', () => {
     expect(state.hullHp).toBe(STARTING_HULL_HP);
     expect(state.resources).toEqual({ scrap: 0, biominerals: 0, coreCrystals: 0, blueprints: 0 });
     expect(state.position).toEqual({ sector: 1, nodeId: null });
+    expect(state.cargo).toEqual([]);
+    expect(state.reactorLevel).toBe(BASELINE_AP);
   });
 
-  it("installs the hull's starting modules for every hull", () => {
+  it("installs the hull's starting modules as tier-1 instances for every hull", () => {
     for (const hull of HULL_DEFS) {
       const state = createRunState('alpha', hull.id);
-      expect(state.modules, hull.id).toEqual(hull.startingModules);
+      const expected = hull.startingModules.map((id) => ({ id, tier: 1 }));
+      expect(state.modules, hull.id).toEqual(expected);
     }
   });
 
   it('copies the starting modules instead of sharing the catalog array', () => {
     const state = createRunState('alpha');
-    expect(state.modules).not.toBe(getHull('hull-scout').startingModules);
+    const catalogModules = getHull('hull-scout').startingModules;
+    expect(state.modules.map((m) => m.id)).toEqual(catalogModules);
+    expect(state.modules).not.toBe(catalogModules);
   });
 
   it('throws on an unknown hull id', () => {
@@ -56,7 +61,12 @@ describe('serialize / deserialize round-trip', () => {
     const state = createRunState('mid-run');
     state.hullHp = 42;
     state.resources.scrap = 17;
-    state.modules = ['mod-light-laser', 'mod-thruster-mk1'];
+    state.modules = [
+      { id: 'mod-light-laser', tier: 1 },
+      { id: 'mod-thruster', tier: 2 },
+    ];
+    state.cargo = [{ id: 'mod-phase-shifter', tier: 1 }];
+    state.reactorLevel = 5;
     state.position = { sector: 2, nodeId: 'node-7' };
     state.rng['combat'].state = 12345;
     expect(deserializeRunState(serializeRunState(state))).toEqual(state);
@@ -84,7 +94,17 @@ describe('deserializeRunState validation', () => {
   });
 
   it('returns null when a field is missing', () => {
-    for (const field of ['seed', 'hullId', 'hullHp', 'resources', 'modules', 'position', 'rng']) {
+    for (const field of [
+      'seed',
+      'hullId',
+      'hullHp',
+      'resources',
+      'modules',
+      'cargo',
+      'reactorLevel',
+      'position',
+      'rng',
+    ]) {
       const tampered = JSON.parse(valid());
       delete tampered[field];
       expect(deserializeRunState(JSON.stringify(tampered)), `missing ${field}`).toBeNull();
@@ -95,13 +115,26 @@ describe('deserializeRunState validation', () => {
     const cases: Record<string, unknown> = {
       hullHp: 'full',
       modules: [1, 2],
+      modules2: 'not-array',
+      cargo: 'not-array',
+      reactorLevel: 'high',
       resources: { scrap: 'lots' },
       position: { sector: 'one', nodeId: null },
     };
     for (const [field, value] of Object.entries(cases)) {
-      const tampered = { ...JSON.parse(valid()), [field]: value };
+      const key = field === 'modules2' ? 'modules' : field;
+      const tampered = { ...JSON.parse(valid()), [key]: value };
       expect(deserializeRunState(JSON.stringify(tampered)), `bad ${field}`).toBeNull();
     }
+  });
+
+  it('returns null for v1 saves (pre-ModuleInstance)', () => {
+    const v1 = JSON.parse(valid());
+    v1.version = 1;
+    v1.modules = ['mod-light-laser', 'mod-thruster'];
+    delete v1.cargo;
+    delete v1.reactorLevel;
+    expect(deserializeRunState(JSON.stringify(v1))).toBeNull();
   });
 
   it('returns null when an rng stream is missing or malformed', () => {

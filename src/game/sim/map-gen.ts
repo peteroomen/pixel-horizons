@@ -29,7 +29,7 @@ import type { Rng } from './rng';
  * Combat exists only on the edges (lane encounters); danger is a property of
  * the path, never of the destination.
  */
-export type NodeType = 'start' | 'planet' | 'cache' | 'gate';
+export type NodeType = 'start' | 'planet' | 'cache' | 'shop' | 'engineer' | 'gate';
 
 export interface LaneParams {
   /** Lane length in turns of travel (GDD §5.1). */
@@ -126,13 +126,22 @@ export function generateSectorMap(seed: string, sector: number): SectorMap {
   }
   columns.push([gate]);
 
-  // A sector must offer at least one planet (GDD §12 expects 2-3 visits; one
-  // is the hard floor). Re-type a deterministic middle node if the roll missed.
   const middle = columns.slice(1, -1).flat();
+
+  // Floor guarantees: at least one planet and one engineer per sector.
+  // Re-type a deterministic middle node if the roll missed.
   if (!middle.some((n) => n.type === 'planet')) {
     const forced = middle[rng.int(0, middle.length)];
     forced.type = 'planet';
     delete forced.cacheScrap;
+  }
+  if (!middle.some((n) => n.type === 'engineer')) {
+    const candidates = middle.filter((n) => n.type !== 'planet');
+    if (candidates.length > 0) {
+      const forced = candidates[rng.int(0, candidates.length)];
+      forced.type = 'engineer';
+      delete forced.cacheScrap;
+    }
   }
 
   const edges: MapEdge[] = [];

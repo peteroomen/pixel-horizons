@@ -42,12 +42,20 @@ export function createSpaceRenderer(app: Application): SpaceRenderer {
   let prevEnemyHp: number | null = null;
   let playerFlashMs = 0;
   let enemyFlashMs = 0;
+  let isBoss = false;
+  let bossPhase = -1;
 
   const tick = (ticker: Ticker) => {
     playerFlashMs = Math.max(0, playerFlashMs - ticker.deltaMS);
     enemyFlashMs = Math.max(0, enemyFlashMs - ticker.deltaMS);
     playerShip.tint = playerFlashMs > 0 ? 0xff4444 : 0xffffff;
-    enemyShip.tint = enemyFlashMs > 0 ? 0xff4444 : 0xffffff;
+    if (enemyFlashMs > 0) {
+      enemyShip.tint = 0xff4444;
+    } else if (isBoss && bossPhase >= 0) {
+      enemyShip.tint = 0xff6688;
+    } else {
+      enemyShip.tint = 0xffffff;
+    }
   };
   app.ticker.add(tick);
 
@@ -61,6 +69,10 @@ export function createSpaceRenderer(app: Application): SpaceRenderer {
       }
       prevHullHp = view.hullHp;
       prevEnemyHp = view.enemyHp;
+
+      isBoss = view.boss;
+      bossPhase = view.bossPhase ?? -1;
+      enemyShip.scale.set(view.boss ? 1.6 : 1);
 
       const layersUp = view.shields.filter((layer) => layer.up).length + view.tempShieldLayers;
       shieldRing.visible = layersUp > 0;
