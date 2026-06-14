@@ -13,9 +13,13 @@ export type HullId = string;
 
 export type ModuleTierLevel = 1 | 2;
 
+export type ModifierId = string;
+
 export interface ModuleInstance {
   id: ModuleId;
   tier: ModuleTierLevel;
+  /** Attach-to-module modifiers (GDD §6.6) — events bolt these on; deck-gen applies them. */
+  modifiers?: ModifierId[];
 }
 
 export type CardEffect =
@@ -119,6 +123,20 @@ export interface ModuleDef {
     /** Absent where the GDD says TBD. */
     mk2?: ModuleTier;
   };
+}
+
+/**
+ * A module modifier (GDD §6.6) — an attach-to-module hack that adjusts how the module's
+ * cards generate. Interpreted by deck.ts; like every other definition, pure data.
+ */
+export interface ModifierDef {
+  id: ModifierId;
+  name: string;
+  description: string;
+  /** AP shaved off each of the module's cards (floored at 0). */
+  apCostReduction?: number;
+  /** Effects appended to each of the module's cards when played. */
+  bonusEffects?: CardEffect[];
 }
 
 export type EnemyId = string;

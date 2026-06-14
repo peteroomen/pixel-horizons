@@ -71,6 +71,17 @@ describe('serialize / deserialize round-trip', () => {
     state.rng['combat'].state = 12345;
     expect(deserializeRunState(serializeRunState(state))).toEqual(state);
   });
+
+  it('round-trips module modifiers (v3, GDD §6.6)', () => {
+    const state = createRunState('modifiers');
+    state.modules = [
+      { id: 'mod-light-laser', tier: 1, modifiers: ['modifier-tuned-capacitors'] },
+      { id: 'mod-thruster', tier: 1 },
+    ];
+    const restored = deserializeRunState(serializeRunState(state));
+    expect(restored).toEqual(state);
+    expect(restored?.modules[0].modifiers).toEqual(['modifier-tuned-capacitors']);
+  });
 });
 
 describe('deserializeRunState validation', () => {
@@ -126,6 +137,17 @@ describe('deserializeRunState validation', () => {
       const tampered = { ...JSON.parse(valid()), [key]: value };
       expect(deserializeRunState(JSON.stringify(tampered)), `bad ${field}`).toBeNull();
     }
+  });
+
+  it('returns null on bad module modifiers', () => {
+    const tampered = JSON.parse(valid());
+    tampered.modules[0].modifiers = [1, 2];
+    expect(deserializeRunState(JSON.stringify(tampered))).toBeNull();
+  });
+
+  it('returns null for v2 saves (pre-modifiers)', () => {
+    const v2 = { ...JSON.parse(valid()), version: 2 };
+    expect(deserializeRunState(JSON.stringify(v2))).toBeNull();
   });
 
   it('returns null for v1 saves (pre-ModuleInstance)', () => {

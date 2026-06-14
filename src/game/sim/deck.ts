@@ -1,5 +1,5 @@
-import { getModule } from '../data';
-import type { CardId, ModuleId, ModuleInstance } from '../data';
+import { getModifier, getModule } from '../data';
+import type { CardEffect, CardId, ModuleId, ModuleInstance } from '../data';
 
 /**
  * One card instance in a combat deck. `moduleIndex` indexes the run's module list —
@@ -17,6 +17,10 @@ export interface CombatCard {
   cardId: CardId;
   moduleIndex: number | null;
   malfunctioning: boolean;
+  /** AP shaved off this instance by module modifiers (GDD §6.6); undefined = none. */
+  apCostDelta?: number;
+  /** Effects appended to this instance by module modifiers (e.g. draw-on-play). */
+  bonusEffects?: CardEffect[];
 }
 
 function tierKey(tier: 1 | 2): 'mk1' | 'mk2' {
@@ -37,7 +41,20 @@ export function generateCombatDeck(modules: readonly ModuleInstance[]): CombatCa
   return modules.flatMap((mod, moduleIndex) => {
     const def = getModule(mod.id);
     const tier = def.tiers[tierKey(mod.tier)] ?? def.tiers.mk1;
-    return tier.cards.map((cardId) => ({ cardId, moduleIndex, malfunctioning: false }));
+    // Aggregate any attach-to-module modifiers into per-instance overrides (GDD §6.6).
+    const mods = (mod.modifiers ?? []).map(getModifier);
+    const apCostDelta = mods.reduce((sum, m) => sum + (m.apCostReduction ?? 0), 0);
+    const bonusEffects = mods.flatMap((m) => m.bonusEffects ?? []);
+    return tier.cards.map((cardId) => {
+      const card: CombatCard = { cardId, moduleIndex, malfunctioning: false };
+      if (apCostDelta > 0) {
+        card.apCostDelta = apCostDelta;
+      }
+      if (bonusEffects.length > 0) {
+        card.bonusEffects = bonusEffects;
+      }
+      return card;
+    });
   });
 }
 

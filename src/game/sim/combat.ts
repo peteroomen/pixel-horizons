@@ -287,7 +287,11 @@ export function canPayToll(state: CombatState): boolean {
 
 /** The AP this card costs to play right now — the repair cost while flipped. */
 export function cardPlayCost(_state: CombatState, card: CombatCard): number {
-  return isCardMalfunctioning(card) ? MALFUNCTION_REPAIR_AP : getCard(card.cardId).apCost;
+  if (isCardMalfunctioning(card)) {
+    return MALFUNCTION_REPAIR_AP;
+  }
+  // Module modifiers (GDD §6.6) shave AP off this instance, floored at 0.
+  return Math.max(0, getCard(card.cardId).apCost - (card.apCostDelta ?? 0));
 }
 
 /** Unplayable cards (Infestations, §5.6) clog the hand until the discard step. */
@@ -356,6 +360,10 @@ export function playCard(
 
   const rng = restoreRng(state.rng);
   for (const effect of card.effects) {
+    applyEffect(state, rng, effect);
+  }
+  // Modifier-appended effects (GDD §6.6) fire after the card's own effects.
+  for (const effect of instance.bonusEffects ?? []) {
     applyEffect(state, rng, effect);
   }
   (card.exhaust === true ? state.exhaustPile : state.discardPile).push(instance);

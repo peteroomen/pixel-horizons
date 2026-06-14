@@ -8,7 +8,7 @@ import { deriveRng } from './rng';
  * serializes losslessly for saves and shareable seeds.
  */
 
-export const RUN_STATE_VERSION = 2;
+export const RUN_STATE_VERSION = 3;
 
 export const RNG_STREAMS = ['map-gen', 'combat', 'surface'] as const;
 export type RngStream = (typeof RNG_STREAMS)[number];
@@ -80,7 +80,22 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 function isModuleInstance(value: unknown): value is ModuleInstance {
-  return isRecord(value) && isNonEmptyString(value.id) && (value.tier === 1 || value.tier === 2);
+  if (!isRecord(value) || !isNonEmptyString(value.id) || !(value.tier === 1 || value.tier === 2)) {
+    return false;
+  }
+  // modifiers (v3) are optional; when present, an array of non-empty ids (GDD §6.6).
+  if (value.modifiers !== undefined) {
+    if (!Array.isArray(value.modifiers) || !value.modifiers.every(isNonEmptyString)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function cloneInstance(m: ModuleInstance): ModuleInstance {
+  return m.modifiers === undefined
+    ? { id: m.id, tier: m.tier }
+    : { id: m.id, tier: m.tier, modifiers: [...m.modifiers] };
 }
 
 function parseRngState(value: unknown): RngState | null {
@@ -166,8 +181,8 @@ export function deserializeRunState(json: string): RunState | null {
       coreCrystals: resources.coreCrystals,
       blueprints: resources.blueprints,
     },
-    modules: (modules as ModuleInstance[]).map((m) => ({ id: m.id, tier: m.tier })),
-    cargo: cargo.map((m) => ({ id: m.id, tier: m.tier })),
+    modules: (modules as ModuleInstance[]).map(cloneInstance),
+    cargo: cargo.map(cloneInstance),
     reactorLevel,
     position: { sector: position.sector, nodeId: position.nodeId },
     rng: rngStates,

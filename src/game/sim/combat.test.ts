@@ -323,6 +323,34 @@ describe('Discard keyword (GDD §5.9)', () => {
   });
 });
 
+describe('module modifiers in combat (GDD §6.6)', () => {
+  it('apCostDelta lowers the play cost, floored at 0', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    const cheap: CombatCard = {
+      cardId: 'card-missile-salvo', // base 2 AP
+      moduleIndex: 0,
+      malfunctioning: false,
+      apCostDelta: 1,
+    };
+    expect(cardPlayCost(state, cheap)).toBe(1);
+  });
+
+  it('bonusEffects fire after the card resolves', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    state.hand = [
+      {
+        cardId: 'card-missile-salvo',
+        moduleIndex: 0,
+        malfunctioning: false,
+        bonusEffects: [{ kind: 'draw', count: 1 }],
+      },
+    ];
+    playCard(state, 0);
+    expect(state.enemyHp).toBe(getEnemy(LAMPREY).maxHp - 8);
+    expect(state.hand.length).toBe(1); // played 1, drew 1 back
+  });
+});
+
 describe('Cleave keyword (GDD §5.9)', () => {
   it('hits the core like any attack while the enemy has no organs', () => {
     const state = createCombat(gunshipRun(), LAMPREY);
