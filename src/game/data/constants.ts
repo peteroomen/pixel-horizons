@@ -36,7 +36,7 @@ export const MAP_COLUMN_NODES_MAX = 3;
  * Relative weights for middle-column node types. Nodes are realspace
  * destinations — combat happens only on lanes (GDD §2/§5.1).
  */
-export const MAP_NODE_WEIGHTS = { planet: 4, cache: 1, shop: 2, engineer: 2 } as const;
+export const MAP_NODE_WEIGHTS = { planet: 4, cache: 1, shop: 2, engineer: 2, event: 2 } as const;
 
 /** Scrap band for cache nodes — a free find, placeholder for events/shops (4.3/4.4). */
 export const CACHE_SCRAP_MIN = 5;

@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from 'react';
 
 import BossReward from '@/components/BossReward';
 import CombatHand from '@/components/CombatHand';
+import EventScreen from '@/components/EventScreen';
 import GameCanvas from '@/components/GameCanvas';
 import HUD from '@/components/HUD';
 import SectorMap from '@/components/SectorMap';
@@ -15,6 +16,7 @@ import Workbench from '@/components/Workbench';
 import FoundryButton from '@/components/foundry/FoundryButton';
 import type {
   CombatView,
+  EventView,
   GameHandle,
   GamePhase,
   MapView,
@@ -78,6 +80,7 @@ export default function Home() {
   const [mapView, setMapView] = useState<MapView | null>(null);
   const [shipView, setShipView] = useState<ShipView | null>(null);
   const [stationView, setStationView] = useState<StationView | null>(null);
+  const [eventView, setEventView] = useState<EventView | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [abandonArmed, setAbandonArmed] = useState(false);
   const [handle, setHandle] = useState<GameHandle | null>(null);
@@ -131,6 +134,10 @@ export default function Home() {
     setStationView(next);
   }, []);
 
+  const onEventUpdate = useCallback((next: EventView) => {
+    setEventView(next);
+  }, []);
+
   // Discard-keyword cards auto-pay with the rightmost other cards (GDD §5.9); the rest
   // play straight. Rightmost-first keeps freshly-drawn cards as the fodder, not the hand
   // you've been holding.
@@ -171,6 +178,7 @@ export default function Home() {
         onMapUpdate={onMapUpdate}
         onShipUpdate={onShipUpdate}
         onStationUpdate={onStationUpdate}
+        onEventUpdate={onEventUpdate}
       />
 
       {/* Title: a saved expedition exists */}
@@ -317,6 +325,17 @@ export default function Home() {
       {/* Shop / Engineer station screens */}
       {(phase === 'shop' || phase === 'engineer') && stationView !== null && handle !== null && (
         <StationScreen view={stationView} handle={handle} />
+      )}
+
+      {/* Event: text node with choices (GDD §4.4) */}
+      {phase === 'event' && eventView !== null && (
+        <EventScreen
+          view={eventView}
+          shipView={shipView}
+          onChoose={(choiceIndex, moduleIndex) =>
+            handleRef.current?.chooseEventChoice(choiceIndex, moduleIndex)
+          }
+        />
       )}
 
       {/* Boss reward: three-choice pick after the gate guardian dies */}

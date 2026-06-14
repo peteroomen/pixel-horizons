@@ -5,6 +5,7 @@ import { useEffect, useRef } from 'react';
 import { initGame } from '@/game/main';
 import type {
   CombatView,
+  EventView,
   GameHandle,
   GamePhase,
   MapView,
@@ -22,6 +23,7 @@ interface GameCanvasProps {
   onMapUpdate?: (view: MapView) => void;
   onShipUpdate?: (view: ShipView) => void;
   onStationUpdate?: (view: StationView) => void;
+  onEventUpdate?: (view: EventView) => void;
 }
 
 /**
@@ -39,6 +41,7 @@ export default function GameCanvas({
   onMapUpdate,
   onShipUpdate,
   onStationUpdate,
+  onEventUpdate,
 }: GameCanvasProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const callbacksRef = useRef({
@@ -50,6 +53,7 @@ export default function GameCanvas({
     onMapUpdate,
     onShipUpdate,
     onStationUpdate,
+    onEventUpdate,
   });
 
   useEffect(() => {
@@ -62,6 +66,7 @@ export default function GameCanvas({
       onMapUpdate,
       onShipUpdate,
       onStationUpdate,
+      onEventUpdate,
     };
   }, [
     onCombatUpdate,
@@ -72,6 +77,7 @@ export default function GameCanvas({
     onMapUpdate,
     onShipUpdate,
     onStationUpdate,
+    onEventUpdate,
   ]);
 
   useEffect(() => {
@@ -90,6 +96,7 @@ export default function GameCanvas({
         onMapUpdate: (view) => callbacksRef.current.onMapUpdate?.(view),
         onShipUpdate: (view) => callbacksRef.current.onShipUpdate?.(view),
         onStationUpdate: (view) => callbacksRef.current.onStationUpdate?.(view),
+        onEventUpdate: (view) => callbacksRef.current.onEventUpdate?.(view),
       });
       if (cancelled) {
         candidate.destroy();

@@ -73,7 +73,7 @@ describe('generateSectorMap', () => {
         expect(column.length).toBeGreaterThanOrEqual(MAP_COLUMN_NODES_MIN);
         expect(column.length).toBeLessThanOrEqual(MAP_COLUMN_NODES_MAX);
         for (const node of column) {
-          expect(['planet', 'cache', 'shop', 'engineer']).toContain(node.type);
+          expect(['planet', 'cache', 'shop', 'engineer', 'event']).toContain(node.type);
         }
       }
     }
