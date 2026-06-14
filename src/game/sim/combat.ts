@@ -90,6 +90,14 @@ export interface CombatState {
    * the end of each enemy phase. 0 for enemies without armor.
    */
   enemyArmor: number;
+  /** Organ HP, parallel to the enemy's `parts` (GDD §5.4); [] for enemies without organs. */
+  partHp: number[];
+  /** Single-target selection: null = the core, else an index into `parts`. */
+  targetPart: number | null;
+  /** Set when the Armor-Node is destroyed — armor stays 0 and stops regrowing. */
+  armorBroken: boolean;
+  /** Set by an organ's `stagger` on-destroy — the enemy skips its next action. */
+  staggered: boolean;
   /** Index into the enemy's intent list — the telegraphed action for its next phase. */
   intentIndex: number;
   hullId: HullId;
@@ -154,6 +162,10 @@ export function createCombat(run: RunState, enemyId: EnemyId, lane?: LaneContext
     enemyId,
     enemyHp: enemy.maxHp,
     enemyArmor: enemy.armor?.amount ?? 0,
+    partHp: enemy.parts?.map((p) => p.maxHp) ?? [],
+    targetPart: null,
+    armorBroken: false,
+    staggered: false,
     intentIndex: enemy.pattern === 'random' ? rng.int(0, enemy.intents.length) : 0,
     hullId: run.hullId,
     hullHp: run.hullHp,
@@ -551,25 +563,34 @@ export function endTurn(state: CombatState): void {
   // Snapshot before the attack so a layer spent this phase doesn't also tick this
   // phase — rechargeTurns counts full enemy phases the layer stays down.
   const recharging = state.shields.filter((layer) => layer.turnsUntilUp > 0);
-  resolveEnemyIntent(state, rng, activeIntents(state)[state.intentIndex]);
-  if (state.hullHp <= 0) {
-    state.outcome = 'defeat';
-    state.rng = rng.getState();
-    return;
+  if (state.staggered) {
+    // An organ's stagger (GDD §5.4) costs the enemy this action — but only once.
+    state.staggered = false;
+  } else {
+    resolveEnemyIntent(state, rng, activeIntents(state)[state.intentIndex]);
+    if (state.hullHp <= 0) {
+      state.outcome = 'defeat';
+      state.rng = rng.getState();
+      return;
+    }
   }
   for (const layer of recharging) {
     layer.turnsUntilUp -= 1;
   }
 
+  // Living organs act after the enemy's main action (GDD §5.4): the Spore-Sac floods.
+  applyOrganAbilities(state, rng);
+
   // Organic armor regrows after the enemy phase (GDD §5.7): chip damage spread
   // across turns is eaten; sustained damage within one turn breaks through.
-  // Phase-specific armor overrides the base definition.
+  // Phase-specific armor overrides the base definition. With an Armor-Node organ
+  // (GDD §5.4) the regrow is gated on that organ still living.
   const phaseArmor =
     state.phaseIndex >= 0 && enemy.phases !== undefined
       ? enemy.phases[state.phaseIndex].armor
       : undefined;
   const armor = phaseArmor ?? enemy.armor;
-  if (armor !== undefined) {
+  if (armor !== undefined && (!hasArmorRegenOrgan(state) || hasLivingArmorRegenOrgan(state))) {
     state.enemyArmor = Math.min(armor.amount, state.enemyArmor + armor.regen);
   }
 
@@ -652,7 +673,7 @@ function applyEffect(state: CombatState, rng: Rng, effect: CardEffect): void {
       state.modifiers.nextAttackBonus = 0;
       state.modifiers.nextAttackMultiplier = 1;
       const total = (effect.amount + bonus) * multiplier + state.modifiers.enemyVulnerable;
-      dealDamageToEnemy(state, total, effect.piercing === true);
+      dealDamageToEnemy(state, total, effect.piercing === true, effect.target === 'all');
       break;
     }
     case 'travel':
@@ -718,12 +739,47 @@ function applyEffect(state: CombatState, rng: Rng, effect: CardEffect): void {
   }
 }
 
+/** Living organ indices (GDD §5.4) — a valid single-target pick has partHp > 0. */
+export function isPartAlive(state: CombatState, partIndex: number): boolean {
+  return state.partHp[partIndex] !== undefined && state.partHp[partIndex] > 0;
+}
+
+/** Selects the single-target focus: null = core, else a living organ (else a no-op). */
+export function selectTarget(state: CombatState, target: number | null): void {
+  if (target === null || isPartAlive(state, target)) {
+    state.targetPart = target;
+  }
+}
+
 /**
  * One outgoing hit against the enemy — the single funnel for all player damage
- * (cards and damage innates), mirroring resolveIncomingHit. Armor (GDD §5.7)
- * absorbs non-piercing damage before HP; piercing bypasses it entirely.
+ * (cards and damage innates), mirroring resolveIncomingHit. `cleave` (GDD §5.4) hits the
+ * core and every living organ at once; otherwise the hit lands on the selected target
+ * (a living organ, else the core). Armor absorbs non-piercing core damage; organs have
+ * no armor.
  */
-function dealDamageToEnemy(state: CombatState, amount: number, piercing: boolean): void {
+function dealDamageToEnemy(
+  state: CombatState,
+  amount: number,
+  piercing: boolean,
+  cleave = false,
+): void {
+  if (cleave) {
+    damageCore(state, amount, piercing);
+    const parts = getEnemy(state.enemyId).parts ?? [];
+    for (let i = 0; i < parts.length; i++) {
+      damagePart(state, i, amount);
+    }
+    return;
+  }
+  if (state.targetPart !== null && isPartAlive(state, state.targetPart)) {
+    damagePart(state, state.targetPart, amount);
+    return;
+  }
+  damageCore(state, amount, piercing);
+}
+
+function damageCore(state: CombatState, amount: number, piercing: boolean): void {
   let remaining = amount;
   if (!piercing) {
     const absorbed = Math.min(state.enemyArmor, remaining);
@@ -732,6 +788,57 @@ function dealDamageToEnemy(state: CombatState, amount: number, piercing: boolean
   }
   state.enemyHp = Math.max(0, state.enemyHp - remaining);
   checkPhaseTransition(state);
+}
+
+function damagePart(state: CombatState, partIndex: number, amount: number): void {
+  if (!isPartAlive(state, partIndex)) return;
+  state.partHp[partIndex] = Math.max(0, state.partHp[partIndex] - amount);
+  if (state.partHp[partIndex] === 0) {
+    onPartDestroyed(state, partIndex);
+  }
+}
+
+function onPartDestroyed(state: CombatState, partIndex: number): void {
+  const part = getEnemy(state.enemyId).parts?.[partIndex];
+  if (part?.onDestroy === 'stagger') {
+    state.staggered = true;
+  } else if (part?.onDestroy === 'break-armor') {
+    state.enemyArmor = 0;
+    state.armorBroken = true;
+  }
+  // A destroyed organ can't stay the focus — fall back to the core.
+  if (state.targetPart === partIndex) {
+    state.targetPart = null;
+  }
+}
+
+/** Whether the enemy has an Armor-Node organ at all (gates the armor-regrow behavior). */
+function hasArmorRegenOrgan(state: CombatState): boolean {
+  return (getEnemy(state.enemyId).parts ?? []).some((p) => p.grants.kind === 'armor-regen');
+}
+
+/** Whether a living Armor-Node organ is keeping the armor regrowing (GDD §5.4). */
+function hasLivingArmorRegenOrgan(state: CombatState): boolean {
+  const parts = getEnemy(state.enemyId).parts ?? [];
+  return parts.some((p, i) => p.grants.kind === 'armor-regen' && isPartAlive(state, i));
+}
+
+/** Per-turn organ pressure (GDD §5.4): each living organ fires its granted ability. */
+function applyOrganAbilities(state: CombatState, rng: Rng): void {
+  const parts = getEnemy(state.enemyId).parts ?? [];
+  parts.forEach((part, i) => {
+    if (!isPartAlive(state, i)) return;
+    if (part.grants.kind === 'inject-each-turn') {
+      for (let n = 0; n < part.grants.count; n++) {
+        const position = rng.int(0, state.drawPile.length + 1);
+        state.drawPile.splice(position, 0, {
+          cardId: part.grants.cardId,
+          moduleIndex: null,
+          malfunctioning: false,
+        });
+      }
+    }
+  });
 }
 
 function checkPhaseTransition(state: CombatState): void {

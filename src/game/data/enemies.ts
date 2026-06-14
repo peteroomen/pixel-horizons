@@ -86,6 +86,25 @@ export const ENEMY_DEFS: readonly EnemyDef[] = [
     scrapReward: { min: 15, max: 25 },
     armor: { amount: 8, regen: 3 },
     anchor: { tollScrap: 999 },
+    // Targetable organs (GDD §5.4): silence the Spore-Sac to stop the infestation, or
+    // pop the Armor-Node to break the shell. The core is killable any time — organs are
+    // pressure, not a gate. Cleave hits all of them; focus-fire burns one down.
+    parts: [
+      {
+        id: 'part-spore-sac',
+        name: 'Spore-Sac',
+        maxHp: 18,
+        grants: { kind: 'inject-each-turn', cardId: 'card-spore-cluster', count: 1 },
+        onDestroy: 'stagger',
+      },
+      {
+        id: 'part-armor-node',
+        name: 'Armor-Node',
+        maxHp: 22,
+        grants: { kind: 'armor-regen' },
+        onDestroy: 'break-armor',
+      },
+    ],
     intents: [
       { kind: 'attack', name: 'Gate Slam', amount: 6 },
       { kind: 'attack', name: 'Tendril Sweep', amount: 4, hits: 2 },

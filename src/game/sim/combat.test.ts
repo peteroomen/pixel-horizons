@@ -21,6 +21,7 @@ import {
   playCard,
   activateInnate,
   rollVictoryScrap,
+  selectTarget,
 } from './combat';
 import type { LaneContext } from './combat';
 import type { CombatCard } from './deck';
@@ -1196,5 +1197,96 @@ describe('boss phases (GDD §7.5)', () => {
     endTurn(state);
     expect(state.travelProgress).toBe(0);
     expect(state.outcome).toBe('ongoing');
+  });
+});
+
+describe('enemy organs (GDD §5.4)', () => {
+  const spores = (state: CombatState): number =>
+    [...state.drawPile, ...state.hand, ...state.discardPile].filter(
+      (c) => c.cardId === 'card-spore-cluster',
+    ).length;
+
+  it('initializes organ HP from the enemy parts; non-organ enemies have none', () => {
+    expect(createCombat(gunshipRun(), GATEMAW).partHp).toEqual([18, 22]);
+    expect(createCombat(gunshipRun(), LAMPREY).partHp).toEqual([]);
+  });
+
+  it('the Spore-Sac injects a spore each enemy turn while alive', () => {
+    const state = createCombat(gunshipRun('organs'), GATEMAW);
+    endTurn(state);
+    expect(spores(state)).toBe(1);
+  });
+
+  it('destroying the Spore-Sac stops injection and staggers the enemy', () => {
+    const state = createCombat(gunshipRun('organs'), GATEMAW);
+    state.partHp[0] = 4;
+    selectTarget(state, 0);
+    state.hand = hand('card-missile-salvo'); // 8 → kills the 4-HP sac
+    playCard(state, 0);
+    expect(state.partHp[0]).toBe(0);
+    expect(state.staggered).toBe(true);
+    const hullBefore = state.hullHp;
+    endTurn(state); // staggered: no enemy attack; sac dead: no spore
+    expect(state.hullHp).toBe(hullBefore);
+    expect(spores(state)).toBe(0);
+    expect(state.staggered).toBe(false);
+  });
+
+  it('armor regrows while the Armor-Node lives, and stops once it dies', () => {
+    const state = createCombat(gunshipRun('organs'), GATEMAW);
+    state.enemyArmor = 2;
+    endTurn(state); // armor-node alive → +3 regrow (capped 8)
+    expect(state.enemyArmor).toBe(5);
+
+    state.partHp[1] = 5;
+    selectTarget(state, 1);
+    state.hand = hand('card-missile-salvo'); // 8 → kills the armor-node
+    playCard(state, 0);
+    expect(state.partHp[1]).toBe(0);
+    expect(state.armorBroken).toBe(true);
+    expect(state.enemyArmor).toBe(0); // break-armor zeroes it
+
+    state.enemyArmor = 2;
+    endTurn(state); // armor-node dead → no regrow
+    expect(state.enemyArmor).toBe(2);
+  });
+
+  it('Cleave hits the core and every living organ at once', () => {
+    const state = createCombat(gunshipRun('organs'), GATEMAW);
+    const coreBefore = state.enemyHp;
+    state.hand = hand('card-scatter-shell'); // 6 to all, piercing (bypasses armor)
+    playCard(state, 0);
+    expect(state.enemyHp).toBe(coreBefore - 6);
+    expect(state.partHp).toEqual([12, 16]);
+  });
+
+  it('single-target fire hits only the selected organ; the default is the core', () => {
+    const state = createCombat(gunshipRun('organs'), GATEMAW);
+    expect(state.targetPart).toBeNull();
+    const coreBefore = state.enemyHp;
+    selectTarget(state, 1);
+    state.hand = hand('card-missile-salvo'); // 8, organs have no armor
+    playCard(state, 0);
+    expect(state.partHp[1]).toBe(22 - 8);
+    expect(state.partHp[0]).toBe(18);
+    expect(state.enemyHp).toBe(coreBefore);
+  });
+
+  it('the core can be killed with organs still alive (organs are pressure, not a gate)', () => {
+    const state = createCombat(gunshipRun('organs'), GATEMAW);
+    state.enemyHp = 5;
+    state.enemyArmor = 0;
+    state.hand = hand('card-missile-salvo'); // 8 → core dies
+    playCard(state, 0);
+    expect(state.enemyHp).toBe(0);
+    expect(state.outcome).toBe('victory');
+    expect(state.partHp[0]).toBeGreaterThan(0);
+  });
+
+  it('selectTarget ignores a dead organ', () => {
+    const state = createCombat(gunshipRun('organs'), GATEMAW);
+    state.partHp[0] = 0;
+    selectTarget(state, 0);
+    expect(state.targetPart).toBeNull();
   });
 });

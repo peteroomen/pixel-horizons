@@ -296,6 +296,7 @@ export default function Home() {
             onInnate={onInnate}
             innateArmed={innateArmed}
             onPayToll={() => handleRef.current?.payToll()}
+            onSelectTarget={(target) => handleRef.current?.selectTarget(target)}
           />
           <div className="absolute inset-x-0 bottom-2 flex justify-center sm:bottom-4">
             <CombatHand

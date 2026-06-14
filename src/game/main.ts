@@ -128,6 +128,8 @@ export interface GameHandle {
   playCard(handIndex: number, discardIndices?: readonly number[]): void;
   /** Jettison a card for its benefit instead of playing it (GDD §5.9 / §5.4). */
   jettisonCard(handIndex: number): void;
+  /** Focus single-target attacks on a boss organ (GDD §5.4); null = the core. */
+  selectTarget(target: number | null): void;
   /** Hull innate ability; handIndex only for card-targeted innates (Slipstream). */
   useInnate(handIndex?: number): void;
   endTurn(): void;
@@ -543,6 +545,9 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     },
     jettisonCard(handIndex: number): void {
       combatMode?.jettisonCard(handIndex);
+    },
+    selectTarget(target: number | null): void {
+      combatMode?.selectTarget(target);
     },
     useInnate(handIndex?: number): void {
       combatMode?.useInnate(handIndex);

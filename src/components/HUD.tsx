@@ -12,15 +12,23 @@ interface HUDProps {
   onInnate: () => void;
   innateArmed: boolean;
   onPayToll: () => void;
+  onSelectTarget: (target: number | null) => void;
 }
 
-export default function HUD({ view, onEndTurn, onInnate, innateArmed, onPayToll }: HUDProps) {
+export default function HUD({
+  view,
+  onEndTurn,
+  onInnate,
+  innateArmed,
+  onPayToll,
+  onSelectTarget,
+}: HUDProps) {
   return (
     <>
       {/* Top: hero plates — content-sized at the screen edges, not full-width columns */}
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-2 sm:p-6">
         <PlayerPlate view={view} />
-        <EnemyPlate view={view} />
+        <EnemyPlate view={view} onSelectTarget={onSelectTarget} />
       </div>
 
       {/* Bottom: meta strip + button bar, above the hand */}

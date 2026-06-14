@@ -1,5 +1,12 @@
 import { getCard, getEnemy, getHull, getModule, MALFUNCTION_REPAIR_AP } from './data';
-import type { CardDef, CardEffect, EnemyIntentDef, ModuleTargeting, OnDrawEffect } from './data';
+import type {
+  CardDef,
+  CardEffect,
+  EnemyIntentDef,
+  ModuleTargeting,
+  OnDrawEffect,
+  PartAbility,
+} from './data';
 import type { CombatOutcome, CombatState } from './sim/combat';
 import {
   canPayToll,
@@ -54,6 +61,16 @@ export interface ModuleView {
   malfunctioning: boolean;
 }
 
+/** A targetable boss organ (GDD §5.4) — its bar, ability tag, and selection state. */
+export interface EnemyPartView {
+  name: string;
+  hp: number;
+  maxHp: number;
+  ability: string;
+  alive: boolean;
+  selected: boolean;
+}
+
 export interface InnateView {
   name: string;
   description: string;
@@ -98,6 +115,10 @@ export interface CombatView {
   enemyMaxHp: number;
   /** Bulwark armor pool currently up (GDD §5.7); 0 for unarmored enemies. */
   enemyArmor: number;
+  /** Targetable boss organs (GDD §5.4); empty for normal single-HP enemies. */
+  enemyParts: EnemyPartView[];
+  /** True when single-target attacks hit the core (no organ selected). */
+  targetIsCore: boolean;
   intent: IntentView;
   hand: CardView[];
   drawCount: number;
@@ -118,6 +139,11 @@ export interface CombatView {
   /** Current boss phase (-1 = base); null for non-boss enemies. */
   bossPhase: number | null;
 }
+
+const PART_ABILITY_LABELS: Record<PartAbility['kind'], string> = {
+  'inject-each-turn': 'SPORES',
+  'armor-regen': 'ARMOR',
+};
 
 export function buildCombatView(state: CombatState): CombatView {
   const enemy = getEnemy(state.enemyId);
@@ -150,6 +176,15 @@ export function buildCombatView(state: CombatState): CombatView {
     enemyHp: state.enemyHp,
     enemyMaxHp: enemy.maxHp,
     enemyArmor: state.enemyArmor,
+    enemyParts: (enemy.parts ?? []).map((part, index) => ({
+      name: part.name,
+      hp: state.partHp[index] ?? 0,
+      maxHp: part.maxHp,
+      ability: PART_ABILITY_LABELS[part.grants.kind],
+      alive: (state.partHp[index] ?? 0) > 0,
+      selected: state.targetPart === index,
+    })),
+    targetIsCore: state.targetPart === null,
     intent: {
       kind: intent.kind,
       name: intent.name,

@@ -22,6 +22,7 @@ import {
   payToll,
   playCard,
   rollVictoryScrap,
+  selectTarget,
 } from '../sim/combat';
 import type { CombatState } from '../sim/combat';
 import type { LaneParams } from '../sim/map-gen';
@@ -57,6 +58,7 @@ export interface CombatModeOptions {
 export interface CombatMode {
   playCard(handIndex: number, discardIndices?: readonly number[]): void;
   jettisonCard(handIndex: number): void;
+  selectTarget(target: number | null): void;
   useInnate(handIndex?: number): void;
   endTurn(): void;
   payToll(): void;
@@ -128,6 +130,11 @@ export function startCombatMode(
       const card = combat.hand[handIndex];
       if (card === undefined || !isCardJettisonable(card)) return;
       jettisonCard(combat, handIndex);
+      emit();
+    },
+    selectTarget(target: number | null): void {
+      if (combat === null || combat.outcome !== 'ongoing') return;
+      selectTarget(combat, target);
       emit();
     },
     useInnate(handIndex?: number): void {

@@ -210,6 +210,25 @@ export type EnemyIntentDef =
       count: number;
     };
 
+/**
+ * A targetable boss organ (GDD §5.4) — a sub-part with its own HP that grants the enemy
+ * a per-turn pressure ability while alive and a one-shot consequence when destroyed. The
+ * core is killable any time; organs are pressure, not a gate. Bosses/elites only.
+ */
+export type PartAbility =
+  | { kind: 'inject-each-turn'; cardId: CardId; count: number }
+  | { kind: 'armor-regen' };
+
+export type PartOnDestroy = 'stagger' | 'break-armor';
+
+export interface EnemyPart {
+  id: string;
+  name: string;
+  maxHp: number;
+  grants: PartAbility;
+  onDestroy?: PartOnDestroy;
+}
+
 export interface EnemyDef {
   id: EnemyId;
   name: string;
@@ -241,6 +260,8 @@ export interface EnemyDef {
    * sustained damage within one turn breaks through, chip across turns is eaten.
    */
   armor?: { amount: number; regen: number };
+  /** Targetable organs (GDD §5.4) — bosses/elites only; default undefined = single-target. */
+  parts?: EnemyPart[];
 }
 
 export interface EnemyPhase {

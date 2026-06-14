@@ -6,6 +6,7 @@ import StatBar from '@/components/foundry/StatBar';
 
 interface EnemyPlateProps {
   view: CombatView;
+  onSelectTarget?: (target: number | null) => void;
 }
 
 const INTENT_KIND_LABELS: Record<IntentView['kind'], string> = {
@@ -14,7 +15,7 @@ const INTENT_KIND_LABELS: Record<IntentView['kind'], string> = {
   inject: 'INJECT',
 };
 
-export default function EnemyPlate({ view }: EnemyPlateProps) {
+export default function EnemyPlate({ view, onSelectTarget }: EnemyPlateProps) {
   return (
     <Plate
       chamfer="chamfer-6 sm:chamfer-10"
@@ -45,8 +46,52 @@ export default function EnemyPlate({ view }: EnemyPlateProps) {
           </span>
         </div>
 
-        {/* HP bar */}
-        <StatBar value={view.enemyHp} max={view.enemyMaxHp} fillClassName="bg-fd-red" />
+        {/* HP bar — tap to focus the core (GDD §5.4) when organs are present */}
+        {view.enemyParts.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => onSelectTarget?.(null)}
+            className={`pointer-events-auto block w-full text-left ${
+              view.targetIsCore ? 'ring-1 ring-fd-orange' : ''
+            }`}
+          >
+            <StatBar value={view.enemyHp} max={view.enemyMaxHp} fillClassName="bg-fd-red" />
+          </button>
+        ) : (
+          <StatBar value={view.enemyHp} max={view.enemyMaxHp} fillClassName="bg-fd-red" />
+        )}
+
+        {/* Targetable organs (GDD §5.4): tap to focus single-target fire */}
+        {view.enemyParts.length > 0 && (
+          <div className="space-y-1">
+            {view.enemyParts.map((part, index) => (
+              <button
+                key={part.name}
+                type="button"
+                disabled={!part.alive}
+                onClick={() => onSelectTarget?.(part.selected ? null : index)}
+                className={`pointer-events-auto block w-full text-left ${
+                  part.alive ? '' : 'opacity-40'
+                } ${part.selected ? 'ring-1 ring-fd-orange' : ''}`}
+              >
+                <div className="flex items-baseline justify-between gap-1">
+                  <span className="font-label uppercase text-[6px] sm:text-[9px] text-fd-amber">
+                    {part.name}
+                    <span className="ml-1 text-fd-muted">{part.ability}</span>
+                  </span>
+                  <span className="font-readout text-[10px] sm:text-[13px] text-fd-ink">
+                    {part.hp}/{part.maxHp}
+                  </span>
+                </div>
+                <StatBar
+                  value={part.hp}
+                  max={part.maxHp}
+                  fillClassName={part.alive ? 'bg-fd-amber' : 'bg-fd-muted'}
+                />
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Intent row — kind and name always visible; numbers only behind Deep Scan */}
         <div className="chamfer chamfer-5 sm:chamfer-8 bg-fd-strip flex items-center gap-1.5 px-1.5 py-1 sm:gap-2.5 sm:px-2.5 sm:py-2">
