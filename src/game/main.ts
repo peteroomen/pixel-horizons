@@ -117,7 +117,10 @@ export interface GameCallbacks {
 export interface GameHandle {
   /** Seed of the active run (the resumed seed after RESUME RUN). */
   readonly seed: string;
-  playCard(handIndex: number): void;
+  /** Plays a card; `discardIndices` supplies targets for a Discard-keyword card (§5.9). */
+  playCard(handIndex: number, discardIndices?: readonly number[]): void;
+  /** Jettison a card for its benefit instead of playing it (GDD §5.9 / §5.4). */
+  jettisonCard(handIndex: number): void;
   /** Hull innate ability; handIndex only for card-targeted innates (Slipstream). */
   useInnate(handIndex?: number): void;
   endTurn(): void;
@@ -506,8 +509,11 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     get seed(): string {
       return run.seed;
     },
-    playCard(handIndex: number): void {
-      combatMode?.playCard(handIndex);
+    playCard(handIndex: number, discardIndices?: readonly number[]): void {
+      combatMode?.playCard(handIndex, discardIndices);
+    },
+    jettisonCard(handIndex: number): void {
+      combatMode?.jettisonCard(handIndex);
     },
     useInnate(handIndex?: number): void {
       combatMode?.useInnate(handIndex);

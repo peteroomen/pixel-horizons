@@ -11,10 +11,13 @@ import {
   applyCombatResult,
   canPayToll,
   canUseInnate,
+  cardDiscardCost,
   cardPlayCost,
   createCombat,
   endTurn,
+  isCardJettisonable,
   isCardPlayable,
+  jettisonCard,
   malfunctioningModules,
   payToll,
   playCard,
@@ -52,7 +55,8 @@ export interface CombatModeOptions {
 }
 
 export interface CombatMode {
-  playCard(handIndex: number): void;
+  playCard(handIndex: number, discardIndices?: readonly number[]): void;
+  jettisonCard(handIndex: number): void;
   useInnate(handIndex?: number): void;
   endTurn(): void;
   payToll(): void;
@@ -108,12 +112,22 @@ export function startCombatMode(
   emit();
 
   return {
-    playCard(handIndex: number): void {
+    playCard(handIndex: number, discardIndices: readonly number[] = []): void {
+      if (combat === null || combat.outcome !== 'ongoing') return;
+      const c = combat;
+      const card = c.hand[handIndex];
+      if (card === undefined || !isCardPlayable(card) || cardPlayCost(c, card) > c.ap) return;
+      // Guard the discard selection here too — a stale tap mustn't throw in the sim.
+      if (discardIndices.length !== cardDiscardCost(card)) return;
+      if (discardIndices.some((i) => i === handIndex || c.hand[i] === undefined)) return;
+      playCard(c, handIndex, discardIndices);
+      emit();
+    },
+    jettisonCard(handIndex: number): void {
       if (combat === null || combat.outcome !== 'ongoing') return;
       const card = combat.hand[handIndex];
-      if (card === undefined || !isCardPlayable(card) || cardPlayCost(combat, card) > combat.ap)
-        return;
-      playCard(combat, handIndex);
+      if (card === undefined || !isCardJettisonable(card)) return;
+      jettisonCard(combat, handIndex);
       emit();
     },
     useInnate(handIndex?: number): void {

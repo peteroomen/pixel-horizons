@@ -4,8 +4,10 @@ import type { CombatOutcome, CombatState } from './sim/combat';
 import {
   canPayToll,
   canUseInnate,
+  cardDiscardCost,
   cardPlayCost,
   currentIntent,
+  isCardJettisonable,
   isCardMalfunctioning,
   isModuleMalfunctioning,
 } from './sim/combat';
@@ -27,6 +29,12 @@ export interface CardView {
   text: string;
   exhaust: boolean;
   affordable: boolean;
+  /** Keyword chips to render (RETAIN / JETTISON / CLEAVE; EXHAUST stays its own flag). */
+  keywords: string[];
+  /** This card can be Jettisoned right now (GDD §5.9) — drives the corner ⤓ button. */
+  jettisonable: boolean;
+  /** Discard keyword cost: N other cards this card discards to play (0 = none). */
+  discardCost: number;
   /** Flipped to its Malfunction form — playing it field-repairs the module (GDD §5.6). */
   malfunction: boolean;
   /** Infestation hand-clog (GDD §5.6) — renders inert, tapping does nothing. */
@@ -161,12 +169,18 @@ export function buildCombatView(state: CombatState): CombatView {
           text: 'Field-repair',
           exhaust: false,
           affordable: state.outcome === 'ongoing' && MALFUNCTION_REPAIR_AP <= state.ap,
+          keywords: [],
+          jettisonable: false,
+          discardCost: 0,
           malfunction: true,
           unplayable: false,
         };
       }
       const card = getCard(instance.cardId);
       const unplayable = card.unplayable === true;
+      const discardCost = cardDiscardCost(instance);
+      // A Discard card needs enough other cards in hand to pay its cost.
+      const enoughToDiscard = discardCost === 0 || state.hand.length - 1 >= discardCost;
       return {
         key: `${instance.cardId}@${index}`,
         id: instance.cardId,
@@ -175,7 +189,13 @@ export function buildCombatView(state: CombatState): CombatView {
         text: describeCardText(card),
         exhaust: card.exhaust === true,
         affordable:
-          !unplayable && state.outcome === 'ongoing' && cardPlayCost(state, instance) <= state.ap,
+          !unplayable &&
+          enoughToDiscard &&
+          state.outcome === 'ongoing' &&
+          cardPlayCost(state, instance) <= state.ap,
+        keywords: cardKeywords(card),
+        jettisonable: state.outcome === 'ongoing' && isCardJettisonable(instance),
+        discardCost,
         malfunction: false,
         unplayable,
       };
@@ -229,9 +249,35 @@ function describeIntentDetail(intent: EnemyIntentDef): IntentDetail {
   }
 }
 
+/** Keyword chips for the card UI (GDD §5.9). EXHAUST keeps its own dedicated chip. */
+function cardKeywords(card: CardDef): string[] {
+  const keywords: string[] = [];
+  if (card.retain === true) {
+    keywords.push('RETAIN');
+  }
+  if (card.jettison !== undefined) {
+    keywords.push('JETTISON');
+  }
+  if (card.effects.some((e) => e.kind === 'damage' && e.target === 'all')) {
+    keywords.push('CLEAVE');
+  }
+  return keywords;
+}
+
 function describeCardText(card: CardDef): string {
   const parts = card.unplayable === true ? ['Unplayable'] : [];
+  // Discard reads as a cost, so it leads (GDD §5.9): "Discard 1 · Deal 9".
+  if (card.discardCost !== undefined) {
+    parts.push(card.discardCost === 1 ? 'Discard 1' : `Discard ${card.discardCost}`);
+  }
   parts.push(...(card.onDraw ?? []).map(describeOnDraw), ...card.effects.map(describeEffect));
+  if (card.jettison !== undefined) {
+    const benefit =
+      card.jettison.benefit === 'ap'
+        ? `+${card.jettison.amount} AP`
+        : `Draw ${card.jettison.amount}`;
+    parts.push(`Jettison: ${benefit}`);
+  }
   return parts.join(' · ');
 }
 

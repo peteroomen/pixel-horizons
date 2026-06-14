@@ -131,6 +131,24 @@ export default function Home() {
     setStationView(next);
   }, []);
 
+  // Discard-keyword cards auto-pay with the rightmost other cards (GDD §5.9); the rest
+  // play straight. Rightmost-first keeps freshly-drawn cards as the fodder, not the hand
+  // you've been holding.
+  const onPlayCard = (index: number) => {
+    if (view === null || handleRef.current === null) return;
+    const card = view.hand[index];
+    if (card === undefined) return;
+    if (card.discardCost > 0) {
+      const targets: number[] = [];
+      for (let i = view.hand.length - 1; i >= 0 && targets.length < card.discardCost; i--) {
+        if (i !== index) targets.push(i);
+      }
+      handleRef.current.playCard(index, targets);
+      return;
+    }
+    handleRef.current.playCard(index);
+  };
+
   // Plain innates fire immediately; card-targeted ones (Slipstream) toggle arming.
   const onInnate = () => {
     if (view === null || handleRef.current === null) return;
@@ -274,9 +292,10 @@ export default function Home() {
           <div className="absolute inset-x-0 bottom-2 flex justify-center sm:bottom-4">
             <CombatHand
               cards={view.hand}
-              onPlay={(index) => handleRef.current?.playCard(index)}
+              onPlay={(index) => onPlayCard(index)}
               discardMode={innateArmed}
               onDiscard={(index) => handleRef.current?.useInnate(index)}
+              onJettison={(index) => handleRef.current?.jettisonCard(index)}
             />
           </div>
 
