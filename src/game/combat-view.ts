@@ -7,6 +7,7 @@ import {
   cardPlayCost,
   currentIntent,
   isCardMalfunctioning,
+  isModuleMalfunctioning,
 } from './sim/combat';
 import { STARTING_HULL_HP } from './sim/run-state';
 
@@ -127,7 +128,7 @@ export function buildCombatView(state: CombatState): CombatView {
     tempShieldLayers: state.tempShieldLayers,
     modules: state.modules.map((moduleId, index) => ({
       name: getModule(moduleId).name,
-      malfunctioning: state.malfunctioning.includes(index),
+      malfunctioning: isModuleMalfunctioning(state, index),
     })),
     innate: {
       name: innate.name,
@@ -148,7 +149,7 @@ export function buildCombatView(state: CombatState): CombatView {
     },
     hand: state.hand.map((instance, index) => {
       // A null moduleIndex (injected Infestation) can never present as malfunctioning.
-      if (isCardMalfunctioning(state, instance) && instance.moduleIndex !== null) {
+      if (isCardMalfunctioning(instance) && instance.moduleIndex !== null) {
         const moduleDef = getModule(state.modules[instance.moduleIndex]);
         return {
           key: `${instance.cardId}@${index}`,
@@ -240,8 +241,12 @@ function describeOnDraw(effect: OnDrawEffect): string {
       return effect.count === 1
         ? 'Drawn: −1 shield layer'
         : `Drawn: −${effect.count} shield layers`;
+    case 'gain-temp-shield':
+      return effect.count === 1
+        ? 'Drawn: +1 temp shield layer'
+        : `Drawn: +${effect.count} temp shield layers`;
     default: {
-      const exhaustive: never = effect.kind;
+      const exhaustive: never = effect;
       throw new Error(`unhandled on-draw effect: ${JSON.stringify(exhaustive)}`);
     }
   }

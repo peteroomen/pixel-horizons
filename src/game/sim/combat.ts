@@ -26,12 +26,15 @@ import type { RunState } from './run-state';
  * `CombatState.rng` back to `runState.rng.combat` — and hull HP / scrap likewise — so
  * consecutive fights continue the stream instead of replaying it.
  *
- * Malfunctions (GDD §5.6): module-level state in `malfunctioning`; a card *presents*
- * as its Malfunction form iff its module index is listed there — flipping is derived,
- * never stored, so the repaired card returning to the discard pile is already back to
- * normal for free. Within a lane they persist between fights: `createCombat` carries
- * them in through the LaneContext and the orchestrator copies them back out; arrival
- * clears them (systems reset).
+ * Malfunctions (GDD §5.6): per-card-instance state — `CombatCard.malfunctioning`. A hit
+ * flags *every* card instance of the targeted module across all piles; playing one card
+ * clears only that instance, so a module contributing N cards is a genuine N-play repair
+ * tax (the module's planet item stays offline until every instance clears). A module is
+ * "operational" (a valid re-target) only when none of its instances are flagged. Within
+ * a lane the malfunction set persists between fights as module indices (per-card flags
+ * can't survive deck regeneration): `createCombat` re-flags this fight's fresh instances
+ * from the LaneContext and the orchestrator derives the set back out via
+ * `malfunctioningModules`; arrival clears them (systems reset).
  *
  * Lanes (GDD §5.1): a fight created with a LaneContext gains travel — +1 progress per
  * survived turn plus engine card effects — and ends as 'escaped' the moment total lane
@@ -95,8 +98,6 @@ export interface CombatState {
   hullHp: number;
   /** The run's module list frozen at combat start (refits take effect next combat, §5.3). */
   modules: ModuleId[];
-  /** Indices into `modules` currently malfunctioning — their cards present flipped. */
-  malfunctioning: number[];
   shields: ShieldLayer[];
   /** One-shot layers (Emergency Barrier, Cargo Thrust) — absorbed first, never recharge. */
   tempShieldLayers: number;
@@ -130,6 +131,14 @@ export function createCombat(run: RunState, enemyId: EnemyId, lane?: LaneContext
   const enemy = getEnemy(enemyId);
   const rng = restoreRng(run.rng.combat);
   const drawPile = rng.shuffle(generateCombatDeck(run.modules));
+  // Re-flag this fight's fresh instances from any malfunctions carried in by the lane.
+  if (lane !== undefined) {
+    for (const card of drawPile) {
+      if (card.moduleIndex !== null && lane.malfunctioning.includes(card.moduleIndex)) {
+        card.malfunctioning = true;
+      }
+    }
+  }
   const shields = run.modules.flatMap((mod): ShieldLayer[] => {
     const def = getModule(mod.id);
     const tier = def.tiers[mod.tier === 2 ? 'mk2' : 'mk1'] ?? def.tiers.mk1;
@@ -151,7 +160,6 @@ export function createCombat(run: RunState, enemyId: EnemyId, lane?: LaneContext
     hullId: run.hullId,
     hullHp: run.hullHp,
     modules: run.modules.map((m) => m.id),
-    malfunctioning: lane === undefined ? [] : [...lane.malfunctioning],
     shields,
     tempShieldLayers: 0,
     ap: run.reactorLevel,
@@ -189,8 +197,45 @@ export function createCombat(run: RunState, enemyId: EnemyId, lane?: LaneContext
 }
 
 /** Whether this card instance currently presents as its Malfunction form (GDD §5.6). */
-export function isCardMalfunctioning(state: CombatState, card: CombatCard): boolean {
-  return card.moduleIndex !== null && state.malfunctioning.includes(card.moduleIndex);
+export function isCardMalfunctioning(card: CombatCard): boolean {
+  return card.malfunctioning;
+}
+
+/** Every card instance across all four piles — the malfunction state lives here now. */
+function allCombatCards(state: CombatState): CombatCard[] {
+  return [...state.drawPile, ...state.hand, ...state.discardPile, ...state.exhaustPile];
+}
+
+/**
+ * Whether any instance of this module is currently flagged — i.e. the module is *not*
+ * fully operational. A module is a valid malfunction re-target only when this is false,
+ * and its planet item stays offline (3.3) until it is.
+ */
+export function isModuleMalfunctioning(state: CombatState, moduleIndex: number): boolean {
+  return allCombatCards(state).some((c) => c.moduleIndex === moduleIndex && c.malfunctioning);
+}
+
+/**
+ * The module indices with at least one flagged instance, sorted ascending — the
+ * cross-fight representation the lane carries between encounters (GDD §5.6).
+ */
+export function malfunctioningModules(state: CombatState): number[] {
+  const set = new Set<number>();
+  for (const card of allCombatCards(state)) {
+    if (card.malfunctioning && card.moduleIndex !== null) {
+      set.add(card.moduleIndex);
+    }
+  }
+  return [...set].sort((a, b) => a - b);
+}
+
+/** Flags every card instance of a module across all piles — the whole module goes down. */
+function flagModule(state: CombatState, moduleIndex: number): void {
+  for (const card of allCombatCards(state)) {
+    if (card.moduleIndex === moduleIndex) {
+      card.malfunctioning = true;
+    }
+  }
 }
 
 /**
@@ -244,8 +289,8 @@ export function canPayToll(state: CombatState): boolean {
 }
 
 /** The AP this card costs to play right now — the repair cost while flipped. */
-export function cardPlayCost(state: CombatState, card: CombatCard): number {
-  return isCardMalfunctioning(state, card) ? MALFUNCTION_REPAIR_AP : getCard(card.cardId).apCost;
+export function cardPlayCost(_state: CombatState, card: CombatCard): number {
+  return isCardMalfunctioning(card) ? MALFUNCTION_REPAIR_AP : getCard(card.cardId).apCost;
 }
 
 /** Unplayable cards (Infestations, §5.6) clog the hand until the discard step. */
@@ -272,10 +317,10 @@ export function playCard(state: CombatState, handIndex: number): void {
   state.ap -= cost;
   state.hand.splice(handIndex, 1);
 
-  if (isCardMalfunctioning(state, instance)) {
-    // Play-to-repair (§5.6): no card effects — the module comes back online and the
-    // card lands in the discard pile, presenting as its normal form again (derived).
-    state.malfunctioning = state.malfunctioning.filter((i) => i !== instance.moduleIndex);
+  if (isCardMalfunctioning(instance)) {
+    // Play-to-repair (§5.6): no card effects. Only *this* instance clears — sibling
+    // cards of the same module stay flagged, so a multi-card module is a multi-play tax.
+    instance.malfunctioning = false;
     state.discardPile.push(instance);
     return;
   }
@@ -562,8 +607,11 @@ function applyEffect(state: CombatState, rng: Rng, effect: CardEffect): void {
       state.enemyArmor = 0;
       break;
     case 'repair-all-modules':
-      // Repair Clone (§4.2) — the alternative to playing each Malfunction card.
-      state.malfunctioning = [];
+      // Repair Clone (§4.2) — the alternative to playing each Malfunction card: clears
+      // every flagged instance across all piles at once.
+      for (const c of allCombatCards(state)) {
+        c.malfunctioning = false;
+      }
       break;
     default: {
       const exhaustive: never = effect;
@@ -621,7 +669,11 @@ function resolveEnemyIntent(state: CombatState, rng: Rng, intent: EnemyIntentDef
       // Not a hit — dodge, untargetable, and shields don't interact.
       for (let i = 0; i < intent.count; i++) {
         const position = rng.int(0, state.drawPile.length + 1);
-        state.drawPile.splice(position, 0, { cardId: intent.cardId, moduleIndex: null });
+        state.drawPile.splice(position, 0, {
+          cardId: intent.cardId,
+          moduleIndex: null,
+          malfunctioning: false,
+        });
       }
       break;
     default: {
@@ -664,7 +716,7 @@ function resolveIncomingHit(
   if (moduleTargeting !== undefined) {
     const target = pickTargetModule(state, rng, moduleTargeting);
     if (target !== null) {
-      state.malfunctioning.push(target);
+      flagModule(state, target);
     }
   }
 }
@@ -678,7 +730,7 @@ function resolveIncomingHit(
 function pickTargetModule(state: CombatState, rng: Rng, targeting: ModuleTargeting): number | null {
   const operational = state.modules
     .map((_, index) => index)
-    .filter((index) => !state.malfunctioning.includes(index));
+    .filter((index) => !isModuleMalfunctioning(state, index));
   if (operational.length === 0) {
     return null;
   }
@@ -745,8 +797,11 @@ function applyOnDrawEffects(state: CombatState, card: CombatCard): void {
           layer.turnsUntilUp = layer.rechargeTurns;
         }
         break;
+      case 'gain-temp-shield':
+        state.tempShieldLayers += effect.count;
+        break;
       default: {
-        const exhaustive: never = effect.kind;
+        const exhaustive: never = effect;
         throw new Error(`unhandled on-draw effect: ${JSON.stringify(exhaustive)}`);
       }
     }

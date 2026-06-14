@@ -19,7 +19,13 @@ export interface ModuleInstance {
 }
 
 export type CardEffect =
-  | { kind: 'damage'; amount: number; piercing?: boolean }
+  | {
+      kind: 'damage';
+      amount: number;
+      piercing?: boolean;
+      /** Cleave (GDD §5.4): 'all' hits the core and every living organ; default 'core'. */
+      target?: 'core' | 'all';
+    }
   | { kind: 'travel'; amount: number }
   | { kind: 'restore-shield-layer'; count: number }
   | { kind: 'temp-shield-layer'; count: number }
@@ -41,7 +47,10 @@ export type CardEffect =
  * *and* mid-card `draw` effects: members must never draw (recursion) and must not
  * consume RNG (re-entrancy).
  */
-export type OnDrawEffect = { kind: 'lose-shield-layer'; count: number };
+export type OnDrawEffect =
+  | { kind: 'lose-shield-layer'; count: number }
+  /** Player-positive on-draw (GDD §5.9): a temp shield layer banked as the card enters hand. */
+  | { kind: 'gain-temp-shield'; count: number };
 
 export interface CardDef {
   id: CardId;
@@ -52,6 +61,15 @@ export interface CardDef {
   /** Hand-clog (Infestations, GDD §5.6): playCard throws, the UI never offers it. */
   unplayable?: true;
   onDraw?: OnDrawEffect[];
+  /** Retain keyword (GDD §5.9): this card survives the end-of-turn discard, staying in hand. */
+  retain?: true;
+  /**
+   * Jettison keyword (GDD §5.9): instead of playing, discard this card from hand for a
+   * small benefit (Draw N or +N AP). Resolves the travel-card-dead-at-boss problem (§5.4).
+   */
+  jettison?: { benefit: 'draw' | 'ap'; amount: number };
+  /** Discard keyword (GDD §5.9): playing this card first discards N other cards as a cost. */
+  discardCost?: number;
 }
 
 export type ModuleSlot = 'weapon' | 'utility' | 'engine' | 'clone-bay';

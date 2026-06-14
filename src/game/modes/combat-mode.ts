@@ -15,6 +15,7 @@ import {
   createCombat,
   endTurn,
   isCardPlayable,
+  malfunctioningModules,
   payToll,
   playCard,
   rollVictoryScrap,
@@ -150,7 +151,7 @@ export function startCombatMode(
         return;
       }
       lane.progress = Math.min(lane.distance, lane.progress + combat.travelProgress);
-      lane.malfunctioning = [...combat.malfunctioning];
+      lane.malfunctioning = malfunctioningModules(combat);
       combat = nextEncounter();
       if (combat === null) {
         callbacks.onArrival();

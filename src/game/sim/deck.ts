@@ -8,10 +8,15 @@ import type { CardId, ModuleId, ModuleInstance } from '../data';
  * Null = the card came from no module (enemy-injected Infestations): it can never
  * present as a Malfunction, and a numeric sentinel would silently re-enter the
  * malfunction-membership logic — null can't.
+ *
+ * `malfunctioning` (GDD §5.6) is per-instance: a module hit flags every one of its card
+ * instances across the piles, and playing one card clears only *that* instance — the
+ * intended multi-turn repair tax. Injected cards (moduleIndex null) are always false.
  */
 export interface CombatCard {
   cardId: CardId;
   moduleIndex: number | null;
+  malfunctioning: boolean;
 }
 
 function tierKey(tier: 1 | 2): 'mk1' | 'mk2' {
@@ -32,7 +37,7 @@ export function generateCombatDeck(modules: readonly ModuleInstance[]): CombatCa
   return modules.flatMap((mod, moduleIndex) => {
     const def = getModule(mod.id);
     const tier = def.tiers[tierKey(mod.tier)] ?? def.tiers.mk1;
-    return tier.cards.map((cardId) => ({ cardId, moduleIndex }));
+    return tier.cards.map((cardId) => ({ cardId, moduleIndex, malfunctioning: false }));
   });
 }
 

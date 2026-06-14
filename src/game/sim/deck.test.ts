@@ -111,11 +111,11 @@ describe('generateDeck', () => {
 describe('generateCombatDeck', () => {
   it('tags every card with the index of its contributing module', () => {
     expect(generateCombatDeck(moduleIds(['mod-thruster', 'mod-light-laser']))).toEqual([
-      { cardId: 'card-burn', moduleIndex: 0 },
-      { cardId: 'card-burn', moduleIndex: 0 },
-      { cardId: 'card-afterburner', moduleIndex: 0 },
-      { cardId: 'card-laser-burst', moduleIndex: 1 },
-      { cardId: 'card-laser-burst', moduleIndex: 1 },
+      { cardId: 'card-burn', moduleIndex: 0, malfunctioning: false },
+      { cardId: 'card-burn', moduleIndex: 0, malfunctioning: false },
+      { cardId: 'card-afterburner', moduleIndex: 0, malfunctioning: false },
+      { cardId: 'card-laser-burst', moduleIndex: 1, malfunctioning: false },
+      { cardId: 'card-laser-burst', moduleIndex: 1, malfunctioning: false },
     ]);
   });
 
