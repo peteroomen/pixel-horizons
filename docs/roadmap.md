@@ -26,6 +26,7 @@
 - [ ] **2.1 Combat engine (sim only)** — Turn loop in `combat.ts`: draw 5, AP spend, card effects (damage/shield/travel as data-interpreted effects), shield layers + recharge, piercing, enemy intent, hull HP, win/lose. Vitest: scripted fights resolve deterministically. *No rendering.*
 - [ ] **2.2 Combat playable** — React card hand (DOM) + Pixi battle viewport + HUD. One full fight vs. Lamprey with placeholder art, playable in browser, touch + mouse. *Done = a stranger can win/lose a fight on a phone.*
 - [ ] **2.3 Malfunctions** — Module targeting, card flipping, play-to-repair, hull-innate abilities. Parasite enemy (targets best module) to exercise it.
+  > **⚠️ Repair fix (post-playtest):** Repair is per-card, not per-module — playing one Malfunction card repairs only that card's slot, not the whole module. A module contributing 3 cards produces 3 Malfunction cards; all three must be played to fully restore it. This makes malfunctions a genuine multi-turn AP tax: fight or repair, not both.
 - [ ] **2.4 Hyperspace run** — Lane distance in turns, travel-progress cards, encounter triggers along the lane, escape-by-arrival, malfunctions persisting within a lane and clearing on arrival. Anchormaw (halts progress).
 - [ ] **2.5 Enemy roster** — Remaining archetypes (Carapace, Sporecaster + Infestation cards), intents telegraphed in UI. **Checkpoint: is the combat loop fun on its own? Tune before proceeding.**
 
@@ -41,8 +42,9 @@
 - [ ] **4.1 Sector map** — Seeded map-gen (branching nodes, lane modifiers), map screen, path choice, node entry → correct mode.
 - [ ] **4.2 Workbench** — Install/swap/craft modules, deck regenerates next combat, blueprint + resource costs.
 - [ ] **4.3 Shops + economy** — Merchant and Engineer nodes, hull repair for Scrap, module purchases, sell resources, minimum-Scrap drops.
-- [ ] **4.4 Events + discoveries** — Text event nodes, module modifiers (attach-to-module), Tinkerer encounter.
+- [ ] **4.4 Events + discoveries** — Text event nodes, module modifiers (attach-to-module), Tinkerer encounter. *(⚠️ Hard dependency for deckbuilding feel — events are the primary mid-run module injection point. Prioritize alongside or before 4.3 if the deck variety problem persists after 4.6.)*
 - [ ] **4.5 Save/resume** — Full RunState persistence at node boundaries, resume from main screen, abandon run.
+- [ ] **4.6 Card keywords & deckbuilding depth** — Define and implement keyword vocabulary (Draw N, Discard-to-trigger, Retain, Exhaust, on-play, on-draw effects). Redesign/extend the module card catalog so each module's cards have distinct mechanical identity and interact with other cards. Audit starting deck size: consider fewer starting modules or more empty hull slots so each new acquisition is a bigger relative change. This is the deckbuilder's identity layer — arguably the most important feel problem to solve. *Coordinate with 4.3/4.4 on acquisition pacing.*
 
 ## Phase 5 — Act 1 Complete
 
@@ -51,6 +53,8 @@
 - [ ] **5.3 Biomes 2–3** — Volcanic + Ice: hazards, tileset recolor pipeline driven by generated planet colors (`palette.ts`).
 - [ ] **5.4 Meta shell** — Main menu, hull select, localStorage unlocks (hulls, modules, clone matrices), run summary screen, wreckage salvage node.
 - [ ] **5.5 Act 1 balance pass** — Full 25–35 min Sector 1 playthrough tuning. **Checkpoint: the vertical slice — would you replay it?**
+  - *Combat difficulty:* Space combat is currently too easy — enemy damage output and encounter pressure are too low. Tune enemy intent values, damage numbers, and encounter density before locking balance. Surface enemies arrive in 3.4 but space combat itself needs a separate pass.
+  - *Travel card design (resolve before balancing):* Engine cards are dead draws during the sector boss fight (no lane distance to shorten). Options: (a) dual-mode Thruster cards with a secondary combat effect (weak shield, Draw 1, 1 AP refund on discard); (b) *Jettison* keyword — discard a travel card for a small benefit; (c) intentional tension, but only valid if the player had a real choice about installing Engine modules. See GDD §5.4. Resolve the design question here before tuning AP costs.
 
 ## Phase 6 — Identity & Feel
 
@@ -60,6 +64,7 @@
 - [ ] **6.4 Mobile pass** — Touch control tuning, responsive layouts, performance on mid-range phones.
 - [ ] **6.5 Seeded/daily runs** — Seed display + share URL, daily seed mode.
 - [ ] **6.6 Card feel & juice pass** — Hand fan, hover-lift, play/discard/draw animations (Motion/FLIP), malfunction card-flip, screen shake, hit effects crossing DOM→Pixi. Baseline animations land with 2.2; this is the polish pass.
+- [ ] **6.7 Workbench feel pass** — Drag-and-drop module slots, visible reactor connections, snap/install animations. FOUNDRY design language applied to the Workbench/outfitter screen so module management feels tactile and mechanical.
 
 ## Phase 7 — Platform
 

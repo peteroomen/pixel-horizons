@@ -162,6 +162,8 @@ Every card falls into one of three tactical categories. A hand of 5 cards forces
 
 The balance of these three axes in your deck depends entirely on your module loadout.
 
+> **Design question (travel cards vs. boss fights):** Engine cards are dead draws during the sector boss — there is no lane distance to shorten at the gate. Three paths to resolve before Act 1 balance lock: (a) **dual-mode Thruster cards** — add a secondary combat effect (e.g. weak shield, Draw 1, 1 AP refund on discard) so they're never fully useless; (b) **Jettison keyword** — any card with Jettison can be discarded for a small benefit (Draw 1, or +1 AP) even if its primary effect is inapplicable; (c) **intentional tension** — speed costs combat power by design, but this only works if players had a real choice about installing Engine modules (valid with hull variety). See roadmap 5.5.
+
 ### 5.5 Turn Structure
 
 1. Draw 5 cards from deck (hand size fixed at 5)
@@ -177,8 +179,8 @@ The balance of these three axes in your deck depends entirely on your module loa
 **Malfunction cards (from your own damaged modules):**
 
 - When a module is hit, it enters **Malfunctioning** state: all of its cards in the deck flip to Malfunction cards (e.g., *Damaged Flak Array — 1 AP: field-repair the Flak Array*).
-- Malfunction cards are **playable, and playing one is how you repair**: spend the AP, the module comes back online, and all its cards flip back to normal (the played card returns to the discard pile as its normal form).
-- Until repaired, the module's planetside item is also offline.
+- Malfunction cards are **playable, and playing them is how you repair**. **Each Malfunction card repairs only itself** — a module contributing 3 cards produces 3 Malfunction cards, and all three must be played to fully restore the module. The played card returns to the discard pile as its normal form. This is a deliberate design: malfunctions are a real multi-turn AP tax, not a one-card fix. You choose each turn between repairing and fighting.
+- Until *all* of a module's Malfunction cards have been played, the module is still partially malfunctioning and its planetside item remains offline.
 - Repair is free in currency but expensive in tempo: AP spent repairing is AP not spent fighting or traveling. **All malfunctions auto-clear when the hyperspace run ends** (arrival in realspace = systems reset). Multi-encounter lanes are therefore the real threat — damage compounds within a lane.
 - Hull HP damage is the lasting cost; Scrap pays for that, not for module repair.
 
@@ -217,6 +219,22 @@ Single source of truth for example modules. All numbers tunable.
 | **Cargo Scanner** | Utility | 1× Deep Scan (1 AP, reveal enemy intent next turn) | TBD | Resource Scanner (highlights hidden deposits) | TBD |
 | **Thruster** | Engine | 2× Burn (1 AP, +2 travel), 1× Afterburner (2 AP, +5 travel) | 2× Hard Burn (1 AP, +3 travel), 1× Emergency Boost (0 AP, +2 travel, exhaust) | Double Jump | + Air Dash, + Hover (brief) |
 | **Hauler Engine** | Engine | 1× Burn (1 AP, +2 travel), 1× Cargo Thrust (2 AP, +3 travel, +1 temp shield layer) | TBD | High Jump (taller single jump, no double jump) | TBD |
+
+### 5.9 Card Keyword Vocabulary
+
+Keywords give cards mechanical identity beyond raw damage/shield numbers. Each keyword opens cross-card interactions and makes module identity legible at a glance. This vocabulary is the foundation of 4.6 (deckbuilding depth slice).
+
+| Keyword | Meaning |
+|---------|---------|
+| **Draw N** | When this card is played, draw N additional cards immediately. |
+| **Discard** | Discard one or more cards from your hand as a cost or trigger for this card's effect. |
+| **Retain** | This card is not discarded at end of turn — it stays in your hand. (Only specific modules grant retain; it is not the default.) |
+| **Exhaust** | After playing this card, remove it from the current combat entirely. It returns to the deck next combat. One-use power spike. |
+| **On-play:** | A secondary effect that triggers when this card is played, listed after the primary effect (e.g. *on-play: draw 1*). |
+| **On-draw:** | An effect that triggers the moment this card enters your hand from the draw pile (e.g. *on-draw: lose 1 shield layer*). Used primarily on Infestation cards to create passive hand-pressure. |
+| **Jettison** *(design question)* | This card may be discarded from hand for a reduced benefit (e.g. draw 1, or gain 1 AP) even if its primary effect is inapplicable. Targets Engine cards during boss fights — see §5.4. |
+
+**Design intent:** keywords create synergy axes. A module whose cards say *Discard* pairs with a module whose innate ability rewards discarding. *Retain* creates a short-term resource that accumulates across turns. *Exhaust* lets you include high-power one-shots without deck consistency issues. Every module in the catalog (§5.8) should have at least one card with a keyword to give it mechanical personality beyond "deal X damage."
 
 ---
 
@@ -581,3 +599,6 @@ Planet visuals and properties are driven by the Deep-Fold Pixel Planet Generator
 11. **Audio/music direction** — style, adaptive music between modes
 12. **Exact shop pricing economy** — Scrap values, Biomineral costs, inflation across sectors
 13. **Multiplayer/sharing** — co-op potential beyond seeded-run sharing, or purely single-player?
+14. **Travel card design at boss fights** — dual-mode Thruster cards, Jettison keyword, or intentional tension? (See §5.4, §5.9, roadmap 5.5.)
+15. **Starting deck size** — are there too many starting modules? Fewer starting slots means each new module has higher relative impact on the deck. Evaluate after 4.6 keyword pass.
+16. **Module acquisition pacing** — are shop/engineer encounters frequent enough? Events (4.4) are the primary mid-run injection point; their timing relative to 4.3 may need adjustment based on playtesting.
