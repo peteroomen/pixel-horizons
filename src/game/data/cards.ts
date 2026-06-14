@@ -94,6 +94,14 @@ export const CARD_DEFS: readonly CardDef[] = [
       { kind: 'damage', amount: 3 },
     ],
   },
+  {
+    id: 'card-salvage-round',
+    name: 'Salvage Round',
+    apCost: 1,
+    // Discard keyword (GDD §5.9): a burst that eats hand economy for a spike.
+    effects: [{ kind: 'damage', amount: 9 }],
+    discardCost: 1,
+  },
 
   // Utility
   {
@@ -106,7 +114,8 @@ export const CARD_DEFS: readonly CardDef[] = [
     id: 'card-desync-hull',
     name: 'Desync Hull',
     apCost: 0,
-    effects: [{ kind: 'retain-cards', count: 1 }],
+    effects: [{ kind: 'draw', count: 1 }],
+    retain: true,
   },
   {
     id: 'card-phase-walk',
@@ -146,6 +155,8 @@ export const CARD_DEFS: readonly CardDef[] = [
     name: 'Afterburner',
     apCost: 2,
     effects: [{ kind: 'travel', amount: 5 }],
+    // Jettison (GDD §5.9 / §5.4): never a dead draw at the boss — trade it for energy.
+    jettison: { benefit: 'ap', amount: 1 },
   },
   {
     id: 'card-hard-burn',

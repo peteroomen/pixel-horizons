@@ -6,13 +6,16 @@ import {
   applyCombatResult,
   canPayToll,
   canUseInnate,
+  cardDiscardCost,
   cardPlayCost,
   createCombat,
   currentIntent,
   endTurn,
+  isCardJettisonable,
   isCardMalfunctioning,
   isCardPlayable,
   isTravelAnchored,
+  jettisonCard,
   malfunctioningModules,
   payToll,
   playCard,
@@ -262,6 +265,61 @@ describe('playCard', () => {
     playCard(state, findInHand(state, 'card-missile-salvo'));
     expect(state.enemyHp).toBe(0);
     expect(state.outcome).toBe('victory');
+  });
+});
+
+describe('Jettison keyword (GDD §5.9)', () => {
+  it('discards the card for its benefit and costs no AP', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    state.hand = hand('card-afterburner', 'card-missile-salvo');
+    state.ap = 1;
+    const afterburner = state.hand[0];
+    expect(isCardJettisonable(afterburner)).toBe(true);
+    jettisonCard(state, 0); // Afterburner: Jettison → +1 AP
+    expect(state.ap).toBe(2);
+    expect(state.travelProgress).toBe(0); // the travel effect did NOT run
+    expect(state.discardPile).toContain(afterburner);
+    expect(ids(state.hand)).toEqual(['card-missile-salvo']);
+  });
+
+  it('throws for a card with no Jettison, and a malfunctioning instance refuses', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    state.hand = hand('card-missile-salvo');
+    expect(isCardJettisonable(state.hand[0])).toBe(false);
+    expect(() => jettisonCard(state, 0)).toThrow('cannot be jettisoned');
+
+    const flagged: CombatCard = {
+      cardId: 'card-afterburner',
+      moduleIndex: 0,
+      malfunctioning: true,
+    };
+    state.hand = [flagged];
+    expect(isCardJettisonable(flagged)).toBe(false);
+    expect(() => jettisonCard(state, 0)).toThrow('cannot be jettisoned');
+  });
+});
+
+describe('Discard keyword (GDD §5.9)', () => {
+  it('discards the chosen card as a cost, then resolves the card', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    state.hand = hand('card-salvage-round', 'card-missile-salvo', 'card-flak-volley');
+    const salvage = state.hand[0];
+    const fodder = state.hand[2];
+    expect(cardDiscardCost(salvage)).toBe(1);
+    playCard(state, 0, [2]); // discard Flak Volley to fire Salvage Round (Deal 9)
+    expect(state.enemyHp).toBe(getEnemy(LAMPREY).maxHp - 9);
+    expect(state.ap).toBe(BASELINE_AP - 1);
+    expect(state.discardPile).toContain(salvage);
+    expect(state.discardPile).toContain(fodder);
+    expect(ids(state.hand)).toEqual(['card-missile-salvo']);
+  });
+
+  it('validates the discard selection', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    state.hand = hand('card-salvage-round', 'card-missile-salvo');
+    expect(() => playCard(state, 0)).toThrow('discards exactly 1'); // no targets supplied
+    expect(() => playCard(state, 0, [0])).toThrow('cannot pay its own discard cost');
+    expect(() => playCard(state, 0, [5])).toThrow('no card at discard index');
   });
 });
 
@@ -633,20 +691,29 @@ describe('turn structure (GDD §5.5)', () => {
     }
   });
 
-  it('retain keeps the leftmost cards through the discard step', () => {
+  it('a Retain card survives the discard step; non-retain cards discard', () => {
     const state = createCombat(gunshipRun(), LAMPREY);
-    state.hand = hand(
-      'card-desync-hull',
-      'card-missile-salvo',
-      'card-flak-volley',
-      'card-cannon-burst',
-      'card-reinforce',
-    );
-    playCard(state, 0); // Desync Hull: 0 AP, retain 1
+    // Desync Hull declares `retain`; the rest do not.
+    state.hand = hand('card-missile-salvo', 'card-desync-hull', 'card-flak-volley');
+    const retained = state.hand[1];
     endTurn(state);
-    expect(state.hand[0].cardId).toBe('card-missile-salvo');
+    expect(state.hand).toContain(retained);
     expect(state.hand.length).toBe(HAND_SIZE);
-    expect(state.modifiers.retainCount).toBe(0);
+    expect(ids(state.discardPile)).toContain('card-missile-salvo');
+    expect(ids(state.discardPile)).toContain('card-flak-volley');
+    expect(ids(state.discardPile)).not.toContain('card-desync-hull');
+  });
+
+  it('a malfunctioning instance never retains, even of a Retain card', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    const flagged: CombatCard = {
+      cardId: 'card-desync-hull',
+      moduleIndex: 0,
+      malfunctioning: true,
+    };
+    state.hand = [flagged];
+    endTurn(state);
+    expect(state.discardPile).toContain(flagged);
   });
 
   it('reshuffles the discard pile when the draw pile empties; exhaust stays out', () => {

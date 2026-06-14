@@ -86,6 +86,8 @@ export const MODULE_DEFS: readonly ModuleDef[] = [
     slot: 'weapon',
     tiers: {
       mk1: { cards: ['card-cannon-burst', 'card-cannon-burst'] },
+      // Mk II trades a steady two-hit for a Discard-fueled spike (GDD §5.9).
+      mk2: { cards: ['card-salvage-round', 'card-cannon-burst'] },
     },
   },
 

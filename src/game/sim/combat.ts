@@ -64,8 +64,6 @@ export interface CombatModifiers {
   dodgeChance: number;
   /** Enemy attacks auto-miss while > 0; ticks down once per enemy phase. */
   untargetableTurns: number;
-  /** Cards kept through the next discard step (Desync Hull), leftmost first. */
-  retainCount: number;
   /** Deep Scan — the already-rolled intent is exposed to the UI this turn. */
   intentRevealed: boolean;
 }
@@ -185,7 +183,6 @@ export function createCombat(run: RunState, enemyId: EnemyId, lane?: LaneContext
       enemyVulnerable: 0,
       dodgeChance: 0,
       untargetableTurns: 0,
-      retainCount: 0,
       intentRevealed: false,
     },
     rng: rng.getState(),
@@ -298,7 +295,29 @@ export function isCardPlayable(card: CombatCard): boolean {
   return getCard(card.cardId).unplayable !== true;
 }
 
-export function playCard(state: CombatState, handIndex: number): void {
+/**
+ * The Discard keyword's cost (GDD §5.9): N other cards this card discards from hand as
+ * it plays. Always 0 for a malfunctioning instance — repairing it has no extra cost.
+ */
+export function cardDiscardCost(card: CombatCard): number {
+  return isCardMalfunctioning(card) ? 0 : (getCard(card.cardId).discardCost ?? 0);
+}
+
+/** Whether this card can be Jettisoned right now (GDD §5.9) — never while malfunctioning. */
+export function isCardJettisonable(card: CombatCard): boolean {
+  return !isCardMalfunctioning(card) && getCard(card.cardId).jettison !== undefined;
+}
+
+/**
+ * Plays the card at `handIndex`. `discardIndices` supplies the other-card targets for a
+ * Discard-keyword card (GDD §5.9); it must list exactly `cardDiscardCost` distinct hand
+ * indices, none equal to `handIndex`. The UI resolves the selection; the sim validates it.
+ */
+export function playCard(
+  state: CombatState,
+  handIndex: number,
+  discardIndices: readonly number[] = [],
+): void {
   if (state.outcome !== 'ongoing') {
     throw new Error('combat already ended');
   }
@@ -314,18 +333,27 @@ export function playCard(state: CombatState, handIndex: number): void {
     throw new Error(`cannot afford ${instance.cardId}: costs ${cost} AP, have ${state.ap}`);
   }
 
-  state.ap -= cost;
-  state.hand.splice(handIndex, 1);
-
   if (isCardMalfunctioning(instance)) {
-    // Play-to-repair (§5.6): no card effects. Only *this* instance clears — sibling
-    // cards of the same module stay flagged, so a multi-card module is a multi-play tax.
+    // Play-to-repair (§5.6): no card effects, no discard cost. Only *this* instance
+    // clears — sibling cards of the same module stay flagged, so a multi-card module
+    // is a multi-play tax.
+    state.ap -= cost;
+    state.hand.splice(handIndex, 1);
     instance.malfunctioning = false;
     state.discardPile.push(instance);
     return;
   }
 
   const card = getCard(instance.cardId);
+  const discardCost = card.discardCost ?? 0;
+  validateDiscardSelection(state, handIndex, discardIndices, discardCost);
+  // Resolve the discard targets by reference before any splicing shifts indices.
+  const discards = discardIndices.map((i) => state.hand[i]);
+
+  state.ap -= cost;
+  state.hand = state.hand.filter((c) => c !== instance && !discards.includes(c));
+  state.discardPile.push(...discards);
+
   const rng = restoreRng(state.rng);
   for (const effect of card.effects) {
     applyEffect(state, rng, effect);
@@ -336,6 +364,63 @@ export function playCard(state: CombatState, handIndex: number): void {
   // An engine card may have ended the fight by arrival mid-play — escape stands.
   if (state.outcome === 'ongoing' && state.enemyHp <= 0) {
     state.outcome = 'victory';
+  }
+}
+
+function validateDiscardSelection(
+  state: CombatState,
+  handIndex: number,
+  discardIndices: readonly number[],
+  discardCost: number,
+): void {
+  if (discardIndices.length !== discardCost) {
+    throw new Error(
+      `this card discards exactly ${discardCost} card(s); got ${discardIndices.length}`,
+    );
+  }
+  const seen = new Set<number>();
+  for (const i of discardIndices) {
+    if (!Number.isInteger(i) || i < 0 || i >= state.hand.length) {
+      throw new Error(`no card at discard index ${i}`);
+    }
+    if (i === handIndex) {
+      throw new Error('a card cannot pay its own discard cost');
+    }
+    if (seen.has(i)) {
+      throw new Error(`duplicate discard index ${i}`);
+    }
+    seen.add(i);
+  }
+}
+
+/**
+ * Jettison (GDD §5.9): discard the card at `handIndex` for its declared benefit (Draw N
+ * or +N AP) instead of playing it — costs no AP, the floor that keeps travel cards from
+ * being dead at the boss (§5.4). Throws if the card has no Jettison (or is malfunctioning).
+ */
+export function jettisonCard(state: CombatState, handIndex: number): void {
+  if (state.outcome !== 'ongoing') {
+    throw new Error('combat already ended');
+  }
+  if (!Number.isInteger(handIndex) || handIndex < 0 || handIndex >= state.hand.length) {
+    throw new Error(`no card at hand index ${handIndex}`);
+  }
+  const instance = state.hand[handIndex];
+  if (!isCardJettisonable(instance)) {
+    throw new Error(`${instance.cardId} cannot be jettisoned`);
+  }
+  const jettison = getCard(instance.cardId).jettison;
+  if (jettison === undefined) {
+    throw new Error(`${instance.cardId} cannot be jettisoned`);
+  }
+  state.hand.splice(handIndex, 1);
+  state.discardPile.push(instance);
+  if (jettison.benefit === 'ap') {
+    state.ap += jettison.amount;
+  } else {
+    const rng = restoreRng(state.rng);
+    drawCards(state, rng, jettison.amount);
+    state.rng = rng.getState();
   }
 }
 
@@ -443,9 +528,17 @@ export function endTurn(state: CombatState): void {
   const enemy = getEnemy(state.enemyId);
   const rng = restoreRng(state.rng);
 
-  const kept = Math.min(state.modifiers.retainCount, state.hand.length);
-  state.discardPile.push(...state.hand.splice(kept));
-  state.modifiers.retainCount = 0;
+  // Retain keyword (GDD §5.9): cards declaring `retain` survive the discard step and
+  // stay in hand; a malfunctioning instance never retains (it presents as a repair card).
+  const retained: CombatCard[] = [];
+  for (const card of state.hand) {
+    if (!card.malfunctioning && getCard(card.cardId).retain === true) {
+      retained.push(card);
+    } else {
+      state.discardPile.push(card);
+    }
+  }
+  state.hand = retained;
 
   // Snapshot before the attack so a layer spent this phase doesn't also tick this
   // phase — rechargeTurns counts full enemy phases the layer stays down.
@@ -598,9 +691,6 @@ function applyEffect(state: CombatState, rng: Rng, effect: CardEffect): void {
       break;
     case 'gain-scrap':
       state.scrapGained += effect.amount;
-      break;
-    case 'retain-cards':
-      state.modifiers.retainCount += effect.count;
       break;
     case 'strip-armor':
       // Gone for the rest of the turn — regen brings it back after the enemy phase.

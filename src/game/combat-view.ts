@@ -280,8 +280,6 @@ function describeEffect(effect: CardEffect): string {
       return effect.count === 1 ? 'Draw a card' : `Draw ${effect.count} cards`;
     case 'gain-scrap':
       return `+${effect.amount} Scrap`;
-    case 'retain-cards':
-      return effect.count === 1 ? 'Retain a card' : `Retain ${effect.count} cards`;
     case 'strip-armor':
       return 'Strip armor';
     case 'repair-all-modules':

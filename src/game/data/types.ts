@@ -38,7 +38,6 @@ export type CardEffect =
   | { kind: 'reveal-intent' }
   | { kind: 'draw'; count: number }
   | { kind: 'gain-scrap'; amount: number }
-  | { kind: 'retain-cards'; count: number }
   | { kind: 'repair-all-modules' };
 
 /**
