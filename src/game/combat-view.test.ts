@@ -4,6 +4,7 @@ import { buildCombatView } from './combat-view';
 import { getEnemy, MALFUNCTION_REPAIR_AP } from './data';
 import type { CombatCard } from './sim/deck';
 import { activateInnate, createCombat, endTurn, playCard } from './sim/combat';
+import type { CombatState } from './sim/combat';
 import { createRunState, STARTING_HULL_HP } from './sim/run-state';
 
 const LAMPREY = 'enemy-lamprey';
@@ -16,7 +17,18 @@ function gunshipCombat(seed = 'view-test') {
 
 /** Fabricates hand instances for scripted tests; module 0 unless a test flips it. */
 function hand(...cardIds: string[]): CombatCard[] {
-  return cardIds.map((cardId) => ({ cardId, moduleIndex: 0 }));
+  return cardIds.map((cardId) => ({ cardId, moduleIndex: 0, malfunctioning: false }));
+}
+
+/** Flags every card instance of a module across all of a state's piles (GDD §5.6). */
+function flagModule(state: CombatState, moduleIndex: number): void {
+  for (const pile of [state.drawPile, state.hand, state.discardPile, state.exhaustPile]) {
+    for (const card of pile) {
+      if (card.moduleIndex === moduleIndex) {
+        card.malfunctioning = true;
+      }
+    }
+  }
 }
 
 describe('buildCombatView', () => {
@@ -71,10 +83,9 @@ describe('buildCombatView', () => {
 
   it('presents a flipped card as its Malfunction form (GDD §5.6)', () => {
     const state = gunshipCombat();
-    state.malfunctioning = [0]; // Flak Array
     state.hand = [
-      { cardId: 'card-flak-volley', moduleIndex: 0 },
-      { cardId: 'card-missile-salvo', moduleIndex: 1 },
+      { cardId: 'card-flak-volley', moduleIndex: 0, malfunctioning: true }, // Flak Array down
+      { cardId: 'card-missile-salvo', moduleIndex: 1, malfunctioning: false },
     ];
     const [damaged, normal] = buildCombatView(state).hand;
     expect(damaged.malfunction).toBe(true);
@@ -89,7 +100,7 @@ describe('buildCombatView', () => {
 
   it('lists modules with their malfunction status', () => {
     const state = gunshipCombat();
-    state.malfunctioning = [1];
+    flagModule(state, 1);
     const view = buildCombatView(state);
     expect(view.modules.map((m) => m.name)).toEqual([
       'Flak Array',
@@ -175,13 +186,15 @@ describe('buildCombatView', () => {
 
   it('renders injected Infestations as unplayable', () => {
     const state = createCombat(createRunState('view-test', 'hull-gunship'), SPORECASTER);
-    state.hand = [{ cardId: 'card-spore-cluster', moduleIndex: null }];
+    state.hand = [{ cardId: 'card-spore-cluster', moduleIndex: null, malfunctioning: false }];
     const [card] = buildCombatView(state).hand;
     expect(card.name).toBe('Spore Cluster');
     expect(card.unplayable).toBe(true);
     expect(card.affordable).toBe(false);
     expect(card.malfunction).toBe(false);
-    expect(card.text).toBe('Unplayable · Drawn: −1 shield layer');
+    // Jettison is the escape valve for the clog (GDD §5.6) — it reads on the card.
+    expect(card.text).toBe('Unplayable · Drawn: −1 shield layer · Jettison to clear');
+    expect(card.jettisonable).toBe(true);
   });
 
   it('reflects shield recharge after a layer absorbs a hit', () => {

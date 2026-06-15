@@ -5,7 +5,9 @@ import { POD_WINDOW_MS } from '@/game/data/surface';
 import { computeScale, VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from '@/renderer/pixel-scale';
 import type { CombatView } from './combat-view';
 import { getEnemy, getHull, getModule } from './data';
-import type { EnemyId, ModuleInstance } from './data';
+import type { EnemyId, EventDef, ModuleInstance } from './data';
+import { buildEventView } from './event-view';
+import type { EventView } from './event-view';
 import { buildMapView } from './map-view';
 import type { MapView } from './map-view';
 import { startCombatMode } from './modes/combat-mode';
@@ -23,6 +25,7 @@ import {
   upgradeModule,
   upgradeReactor,
 } from './sim/economy';
+import { applyEventChoice, pickEvent } from './sim/events';
 import { generateSectorMap, getNode, edgesFrom } from './sim/map-gen';
 import type { LaneParams, SectorMap } from './sim/map-gen';
 import { createRunState } from './sim/run-state';
@@ -74,6 +77,7 @@ export type {
 } from './combat-view';
 export type { SurfaceItemView, SurfaceView } from './surface-view';
 export type { MapEdgeView, MapNodeView, MapView } from './map-view';
+export type { EventChoiceView, EventView } from './event-view';
 export type { ShipModuleView, CargoModuleView, ShipView } from './ship-view';
 export type {
   ShopOfferView,
@@ -92,6 +96,7 @@ export type GamePhase =
   | 'surface'
   | 'shop'
   | 'engineer'
+  | 'event'
   | 'boss-reward'
   | 'run-over'
   | 'sector-complete';
@@ -112,12 +117,19 @@ export interface GameCallbacks {
   onShipUpdate?(view: ShipView): void;
   /** Fired on shop/engineer phase entry and after each station transaction. */
   onStationUpdate?(view: StationView): void;
+  /** Fired on event phase entry — the EventScreen reads this (GDD §4.4). */
+  onEventUpdate?(view: EventView): void;
 }
 
 export interface GameHandle {
   /** Seed of the active run (the resumed seed after RESUME RUN). */
   readonly seed: string;
-  playCard(handIndex: number): void;
+  /** Plays a card; `discardIndices` supplies targets for a Discard-keyword card (§5.9). */
+  playCard(handIndex: number, discardIndices?: readonly number[]): void;
+  /** Jettison a card for its benefit instead of playing it (GDD §5.9 / §5.4). */
+  jettisonCard(handIndex: number): void;
+  /** Focus single-target attacks on a boss organ (GDD §5.4); null = the core. */
+  selectTarget(target: number | null): void;
   /** Hull innate ability; handIndex only for card-targeted innates (Slipstream). */
   useInnate(handIndex?: number): void;
   endTurn(): void;
@@ -165,6 +177,11 @@ export interface GameHandle {
   upgradeModule(moduleIndex: number): void;
   /** Shop/engineer: leave the station and return to the map. */
   leaveStation(): void;
+  /**
+   * Event phase: resolve a choice (GDD §4.4). `moduleIndex` is required for choices
+   * that attach a modifier to an installed module; the run returns to the map.
+   */
+  chooseEventChoice(choiceIndex: number, moduleIndex?: number): void;
   /** Boss reward phase: pick one of the three options. */
   chooseBossReward(option: BossRewardOption): void;
   destroy(): void;
@@ -355,6 +372,8 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   let laneDestination: string | null = null;
   /** Run loaded from storage, held until the title screen resolves. */
   let savedRun: RunState | null = null;
+  /** The event presented at the current node, held while the player chooses (GDD §4.4). */
+  let currentEvent: EventDef | null = null;
 
   const setPhase = (next: GamePhase): void => {
     phase = next;
@@ -427,6 +446,17 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     setPhase('engineer');
   };
 
+  const enterEvent = (): void => {
+    const nodeId = run.position.nodeId;
+    if (nodeId === null) return;
+    // Deterministic per node (ADR 005) — resume lands on the same event.
+    currentEvent = pickEvent(run.seed, run.position.sector, nodeId);
+    store.save(run);
+    callbacks.onEventUpdate?.(buildEventView(run, currentEvent));
+    callbacks.onShipUpdate?.(buildShipView(run));
+    setPhase('event');
+  };
+
   const emitShipAndStation = (): void => {
     callbacks.onShipUpdate?.(buildShipView(run));
     if (phase === 'shop') {
@@ -480,6 +510,10 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       enterEngineer();
       return;
     }
+    if (node.type === 'event') {
+      enterEvent();
+      return;
+    }
     if (node.type === 'gate') {
       startBossFight();
       return;
@@ -506,8 +540,14 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     get seed(): string {
       return run.seed;
     },
-    playCard(handIndex: number): void {
-      combatMode?.playCard(handIndex);
+    playCard(handIndex: number, discardIndices?: readonly number[]): void {
+      combatMode?.playCard(handIndex, discardIndices);
+    },
+    jettisonCard(handIndex: number): void {
+      combatMode?.jettisonCard(handIndex);
+    },
+    selectTarget(target: number | null): void {
+      combatMode?.selectTarget(target);
     },
     useInnate(handIndex?: number): void {
       combatMode?.useInnate(handIndex);
@@ -641,6 +681,31 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     },
     leaveStation(): void {
       if (phase !== 'shop' && phase !== 'engineer') return;
+      enterMap();
+    },
+    chooseEventChoice(choiceIndex: number, moduleIndex?: number): void {
+      if (phase !== 'event' || currentEvent === null) return;
+      const choice = currentEvent.choices[choiceIndex];
+      if (choice === undefined) return;
+      // Guard a module-target choice before touching the sim — a stale tap is a no-op.
+      if (choice.requiresModuleTarget === true) {
+        if (
+          moduleIndex === undefined ||
+          !Number.isInteger(moduleIndex) ||
+          moduleIndex < 0 ||
+          moduleIndex >= run.modules.length
+        ) {
+          return;
+        }
+      }
+      // A cost the player can't pay is a no-op (UI marks it unaffordable).
+      for (const outcome of choice.outcomes) {
+        if (outcome.kind === 'lose-resources' && run.resources[outcome.resource] < outcome.amount) {
+          return;
+        }
+      }
+      applyEventChoice(run, currentEvent.id, choiceIndex, moduleIndex);
+      currentEvent = null;
       enterMap();
     },
     chooseBossReward(option: BossRewardOption): void {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { getEnemy } from '../data';
 import { createRunState } from './run-state';
 import { advanceLane, createLane } from './travel';
 import type { LaneState } from './travel';
@@ -54,6 +55,16 @@ describe('createLane', () => {
   it('a forced single-enemy pool fills every encounter (the ?enemy= knob)', () => {
     const result = createLane(createRunState('forced'), PARAMS, ['enemy-anchormaw']);
     expect(result.encounters.map((e) => e.enemyId)).toEqual(['enemy-anchormaw', 'enemy-anchormaw']);
+  });
+
+  it('never rolls a gate boss into the default lane pool', () => {
+    const params = { distance: 20, encounterCount: 5 };
+    for (let i = 0; i < 200; i++) {
+      const result = createLane(createRunState(`no-boss-${i}`), params);
+      for (const encounter of result.encounters) {
+        expect(getEnemy(encounter.enemyId).boss).toBeFalsy();
+      }
+    }
   });
 });
 

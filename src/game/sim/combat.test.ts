@@ -1,22 +1,27 @@
 import { describe, expect, it } from 'vitest';
 
-import { BASELINE_AP, getEnemy, HAND_SIZE, MALFUNCTION_REPAIR_AP } from '../data';
+import { BASELINE_AP, getCard, getEnemy, HAND_SIZE, MALFUNCTION_REPAIR_AP } from '../data';
 import type { CombatState } from './combat';
 import {
   applyCombatResult,
   canPayToll,
   canUseInnate,
+  cardDiscardCost,
   cardPlayCost,
   createCombat,
   currentIntent,
   endTurn,
+  isCardJettisonable,
   isCardMalfunctioning,
   isCardPlayable,
   isTravelAnchored,
+  jettisonCard,
+  malfunctioningModules,
   payToll,
   playCard,
   activateInnate,
   rollVictoryScrap,
+  selectTarget,
 } from './combat';
 import type { LaneContext } from './combat';
 import type { CombatCard } from './deck';
@@ -41,7 +46,21 @@ function scoutRun(seed = 'combat-test'): RunState {
 
 /** Fabricates hand instances for scripted tests; module 0 unless a test flips it. */
 function hand(...cardIds: string[]): CombatCard[] {
-  return cardIds.map((cardId) => ({ cardId, moduleIndex: 0 }));
+  return cardIds.map((cardId) => ({ cardId, moduleIndex: 0, malfunctioning: false }));
+}
+
+/**
+ * Flags every card instance of a module across all of a state's piles — the test-side
+ * mirror of the engine's internal hit-flagging, so tests can set up partial damage.
+ */
+function flagModule(state: CombatState, moduleIndex: number): void {
+  for (const pile of [state.drawPile, state.hand, state.discardPile, state.exhaustPile]) {
+    for (const card of pile) {
+      if (card.moduleIndex === moduleIndex) {
+        card.malfunctioning = true;
+      }
+    }
+  }
 }
 
 function ids(pile: readonly CombatCard[]): string[] {
@@ -116,7 +135,7 @@ describe('createCombat', () => {
     expect(state.outcome).toBe('ongoing');
     expect(state.travelProgress).toBe(0);
     expect(state.scrapGained).toBe(0);
-    expect(state.malfunctioning).toEqual([]);
+    expect(malfunctioningModules(state)).toEqual([]);
     expect(state.innateUsedThisTurn).toBe(false);
     expect(state.innateUsedThisCombat).toBe(false);
   });
@@ -197,7 +216,7 @@ describe('determinism (ADR 003)', () => {
     const rerun = createCombat(gunshipRun('parasite-seed'), PARASITE);
     replay(rerun, log);
     expect(rerun).toEqual(reference);
-    expect(rerun.malfunctioning).toEqual(reference.malfunctioning);
+    expect(malfunctioningModules(rerun)).toEqual(malfunctioningModules(reference));
   });
 
   it('different seeds shuffle differently', () => {
@@ -247,6 +266,110 @@ describe('playCard', () => {
     playCard(state, findInHand(state, 'card-missile-salvo'));
     expect(state.enemyHp).toBe(0);
     expect(state.outcome).toBe('victory');
+  });
+});
+
+describe('Jettison keyword (GDD §5.9)', () => {
+  it('discards the card for its benefit and costs no AP', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    state.hand = hand('card-afterburner', 'card-missile-salvo');
+    state.ap = 1;
+    const afterburner = state.hand[0];
+    expect(isCardJettisonable(afterburner)).toBe(true);
+    jettisonCard(state, 0); // Afterburner: Jettison → +1 AP
+    expect(state.ap).toBe(2);
+    expect(state.travelProgress).toBe(0); // the travel effect did NOT run
+    expect(state.discardPile).toContain(afterburner);
+    expect(ids(state.hand)).toEqual(['card-missile-salvo']);
+  });
+
+  it('exhausts an exhaust card so injected clog clears for good (Spore Cluster)', () => {
+    const state = createCombat(gunshipRun(), SPORECASTER);
+    state.hand = hand('card-spore-cluster');
+    const spore = state.hand[0];
+    expect(isCardJettisonable(spore)).toBe(true);
+    jettisonCard(state, 0);
+    // Goes to the exhaust pile, not discard — it can never reshuffle back into the fight.
+    expect(state.exhaustPile).toContain(spore);
+    expect(state.discardPile).not.toContain(spore);
+    expect(ids(state.hand)).toEqual([]);
+  });
+
+  it('throws for a card with no Jettison, and a malfunctioning instance refuses', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    state.hand = hand('card-missile-salvo');
+    expect(isCardJettisonable(state.hand[0])).toBe(false);
+    expect(() => jettisonCard(state, 0)).toThrow('cannot be jettisoned');
+
+    const flagged: CombatCard = {
+      cardId: 'card-afterburner',
+      moduleIndex: 0,
+      malfunctioning: true,
+    };
+    state.hand = [flagged];
+    expect(isCardJettisonable(flagged)).toBe(false);
+    expect(() => jettisonCard(state, 0)).toThrow('cannot be jettisoned');
+  });
+});
+
+describe('Discard keyword (GDD §5.9)', () => {
+  it('discards the chosen card as a cost, then resolves the card', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    state.hand = hand('card-salvage-round', 'card-missile-salvo', 'card-flak-volley');
+    const salvage = state.hand[0];
+    const fodder = state.hand[2];
+    expect(cardDiscardCost(salvage)).toBe(1);
+    playCard(state, 0, [2]); // discard Flak Volley to fire Salvage Round (Deal 9)
+    expect(state.enemyHp).toBe(getEnemy(LAMPREY).maxHp - 9);
+    expect(state.ap).toBe(BASELINE_AP - 1);
+    expect(state.discardPile).toContain(salvage);
+    expect(state.discardPile).toContain(fodder);
+    expect(ids(state.hand)).toEqual(['card-missile-salvo']);
+  });
+
+  it('validates the discard selection', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    state.hand = hand('card-salvage-round', 'card-missile-salvo');
+    expect(() => playCard(state, 0)).toThrow('discards exactly 1'); // no targets supplied
+    expect(() => playCard(state, 0, [0])).toThrow('cannot pay its own discard cost');
+    expect(() => playCard(state, 0, [5])).toThrow('no card at discard index');
+  });
+});
+
+describe('module modifiers in combat (GDD §6.6)', () => {
+  it('apCostDelta lowers the play cost, floored at 0', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    const cheap: CombatCard = {
+      cardId: 'card-missile-salvo', // base 2 AP
+      moduleIndex: 0,
+      malfunctioning: false,
+      apCostDelta: 1,
+    };
+    expect(cardPlayCost(state, cheap)).toBe(1);
+  });
+
+  it('bonusEffects fire after the card resolves', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    state.hand = [
+      {
+        cardId: 'card-missile-salvo',
+        moduleIndex: 0,
+        malfunctioning: false,
+        bonusEffects: [{ kind: 'draw', count: 1 }],
+      },
+    ];
+    playCard(state, 0);
+    expect(state.enemyHp).toBe(getEnemy(LAMPREY).maxHp - 8);
+    expect(state.hand.length).toBe(1); // played 1, drew 1 back
+  });
+});
+
+describe('Cleave keyword (GDD §5.9)', () => {
+  it('hits the core like any attack while the enemy has no organs', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    state.hand = hand('card-scatter-shell'); // Deal 6 to all · piercing
+    playCard(state, 0);
+    expect(state.enemyHp).toBe(getEnemy(LAMPREY).maxHp - 6);
   });
 });
 
@@ -323,14 +446,24 @@ describe('malfunctions (GDD §5.6)', () => {
     const state = createCombat(scoutRun(), PARASITE);
     endTurn(state);
     expect(state.hullHp).toBe(97);
-    expect(state.malfunctioning).toEqual([1]);
+    expect(malfunctioningModules(state)).toEqual([1]);
+  });
+
+  it('flags every card instance of the hit module, not just one', () => {
+    const state = createCombat(scoutRun(), PARASITE);
+    endTurn(state); // Phase Shifter (index 1) hunted first
+    const phaseShifterCards = [...state.drawPile, ...state.hand, ...state.discardPile].filter(
+      (c) => c.moduleIndex === 1,
+    );
+    expect(phaseShifterCards.length).toBeGreaterThan(1);
+    expect(phaseShifterCards.every((c) => c.malfunctioning)).toBe(true);
   });
 
   it('a shield layer that absorbs the hit absorbs the malfunction too (§5.2)', () => {
     const state = createCombat(gunshipRun(), PARASITE);
     endTurn(state); // Burrow eaten by a Shield Generator layer
     expect(state.hullHp).toBe(100);
-    expect(state.malfunctioning).toEqual([]);
+    expect(malfunctioningModules(state)).toEqual([]);
     expect(state.shields.filter((l) => l.turnsUntilUp > 0).length).toBe(1);
   });
 
@@ -339,7 +472,7 @@ describe('malfunctions (GDD §5.6)', () => {
     state.intentIndex = 2; // Rend: 9 dmg, piercing, random module
     endTurn(state);
     expect(state.hullHp).toBe(91);
-    expect(state.malfunctioning.length).toBe(1);
+    expect(malfunctioningModules(state).length).toBe(1);
     expect(state.shields.map((l) => l.turnsUntilUp)).toEqual([0, 0]);
   });
 
@@ -349,14 +482,17 @@ describe('malfunctions (GDD §5.6)', () => {
     playCard(state, 0);
     endTurn(state);
     expect(state.hullHp).toBe(100);
-    expect(state.malfunctioning).toEqual([]);
+    expect(malfunctioningModules(state)).toEqual([]);
   });
 
   it('flipped cards cost the repair AP regardless of their printed cost', () => {
     const state = createCombat(scoutRun(), PARASITE);
-    state.malfunctioning = [2]; // a Thruster
-    const afterburner: CombatCard = { cardId: 'card-afterburner', moduleIndex: 2 };
-    expect(isCardMalfunctioning(state, afterburner)).toBe(true);
+    const afterburner: CombatCard = {
+      cardId: 'card-afterburner',
+      moduleIndex: 2,
+      malfunctioning: true,
+    };
+    expect(isCardMalfunctioning(afterburner)).toBe(true);
     expect(cardPlayCost(state, afterburner)).toBe(MALFUNCTION_REPAIR_AP);
     state.hand = [afterburner];
     state.ap = 1; // printed cost is 2 — unaffordable if it weren't flipped
@@ -364,49 +500,68 @@ describe('malfunctions (GDD §5.6)', () => {
     expect(state.ap).toBe(0);
   });
 
-  it('playing a flipped card repairs the module and applies no card effects', () => {
+  it('playing a flipped card clears only that instance and applies no card effects', () => {
     const state = createCombat(scoutRun(), PARASITE);
-    state.malfunctioning = [1]; // Phase Shifter
-    state.hand = [{ cardId: 'card-ghost-shift', moduleIndex: 1 }];
+    flagModule(state, 1); // Phase Shifter — all its instances down
+    expect(malfunctioningModules(state)).toEqual([1]);
+    state.hand = [{ cardId: 'card-ghost-shift', moduleIndex: 1, malfunctioning: true }];
     playCard(state, 0);
-    expect(state.malfunctioning).toEqual([]);
     expect(state.modifiers.dodgeChance).toBe(0); // Ghost Shift's effect did NOT run
     expect(state.ap).toBe(BASELINE_AP - MALFUNCTION_REPAIR_AP);
-    // The card returns to the discard pile, presenting as its normal form again.
+    // The played card returns to the discard pile in normal form...
     expect(ids(state.discardPile)).toEqual(['card-ghost-shift']);
-    expect(isCardMalfunctioning(state, state.discardPile[0])).toBe(false);
+    expect(isCardMalfunctioning(state.discardPile[0])).toBe(false);
+    // ...but the module's other instances (in the draw pile) are still flagged.
+    expect(malfunctioningModules(state)).toEqual([1]);
+  });
+
+  it('a module is operational again only once all its instances are repaired', () => {
+    const state = createCombat(scoutRun(), PARASITE);
+    flagModule(state, 1); // Phase Shifter contributes 3 cards
+    const flagged = [state.drawPile, state.hand]
+      .flat()
+      .filter((c) => c.moduleIndex === 1 && c.malfunctioning);
+    expect(flagged.length).toBe(3);
+    // Repair each in turn; the module stays malfunctioning until the last clears.
+    for (let i = 0; i < flagged.length; i++) {
+      expect(malfunctioningModules(state)).toEqual([1]);
+      flagged[i].malfunctioning = false;
+    }
+    expect(malfunctioningModules(state)).toEqual([]);
   });
 
   it('only the hit module flips — its twin keeps its cards', () => {
-    const state = createCombat(scoutRun(), PARASITE);
-    state.malfunctioning = [2]; // first Thruster; the second is module index 3
-    const flipped: CombatCard = { cardId: 'card-burn', moduleIndex: 2 };
-    const twin: CombatCard = { cardId: 'card-burn', moduleIndex: 3 };
-    expect(isCardMalfunctioning(state, flipped)).toBe(true);
-    expect(isCardMalfunctioning(state, twin)).toBe(false);
+    const flipped: CombatCard = { cardId: 'card-burn', moduleIndex: 2, malfunctioning: true };
+    const twin: CombatCard = { cardId: 'card-burn', moduleIndex: 3, malfunctioning: false };
+    expect(isCardMalfunctioning(flipped)).toBe(true);
+    expect(isCardMalfunctioning(twin)).toBe(false);
   });
 
   it('an already-flipped module cannot flip twice — the hunt moves on', () => {
     const state = createCombat(scoutRun(), PARASITE);
-    state.malfunctioning = [1];
+    flagModule(state, 1);
     endTurn(state); // Burrow: next-best operational module is the first Thruster
-    expect(state.malfunctioning).toEqual([1, 2]);
+    expect(malfunctioningModules(state)).toEqual([1, 2]);
   });
 
   it('with every module down, a module hit is plain hull damage', () => {
     const state = createCombat(scoutRun(), PARASITE);
-    state.malfunctioning = [0, 1, 2, 3, 4];
+    for (const index of [0, 1, 2, 3, 4]) {
+      flagModule(state, index);
+    }
     endTurn(state);
     expect(state.hullHp).toBe(97);
-    expect(state.malfunctioning).toEqual([0, 1, 2, 3, 4]);
+    expect(malfunctioningModules(state)).toEqual([0, 1, 2, 3, 4]);
   });
 
   it('repair-all-modules (Repair Clone) clears every malfunction at once', () => {
     const state = createCombat(scoutRun(), PARASITE);
-    state.malfunctioning = [1, 2, 3];
+    for (const index of [1, 2, 3]) {
+      flagModule(state, index);
+    }
     state.hand = hand('card-repair-clone');
     playCard(state, 0);
-    expect(state.malfunctioning).toEqual([]);
+    expect(malfunctioningModules(state)).toEqual([]);
     expect(state.ap).toBe(BASELINE_AP - 2);
   });
 });
@@ -574,32 +729,48 @@ describe('shields and the enemy phase', () => {
 });
 
 describe('turn structure (GDD §5.5)', () => {
-  it('discards unplayed cards and redraws to 5', () => {
+  it('discards unplayed cards and redraws to 5 — but keeps Retain cards in hand', () => {
     const state = createCombat(gunshipRun(), LAMPREY);
-    const unplayed = ids(state.hand);
+    const unplayed = state.hand.map((c) => c.cardId);
+    const retained = state.hand
+      .filter((c) => getCard(c.cardId).retain === true)
+      .map((c) => c.cardId);
     endTurn(state);
     expect(state.hand.length).toBe(HAND_SIZE);
     expect(state.turn).toBe(2);
     expect(state.ap).toBe(BASELINE_AP);
     for (const cardId of unplayed) {
-      expect(ids(state.discardPile)).toContain(cardId);
+      if (retained.includes(cardId)) {
+        expect(ids(state.hand)).toContain(cardId); // Retain (e.g. Reinforce) stayed
+      } else {
+        expect(ids(state.discardPile)).toContain(cardId);
+      }
     }
   });
 
-  it('retain keeps the leftmost cards through the discard step', () => {
+  it('a Retain card survives the discard step; non-retain cards discard', () => {
     const state = createCombat(gunshipRun(), LAMPREY);
-    state.hand = hand(
-      'card-desync-hull',
-      'card-missile-salvo',
-      'card-flak-volley',
-      'card-cannon-burst',
-      'card-reinforce',
-    );
-    playCard(state, 0); // Desync Hull: 0 AP, retain 1
+    // Desync Hull declares `retain`; the rest do not.
+    state.hand = hand('card-missile-salvo', 'card-desync-hull', 'card-flak-volley');
+    const retained = state.hand[1];
     endTurn(state);
-    expect(state.hand[0].cardId).toBe('card-missile-salvo');
+    expect(state.hand).toContain(retained);
     expect(state.hand.length).toBe(HAND_SIZE);
-    expect(state.modifiers.retainCount).toBe(0);
+    expect(ids(state.discardPile)).toContain('card-missile-salvo');
+    expect(ids(state.discardPile)).toContain('card-flak-volley');
+    expect(ids(state.discardPile)).not.toContain('card-desync-hull');
+  });
+
+  it('a malfunctioning instance never retains, even of a Retain card', () => {
+    const state = createCombat(gunshipRun(), LAMPREY);
+    const flagged: CombatCard = {
+      cardId: 'card-desync-hull',
+      moduleIndex: 0,
+      malfunctioning: true,
+    };
+    state.hand = [flagged];
+    endTurn(state);
+    expect(state.discardPile).toContain(flagged);
   });
 
   it('reshuffles the discard pile when the draw pile empties; exhaust stays out', () => {
@@ -741,7 +912,7 @@ describe('lanes and travel', () => {
   it('carries the lane snapshot and earlier malfunctions into the fight', () => {
     const state = createCombat(gunshipRun(), LAMPREY, laneCtx(9, 2, [1]));
     expect(state.lane).toEqual({ distance: 9, progressAtStart: 2 });
-    expect(state.malfunctioning).toEqual([1]);
+    expect(malfunctioningModules(state)).toEqual([1]);
   });
 
   it('a survived full turn is a turn of travel', () => {
@@ -828,7 +999,7 @@ describe('lanes and travel', () => {
     let state = createCombat(gunshipRun(), ANCHORMAW, laneCtx(9, 3, [0]));
     state = JSON.parse(JSON.stringify(state)) as CombatState;
     expect(state.lane).toEqual({ distance: 9, progressAtStart: 3 });
-    expect(state.malfunctioning).toEqual([0]);
+    expect(malfunctioningModules(state)).toEqual([0]);
     expect(isTravelAnchored(state)).toBe(true);
     endTurn(state);
     expect(state.travelProgress).toBe(0);
@@ -908,7 +1079,7 @@ describe('Infestations (GDD §5.6)', () => {
   const SPORE = 'card-spore-cluster';
 
   function sporeCard(): CombatCard {
-    return { cardId: SPORE, moduleIndex: null };
+    return { cardId: SPORE, moduleIndex: null, malfunctioning: false };
   }
 
   it('inject inserts the cards into the draw pile with no module', () => {
@@ -950,9 +1121,9 @@ describe('Infestations (GDD §5.6)', () => {
   });
 
   it('an injected card can never present as a Malfunction', () => {
-    const state = createCombat(gunshipRun(), SPORECASTER);
-    state.malfunctioning = [0, 1];
-    expect(isCardMalfunctioning(state, sporeCard())).toBe(false);
+    // An injected card carries moduleIndex null and is never flagged, so even if every
+    // real module is down it can't present as a Malfunction.
+    expect(isCardMalfunctioning(sporeCard())).toBe(false);
   });
 
   it('Spore Cluster drops a shield layer as it is drawn — mid-card draws included', () => {
@@ -1038,5 +1209,96 @@ describe('boss phases (GDD §7.5)', () => {
     endTurn(state);
     expect(state.travelProgress).toBe(0);
     expect(state.outcome).toBe('ongoing');
+  });
+});
+
+describe('enemy organs (GDD §5.4)', () => {
+  const spores = (state: CombatState): number =>
+    [...state.drawPile, ...state.hand, ...state.discardPile].filter(
+      (c) => c.cardId === 'card-spore-cluster',
+    ).length;
+
+  it('initializes organ HP from the enemy parts; non-organ enemies have none', () => {
+    expect(createCombat(gunshipRun(), GATEMAW).partHp).toEqual([18, 22]);
+    expect(createCombat(gunshipRun(), LAMPREY).partHp).toEqual([]);
+  });
+
+  it('the Spore-Sac injects a spore each enemy turn while alive', () => {
+    const state = createCombat(gunshipRun('organs'), GATEMAW);
+    endTurn(state);
+    expect(spores(state)).toBe(1);
+  });
+
+  it('destroying the Spore-Sac stops injection and staggers the enemy', () => {
+    const state = createCombat(gunshipRun('organs'), GATEMAW);
+    state.partHp[0] = 4;
+    selectTarget(state, 0);
+    state.hand = hand('card-missile-salvo'); // 8 → kills the 4-HP sac
+    playCard(state, 0);
+    expect(state.partHp[0]).toBe(0);
+    expect(state.staggered).toBe(true);
+    const hullBefore = state.hullHp;
+    endTurn(state); // staggered: no enemy attack; sac dead: no spore
+    expect(state.hullHp).toBe(hullBefore);
+    expect(spores(state)).toBe(0);
+    expect(state.staggered).toBe(false);
+  });
+
+  it('armor regrows while the Armor-Node lives, and stops once it dies', () => {
+    const state = createCombat(gunshipRun('organs'), GATEMAW);
+    state.enemyArmor = 2;
+    endTurn(state); // armor-node alive → +3 regrow (capped 8)
+    expect(state.enemyArmor).toBe(5);
+
+    state.partHp[1] = 5;
+    selectTarget(state, 1);
+    state.hand = hand('card-missile-salvo'); // 8 → kills the armor-node
+    playCard(state, 0);
+    expect(state.partHp[1]).toBe(0);
+    expect(state.armorBroken).toBe(true);
+    expect(state.enemyArmor).toBe(0); // break-armor zeroes it
+
+    state.enemyArmor = 2;
+    endTurn(state); // armor-node dead → no regrow
+    expect(state.enemyArmor).toBe(2);
+  });
+
+  it('Cleave hits the core and every living organ at once', () => {
+    const state = createCombat(gunshipRun('organs'), GATEMAW);
+    const coreBefore = state.enemyHp;
+    state.hand = hand('card-scatter-shell'); // 6 to all, piercing (bypasses armor)
+    playCard(state, 0);
+    expect(state.enemyHp).toBe(coreBefore - 6);
+    expect(state.partHp).toEqual([12, 16]);
+  });
+
+  it('single-target fire hits only the selected organ; the default is the core', () => {
+    const state = createCombat(gunshipRun('organs'), GATEMAW);
+    expect(state.targetPart).toBeNull();
+    const coreBefore = state.enemyHp;
+    selectTarget(state, 1);
+    state.hand = hand('card-missile-salvo'); // 8, organs have no armor
+    playCard(state, 0);
+    expect(state.partHp[1]).toBe(22 - 8);
+    expect(state.partHp[0]).toBe(18);
+    expect(state.enemyHp).toBe(coreBefore);
+  });
+
+  it('the core can be killed with organs still alive (organs are pressure, not a gate)', () => {
+    const state = createCombat(gunshipRun('organs'), GATEMAW);
+    state.enemyHp = 5;
+    state.enemyArmor = 0;
+    state.hand = hand('card-missile-salvo'); // 8 → core dies
+    playCard(state, 0);
+    expect(state.enemyHp).toBe(0);
+    expect(state.outcome).toBe('victory');
+    expect(state.partHp[0]).toBeGreaterThan(0);
+  });
+
+  it('selectTarget ignores a dead organ', () => {
+    const state = createCombat(gunshipRun('organs'), GATEMAW);
+    state.partHp[0] = 0;
+    selectTarget(state, 0);
+    expect(state.targetPart).toBeNull();
   });
 });

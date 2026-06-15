@@ -162,7 +162,7 @@ Every card falls into one of three tactical categories. A hand of 5 cards forces
 
 The balance of these three axes in your deck depends entirely on your module loadout.
 
-> **Design question (travel cards vs. boss fights):** Engine cards are dead draws during the sector boss — there is no lane distance to shorten at the gate. Three paths to resolve before Act 1 balance lock: (a) **dual-mode Thruster cards** — add a secondary combat effect (e.g. weak shield, Draw 1, 1 AP refund on discard) so they're never fully useless; (b) **Jettison keyword** — any card with Jettison can be discarded for a small benefit (Draw 1, or +1 AP) even if its primary effect is inapplicable; (c) **intentional tension** — speed costs combat power by design, but this only works if players had a real choice about installing Engine modules (valid with hull variety). See roadmap 5.5.
+> **Design question (travel cards vs. boss fights) — RESOLVED (mega-slice 4): (a) dual-mode + (b) Jettison, both.** Every Engine card now carries an on-play `Draw 1` *and* the Jettison keyword, so engine cards are a net positive in any fight and never fully dead at the gate. (Original options for the record: (a) dual-mode Thruster cards; (b) Jettison keyword; (c) intentional tension — rejected, only valid with real hull choice, and hull select is still a knob.)
 
 ### 5.5 Turn Structure
 
@@ -235,6 +235,16 @@ Keywords give cards mechanical identity beyond raw damage/shield numbers. Each k
 | **Jettison** *(design question)* | This card may be discarded from hand for a reduced benefit (e.g. draw 1, or gain 1 AP) even if its primary effect is inapplicable. Targets Engine cards during boss fights — see §5.4. |
 
 **Design intent:** keywords create synergy axes. A module whose cards say *Discard* pairs with a module whose innate ability rewards discarding. *Retain* creates a short-term resource that accumulates across turns. *Exhaust* lets you include high-power one-shots without deck consistency issues. Every module in the catalog (§5.8) should have at least one card with a keyword to give it mechanical personality beyond "deal X damage."
+
+### 5.10 Powers & status effects *(planned — roadmap 4.7)*
+
+> Direction set by the PR #13 playtest (feedback #2); full model to be specified before building 4.7.
+
+Cards today apply only one-shot, here-and-now effects (a single attack's `+N`, an immediate shield layer). That made the flat next-attack-+damage cards (Lock-On, Combat Sim) **overpowered**: they cost little, **stack without limit**, and combine with multi-hit attacks for runaway damage. Combat needs a **Power/status layer** in the spirit of Slay the Spire:
+
+- **Statuses are persistent, stacking, and visible.** A status (buff on your ship, debuff on an enemy or a specific organ) carries across turns with a **stack count and/or duration**, decays by its own rule, and is **always rendered** — a status strip on the ship plate and on the enemy/organ plates — with **tooltips** that explain what each status and keyword does (the playtest also flagged that none of this is currently explained in the UI).
+- **Rebalance the existing cards around it.** The next-attack-+damage cards become **Exhaust** one-shots (a spike you spend, not a tap you spam). The blanket "+N from every hit" card becomes a **targeted skill**: Exhaust, and apply a debuff to a **chosen enemy ship/organ** (reusing the §5.4 target-selection seam) instead of a free global modifier.
+- **This is the debuff half of the organ system (§5.4).** Organs are the targets; statuses are what you do to them — silence, armor-shred, mark-for-extra-damage — making focus-fire a real decision rather than just "hit the lowest bar."
 
 ---
 
@@ -426,6 +436,8 @@ A safe destination might have a dangerous lane. A dangerous planet might be easy
 
 **Nodes are realspace — combat never happens at them.** The Bloom lives in the lanes (§2): every fight is a lane encounter, and arrival means safety. Forced combat is therefore a *lane* property (infested/elite lanes, §7.3), never a destination. The one exception is the Sector Boss: the gate itself is a Bloom growth sealing the lane mouth, so the boss fight happens at the gate.
 
+> **Gate guardians never appear as random lane encounters.** Enemies flagged `boss` (the Gatemaw) are excluded from the default lane encounter pool — the boss is fought once, at the gate. (Fixed in PR #13 after a playtest where the boss was rolling into ordinary lanes repeatedly. The `?enemy=` dev knob can still force it into a lane for testing.)
+
 ### 7.2 Node Types
 
 | Node | What Happens | Duration |
@@ -599,6 +611,7 @@ Planet visuals and properties are driven by the Deep-Fold Pixel Planet Generator
 11. **Audio/music direction** — style, adaptive music between modes
 12. **Exact shop pricing economy** — Scrap values, Biomineral costs, inflation across sectors
 13. **Multiplayer/sharing** — co-op potential beyond seeded-run sharing, or purely single-player?
-14. **Travel card design at boss fights** — dual-mode Thruster cards, Jettison keyword, or intentional tension? (See §5.4, §5.9, roadmap 5.5.)
-15. **Starting deck size** — are there too many starting modules? Fewer starting slots means each new module has higher relative impact on the deck. Evaluate after 4.6 keyword pass.
-16. **Module acquisition pacing** — are shop/engineer encounters frequent enough? Events (4.4) are the primary mid-run injection point; their timing relative to 4.3 may need adjustment based on playtesting.
+14. ~~**Travel card design at boss fights**~~ — RESOLVED (mega-slice 4): dual-mode (`Draw 1`) + Jettison on every Engine card. See §5.4.
+15. **Starting deck size** — are there too many starting modules? Fewer starting slots means each new module has higher relative impact on the deck. The keyword pass (mega-slice 4) deferred the starting-loadout audit to the 5.5 balance pass; evaluate then with the keyword identity in place.
+16. **Module acquisition pacing** — are shop/engineer/event encounters frequent enough? Events (shipped mega-slice 4, weight 2) are the primary mid-run injection point; tune timing in playtest.
+17. **Multi-enemy encounters** — the boss-organ work (mega-slice 4) seeded a multi-target combat UI. Should lanes ever present 2+ enemies at once? This contradicts the current §5.1/§5.7 "single-enemy fights only" commitment — resolve before building (roadmap 5.x).

@@ -39,7 +39,11 @@ export interface LaneState {
   malfunctioning: number[];
 }
 
-const DEFAULT_ENEMY_POOL: readonly EnemyId[] = ENEMY_DEFS.map((enemy) => enemy.id);
+// Gate guardians (`boss`) are fought only at the sector gate, never as random lane
+// encounters — they reach the player via `main.startBossFight` / the `?enemy=` knob.
+const DEFAULT_ENEMY_POOL: readonly EnemyId[] = ENEMY_DEFS.filter((enemy) => !enemy.boss).map(
+  (enemy) => enemy.id,
+);
 
 /**
  * Rolls a lane on the run's map-gen stream and commits the stream back. Distance

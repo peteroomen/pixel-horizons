@@ -13,13 +13,23 @@ export type HullId = string;
 
 export type ModuleTierLevel = 1 | 2;
 
+export type ModifierId = string;
+
 export interface ModuleInstance {
   id: ModuleId;
   tier: ModuleTierLevel;
+  /** Attach-to-module modifiers (GDD §6.6) — events bolt these on; deck-gen applies them. */
+  modifiers?: ModifierId[];
 }
 
 export type CardEffect =
-  | { kind: 'damage'; amount: number; piercing?: boolean }
+  | {
+      kind: 'damage';
+      amount: number;
+      piercing?: boolean;
+      /** Cleave (GDD §5.4): 'all' hits the core and every living organ; default 'core'. */
+      target?: 'core' | 'all';
+    }
   | { kind: 'travel'; amount: number }
   | { kind: 'restore-shield-layer'; count: number }
   | { kind: 'temp-shield-layer'; count: number }
@@ -32,7 +42,6 @@ export type CardEffect =
   | { kind: 'reveal-intent' }
   | { kind: 'draw'; count: number }
   | { kind: 'gain-scrap'; amount: number }
-  | { kind: 'retain-cards'; count: number }
   | { kind: 'repair-all-modules' };
 
 /**
@@ -41,7 +50,10 @@ export type CardEffect =
  * *and* mid-card `draw` effects: members must never draw (recursion) and must not
  * consume RNG (re-entrancy).
  */
-export type OnDrawEffect = { kind: 'lose-shield-layer'; count: number };
+export type OnDrawEffect =
+  | { kind: 'lose-shield-layer'; count: number }
+  /** Player-positive on-draw (GDD §5.9): a temp shield layer banked as the card enters hand. */
+  | { kind: 'gain-temp-shield'; count: number };
 
 export interface CardDef {
   id: CardId;
@@ -52,6 +64,15 @@ export interface CardDef {
   /** Hand-clog (Infestations, GDD §5.6): playCard throws, the UI never offers it. */
   unplayable?: true;
   onDraw?: OnDrawEffect[];
+  /** Retain keyword (GDD §5.9): this card survives the end-of-turn discard, staying in hand. */
+  retain?: true;
+  /**
+   * Jettison keyword (GDD §5.9): instead of playing, discard this card from hand for a
+   * small benefit (Draw N or +N AP). Resolves the travel-card-dead-at-boss problem (§5.4).
+   */
+  jettison?: { benefit: 'draw' | 'ap'; amount: number };
+  /** Discard keyword (GDD §5.9): playing this card first discards N other cards as a cost. */
+  discardCost?: number;
 }
 
 export type ModuleSlot = 'weapon' | 'utility' | 'engine' | 'clone-bay';
@@ -104,6 +125,50 @@ export interface ModuleDef {
   };
 }
 
+/**
+ * A module modifier (GDD §6.6) — an attach-to-module hack that adjusts how the module's
+ * cards generate. Interpreted by deck.ts; like every other definition, pure data.
+ */
+export interface ModifierDef {
+  id: ModifierId;
+  name: string;
+  description: string;
+  /** AP shaved off each of the module's cards (floored at 0). */
+  apCostReduction?: number;
+  /** Effects appended to each of the module's cards when played. */
+  bonusEffects?: CardEffect[];
+}
+
+export type ResourceKind = 'scrap' | 'biominerals' | 'coreCrystals' | 'blueprints';
+
+/**
+ * One consequence of an event choice (GDD §6.6 / §4.4) — interpreted by sim/events.ts.
+ * `attach-modifier` needs a target module the player picks; the choice flags that.
+ */
+export type EventOutcome =
+  | { kind: 'gain-resources'; resource: ResourceKind; amount: number }
+  | { kind: 'lose-resources'; resource: ResourceKind; amount: number }
+  | { kind: 'gain-module-to-cargo'; moduleId: ModuleId }
+  | { kind: 'repair-hull'; amount: number }
+  | { kind: 'damage-hull'; amount: number }
+  | { kind: 'attach-modifier'; modifierId: ModifierId }
+  | { kind: 'nothing' };
+
+export interface EventChoice {
+  label: string;
+  description: string;
+  outcomes: EventOutcome[];
+  /** True when an outcome (attach-modifier) needs the player to pick an installed module. */
+  requiresModuleTarget?: boolean;
+}
+
+export interface EventDef {
+  id: string;
+  title: string;
+  body: string;
+  choices: EventChoice[];
+}
+
 export type EnemyId = string;
 
 /**
@@ -145,6 +210,25 @@ export type EnemyIntentDef =
       count: number;
     };
 
+/**
+ * A targetable boss organ (GDD §5.4) — a sub-part with its own HP that grants the enemy
+ * a per-turn pressure ability while alive and a one-shot consequence when destroyed. The
+ * core is killable any time; organs are pressure, not a gate. Bosses/elites only.
+ */
+export type PartAbility =
+  | { kind: 'inject-each-turn'; cardId: CardId; count: number }
+  | { kind: 'armor-regen' };
+
+export type PartOnDestroy = 'stagger' | 'break-armor';
+
+export interface EnemyPart {
+  id: string;
+  name: string;
+  maxHp: number;
+  grants: PartAbility;
+  onDestroy?: PartOnDestroy;
+}
+
 export interface EnemyDef {
   id: EnemyId;
   name: string;
@@ -176,6 +260,14 @@ export interface EnemyDef {
    * sustained damage within one turn breaks through, chip across turns is eaten.
    */
   armor?: { amount: number; regen: number };
+  /** Targetable organs (GDD §5.4) — bosses/elites only; default undefined = single-target. */
+  parts?: EnemyPart[];
+  /**
+   * Gate guardians (GDD §7.5): fought only at the sector gate, never rolled as a random
+   * lane encounter. Excluded from the default lane pool — the dedicated boss fight
+   * (`main.startBossFight`) and the `?enemy=` dev knob still reach them.
+   */
+  boss?: boolean;
 }
 
 export interface EnemyPhase {

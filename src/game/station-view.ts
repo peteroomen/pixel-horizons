@@ -5,6 +5,8 @@ import {
   canRepairHull,
   canSellBiominerals,
   canUpgradeModule,
+  hasSlotRoom,
+  modulePrice,
   repairCost,
   upgradeCost,
 } from './sim/economy';
@@ -19,6 +21,11 @@ export interface ShopOfferView {
   canBuy: boolean;
   /** Already owned (installed or in cargo) — greyed out, no buy button. */
   owned: boolean;
+  /**
+   * Why an affordable-looking offer can't be bought — so a blocked purchase explains
+   * itself instead of being a dead button (playtest fix). `null` when buyable or owned.
+   */
+  blockReason: 'need-slot' | 'need-scrap' | null;
 }
 
 export interface UpgradeOfferView {
@@ -58,18 +65,36 @@ function ownedModuleIds(run: RunState): Set<string> {
   return ids;
 }
 
+/** Why a not-buyable offer is blocked. Slot wins over Scrap — fix the cap first. */
+function blockReason(
+  run: RunState,
+  moduleId: string,
+  owned: boolean,
+  canBuy: boolean,
+): ShopOfferView['blockReason'] {
+  if (owned || canBuy) return null;
+  if (!hasSlotRoom(run.hullId, run.modules, moduleId)) return 'need-slot';
+  if (run.resources.scrap < modulePrice(moduleId)) return 'need-scrap';
+  return null;
+}
+
 export function buildMerchantView(run: RunState): MerchantView {
   const offers = generateShopOffers(run.seed, run.position.sector, run.position.nodeId!);
   const owned = ownedModuleIds(run);
   return {
     kind: 'merchant',
-    offers: offers.map((o) => ({
-      moduleId: o.moduleId,
-      moduleName: getModule(o.moduleId).name,
-      price: o.price,
-      canBuy: !owned.has(o.moduleId) && canBuyModule(run, o.moduleId),
-      owned: owned.has(o.moduleId),
-    })),
+    offers: offers.map((o) => {
+      const isOwned = owned.has(o.moduleId);
+      const canBuy = !isOwned && canBuyModule(run, o.moduleId);
+      return {
+        moduleId: o.moduleId,
+        moduleName: getModule(o.moduleId).name,
+        price: o.price,
+        canBuy,
+        owned: isOwned,
+        blockReason: blockReason(run, o.moduleId, isOwned, canBuy),
+      };
+    }),
     canSellBiominerals: canSellBiominerals(run, 1),
     sellRate: 2,
     resources: { ...run.resources },

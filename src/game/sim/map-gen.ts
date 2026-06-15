@@ -29,7 +29,7 @@ import type { Rng } from './rng';
  * Combat exists only on the edges (lane encounters); danger is a property of
  * the path, never of the destination.
  */
-export type NodeType = 'start' | 'planet' | 'cache' | 'shop' | 'engineer' | 'gate';
+export type NodeType = 'start' | 'planet' | 'cache' | 'shop' | 'engineer' | 'event' | 'gate';
 
 export interface LaneParams {
   /** Lane length in turns of travel (GDD §5.1). */

@@ -13,6 +13,7 @@ const NODE_LABEL: Record<MapNodeView['type'], string> = {
   cache: 'CACHE',
   shop: 'SHOP',
   engineer: 'ENGINEER',
+  event: 'EVENT',
   gate: 'GATE',
 };
 

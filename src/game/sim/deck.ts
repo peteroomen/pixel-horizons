@@ -1,5 +1,5 @@
-import { getModule } from '../data';
-import type { CardId, ModuleId, ModuleInstance } from '../data';
+import { getModifier, getModule } from '../data';
+import type { CardEffect, CardId, ModuleId, ModuleInstance } from '../data';
 
 /**
  * One card instance in a combat deck. `moduleIndex` indexes the run's module list —
@@ -8,10 +8,19 @@ import type { CardId, ModuleId, ModuleInstance } from '../data';
  * Null = the card came from no module (enemy-injected Infestations): it can never
  * present as a Malfunction, and a numeric sentinel would silently re-enter the
  * malfunction-membership logic — null can't.
+ *
+ * `malfunctioning` (GDD §5.6) is per-instance: a module hit flags every one of its card
+ * instances across the piles, and playing one card clears only *that* instance — the
+ * intended multi-turn repair tax. Injected cards (moduleIndex null) are always false.
  */
 export interface CombatCard {
   cardId: CardId;
   moduleIndex: number | null;
+  malfunctioning: boolean;
+  /** AP shaved off this instance by module modifiers (GDD §6.6); undefined = none. */
+  apCostDelta?: number;
+  /** Effects appended to this instance by module modifiers (e.g. draw-on-play). */
+  bonusEffects?: CardEffect[];
 }
 
 function tierKey(tier: 1 | 2): 'mk1' | 'mk2' {
@@ -32,7 +41,20 @@ export function generateCombatDeck(modules: readonly ModuleInstance[]): CombatCa
   return modules.flatMap((mod, moduleIndex) => {
     const def = getModule(mod.id);
     const tier = def.tiers[tierKey(mod.tier)] ?? def.tiers.mk1;
-    return tier.cards.map((cardId) => ({ cardId, moduleIndex }));
+    // Aggregate any attach-to-module modifiers into per-instance overrides (GDD §6.6).
+    const mods = (mod.modifiers ?? []).map(getModifier);
+    const apCostDelta = mods.reduce((sum, m) => sum + (m.apCostReduction ?? 0), 0);
+    const bonusEffects = mods.flatMap((m) => m.bonusEffects ?? []);
+    return tier.cards.map((cardId) => {
+      const card: CombatCard = { cardId, moduleIndex, malfunctioning: false };
+      if (apCostDelta > 0) {
+        card.apCostDelta = apCostDelta;
+      }
+      if (bonusEffects.length > 0) {
+        card.bonusEffects = bonusEffects;
+      }
+      return card;
+    });
   });
 }
 

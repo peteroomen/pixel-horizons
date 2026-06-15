@@ -65,8 +65,12 @@ export default function CombatCard({ card, state, disabled, onClick }: CombatCar
   if (state === 'infested') {
     tags.push({ label: 'INFESTED', color: 'text-fd-green' });
   }
-  if (card.exhaust && tags.length < 2) {
+  if (card.exhaust && tags.length < 3) {
     tags.push({ label: 'EXHAUST', color: 'text-fd-muted' });
+  }
+  for (const keyword of card.keywords) {
+    if (tags.length >= 3) break;
+    tags.push({ label: keyword, color: 'text-fd-muted' });
   }
 
   return (
@@ -74,7 +78,7 @@ export default function CombatCard({ card, state, disabled, onClick }: CombatCar
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`chamfer chamfer-5 sm:chamfer-8 ${s.frame} p-[2px] flex-1 basis-0 min-w-0 h-[142px] sm:w-[200px] sm:h-[210px] sm:flex-none ${
+      className={`chamfer chamfer-5 sm:chamfer-8 ${s.frame} p-[2px] w-full h-[142px] sm:h-[210px] ${
         selectable ? 'cursor-pointer hover:-translate-y-2 active:-translate-y-1' : ''
       } transition-transform ${!card.affordable && state !== 'discard' ? 'opacity-40' : ''}`}
     >

@@ -111,17 +111,37 @@ describe('generateDeck', () => {
 describe('generateCombatDeck', () => {
   it('tags every card with the index of its contributing module', () => {
     expect(generateCombatDeck(moduleIds(['mod-thruster', 'mod-light-laser']))).toEqual([
-      { cardId: 'card-burn', moduleIndex: 0 },
-      { cardId: 'card-burn', moduleIndex: 0 },
-      { cardId: 'card-afterburner', moduleIndex: 0 },
-      { cardId: 'card-laser-burst', moduleIndex: 1 },
-      { cardId: 'card-laser-burst', moduleIndex: 1 },
+      { cardId: 'card-burn', moduleIndex: 0, malfunctioning: false },
+      { cardId: 'card-burn', moduleIndex: 0, malfunctioning: false },
+      { cardId: 'card-afterburner', moduleIndex: 0, malfunctioning: false },
+      { cardId: 'card-laser-burst', moduleIndex: 1, malfunctioning: false },
+      { cardId: 'card-laser-burst', moduleIndex: 1, malfunctioning: false },
     ]);
   });
 
   it('duplicate modules keep distinct indices — they are separate malfunction targets', () => {
     const deck = generateCombatDeck(moduleIds(['mod-thruster', 'mod-thruster']));
     expect(new Set(deck.map((card) => card.moduleIndex))).toEqual(new Set([0, 1]));
+  });
+
+  it('applies module modifiers as per-instance overrides (GDD §6.6)', () => {
+    const deck = generateCombatDeck([
+      { id: 'mod-light-laser', tier: 1, modifiers: ['modifier-tuned-capacitors'] },
+      { id: 'mod-thruster', tier: 1, modifiers: ['modifier-feedback-loop'] },
+    ]);
+    const laser = deck.filter((c) => c.moduleIndex === 0);
+    expect(laser.every((c) => c.apCostDelta === 1)).toBe(true);
+    expect(laser.every((c) => c.bonusEffects === undefined)).toBe(true);
+    const thruster = deck.filter((c) => c.moduleIndex === 1);
+    expect(thruster.every((c) => c.bonusEffects?.[0]?.kind === 'draw')).toBe(true);
+    expect(thruster.every((c) => c.apCostDelta === undefined)).toBe(true);
+  });
+
+  it('leaves unmodified modules without override fields', () => {
+    const deck = generateCombatDeck(moduleIds(['mod-light-laser']));
+    expect(deck.every((c) => c.apCostDelta === undefined && c.bonusEffects === undefined)).toBe(
+      true,
+    );
   });
 });
 

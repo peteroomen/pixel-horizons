@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from 'react';
 
 import BossReward from '@/components/BossReward';
 import CombatHand from '@/components/CombatHand';
+import EventScreen from '@/components/EventScreen';
 import GameCanvas from '@/components/GameCanvas';
 import HUD from '@/components/HUD';
 import SectorMap from '@/components/SectorMap';
@@ -15,6 +16,7 @@ import Workbench from '@/components/Workbench';
 import FoundryButton from '@/components/foundry/FoundryButton';
 import type {
   CombatView,
+  EventView,
   GameHandle,
   GamePhase,
   MapView,
@@ -78,6 +80,7 @@ export default function Home() {
   const [mapView, setMapView] = useState<MapView | null>(null);
   const [shipView, setShipView] = useState<ShipView | null>(null);
   const [stationView, setStationView] = useState<StationView | null>(null);
+  const [eventView, setEventView] = useState<EventView | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [abandonArmed, setAbandonArmed] = useState(false);
   const [handle, setHandle] = useState<GameHandle | null>(null);
@@ -131,6 +134,28 @@ export default function Home() {
     setStationView(next);
   }, []);
 
+  const onEventUpdate = useCallback((next: EventView) => {
+    setEventView(next);
+  }, []);
+
+  // Discard-keyword cards auto-pay with the rightmost other cards (GDD §5.9); the rest
+  // play straight. Rightmost-first keeps freshly-drawn cards as the fodder, not the hand
+  // you've been holding.
+  const onPlayCard = (index: number) => {
+    if (view === null || handleRef.current === null) return;
+    const card = view.hand[index];
+    if (card === undefined) return;
+    if (card.discardCost > 0) {
+      const targets: number[] = [];
+      for (let i = view.hand.length - 1; i >= 0 && targets.length < card.discardCost; i--) {
+        if (i !== index) targets.push(i);
+      }
+      handleRef.current.playCard(index, targets);
+      return;
+    }
+    handleRef.current.playCard(index);
+  };
+
   // Plain innates fire immediately; card-targeted ones (Slipstream) toggle arming.
   const onInnate = () => {
     if (view === null || handleRef.current === null) return;
@@ -144,7 +169,7 @@ export default function Home() {
   const hasDash = surfaceView !== null && surfaceView.dashCooldownSeconds !== null;
 
   return (
-    <main className="fixed inset-0 touch-none select-none bg-fd-void">
+    <main className="fixed inset-0 select-none bg-fd-void">
       <GameCanvas
         onCombatUpdate={onCombatUpdate}
         onReady={onReady}
@@ -153,6 +178,7 @@ export default function Home() {
         onMapUpdate={onMapUpdate}
         onShipUpdate={onShipUpdate}
         onStationUpdate={onStationUpdate}
+        onEventUpdate={onEventUpdate}
       />
 
       {/* Title: a saved expedition exists */}
@@ -270,13 +296,15 @@ export default function Home() {
             onInnate={onInnate}
             innateArmed={innateArmed}
             onPayToll={() => handleRef.current?.payToll()}
+            onSelectTarget={(target) => handleRef.current?.selectTarget(target)}
           />
           <div className="absolute inset-x-0 bottom-2 flex justify-center sm:bottom-4">
             <CombatHand
               cards={view.hand}
-              onPlay={(index) => handleRef.current?.playCard(index)}
+              onPlay={(index) => onPlayCard(index)}
               discardMode={innateArmed}
               onDiscard={(index) => handleRef.current?.useInnate(index)}
+              onJettison={(index) => handleRef.current?.jettisonCard(index)}
             />
           </div>
 
@@ -298,6 +326,17 @@ export default function Home() {
       {/* Shop / Engineer station screens */}
       {(phase === 'shop' || phase === 'engineer') && stationView !== null && handle !== null && (
         <StationScreen view={stationView} handle={handle} />
+      )}
+
+      {/* Event: text node with choices (GDD §4.4) */}
+      {phase === 'event' && eventView !== null && (
+        <EventScreen
+          view={eventView}
+          shipView={shipView}
+          onChoose={(choiceIndex, moduleIndex) =>
+            handleRef.current?.chooseEventChoice(choiceIndex, moduleIndex)
+          }
+        />
       )}
 
       {/* Boss reward: three-choice pick after the gate guardian dies */}

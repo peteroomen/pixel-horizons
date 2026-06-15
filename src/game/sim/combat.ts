@@ -26,12 +26,15 @@ import type { RunState } from './run-state';
  * `CombatState.rng` back to `runState.rng.combat` — and hull HP / scrap likewise — so
  * consecutive fights continue the stream instead of replaying it.
  *
- * Malfunctions (GDD §5.6): module-level state in `malfunctioning`; a card *presents*
- * as its Malfunction form iff its module index is listed there — flipping is derived,
- * never stored, so the repaired card returning to the discard pile is already back to
- * normal for free. Within a lane they persist between fights: `createCombat` carries
- * them in through the LaneContext and the orchestrator copies them back out; arrival
- * clears them (systems reset).
+ * Malfunctions (GDD §5.6): per-card-instance state — `CombatCard.malfunctioning`. A hit
+ * flags *every* card instance of the targeted module across all piles; playing one card
+ * clears only that instance, so a module contributing N cards is a genuine N-play repair
+ * tax (the module's planet item stays offline until every instance clears). A module is
+ * "operational" (a valid re-target) only when none of its instances are flagged. Within
+ * a lane the malfunction set persists between fights as module indices (per-card flags
+ * can't survive deck regeneration): `createCombat` re-flags this fight's fresh instances
+ * from the LaneContext and the orchestrator derives the set back out via
+ * `malfunctioningModules`; arrival clears them (systems reset).
  *
  * Lanes (GDD §5.1): a fight created with a LaneContext gains travel — +1 progress per
  * survived turn plus engine card effects — and ends as 'escaped' the moment total lane
@@ -61,8 +64,6 @@ export interface CombatModifiers {
   dodgeChance: number;
   /** Enemy attacks auto-miss while > 0; ticks down once per enemy phase. */
   untargetableTurns: number;
-  /** Cards kept through the next discard step (Desync Hull), leftmost first. */
-  retainCount: number;
   /** Deep Scan — the already-rolled intent is exposed to the UI this turn. */
   intentRevealed: boolean;
 }
@@ -89,14 +90,20 @@ export interface CombatState {
    * the end of each enemy phase. 0 for enemies without armor.
    */
   enemyArmor: number;
+  /** Organ HP, parallel to the enemy's `parts` (GDD §5.4); [] for enemies without organs. */
+  partHp: number[];
+  /** Single-target selection: null = the core, else an index into `parts`. */
+  targetPart: number | null;
+  /** Set when the Armor-Node is destroyed — armor stays 0 and stops regrowing. */
+  armorBroken: boolean;
+  /** Set by an organ's `stagger` on-destroy — the enemy skips its next action. */
+  staggered: boolean;
   /** Index into the enemy's intent list — the telegraphed action for its next phase. */
   intentIndex: number;
   hullId: HullId;
   hullHp: number;
   /** The run's module list frozen at combat start (refits take effect next combat, §5.3). */
   modules: ModuleId[];
-  /** Indices into `modules` currently malfunctioning — their cards present flipped. */
-  malfunctioning: number[];
   shields: ShieldLayer[];
   /** One-shot layers (Emergency Barrier, Cargo Thrust) — absorbed first, never recharge. */
   tempShieldLayers: number;
@@ -130,6 +137,14 @@ export function createCombat(run: RunState, enemyId: EnemyId, lane?: LaneContext
   const enemy = getEnemy(enemyId);
   const rng = restoreRng(run.rng.combat);
   const drawPile = rng.shuffle(generateCombatDeck(run.modules));
+  // Re-flag this fight's fresh instances from any malfunctions carried in by the lane.
+  if (lane !== undefined) {
+    for (const card of drawPile) {
+      if (card.moduleIndex !== null && lane.malfunctioning.includes(card.moduleIndex)) {
+        card.malfunctioning = true;
+      }
+    }
+  }
   const shields = run.modules.flatMap((mod): ShieldLayer[] => {
     const def = getModule(mod.id);
     const tier = def.tiers[mod.tier === 2 ? 'mk2' : 'mk1'] ?? def.tiers.mk1;
@@ -147,11 +162,14 @@ export function createCombat(run: RunState, enemyId: EnemyId, lane?: LaneContext
     enemyId,
     enemyHp: enemy.maxHp,
     enemyArmor: enemy.armor?.amount ?? 0,
+    partHp: enemy.parts?.map((p) => p.maxHp) ?? [],
+    targetPart: null,
+    armorBroken: false,
+    staggered: false,
     intentIndex: enemy.pattern === 'random' ? rng.int(0, enemy.intents.length) : 0,
     hullId: run.hullId,
     hullHp: run.hullHp,
     modules: run.modules.map((m) => m.id),
-    malfunctioning: lane === undefined ? [] : [...lane.malfunctioning],
     shields,
     tempShieldLayers: 0,
     ap: run.reactorLevel,
@@ -177,7 +195,6 @@ export function createCombat(run: RunState, enemyId: EnemyId, lane?: LaneContext
       enemyVulnerable: 0,
       dodgeChance: 0,
       untargetableTurns: 0,
-      retainCount: 0,
       intentRevealed: false,
     },
     rng: rng.getState(),
@@ -189,8 +206,45 @@ export function createCombat(run: RunState, enemyId: EnemyId, lane?: LaneContext
 }
 
 /** Whether this card instance currently presents as its Malfunction form (GDD §5.6). */
-export function isCardMalfunctioning(state: CombatState, card: CombatCard): boolean {
-  return card.moduleIndex !== null && state.malfunctioning.includes(card.moduleIndex);
+export function isCardMalfunctioning(card: CombatCard): boolean {
+  return card.malfunctioning;
+}
+
+/** Every card instance across all four piles — the malfunction state lives here now. */
+function allCombatCards(state: CombatState): CombatCard[] {
+  return [...state.drawPile, ...state.hand, ...state.discardPile, ...state.exhaustPile];
+}
+
+/**
+ * Whether any instance of this module is currently flagged — i.e. the module is *not*
+ * fully operational. A module is a valid malfunction re-target only when this is false,
+ * and its planet item stays offline (3.3) until it is.
+ */
+export function isModuleMalfunctioning(state: CombatState, moduleIndex: number): boolean {
+  return allCombatCards(state).some((c) => c.moduleIndex === moduleIndex && c.malfunctioning);
+}
+
+/**
+ * The module indices with at least one flagged instance, sorted ascending — the
+ * cross-fight representation the lane carries between encounters (GDD §5.6).
+ */
+export function malfunctioningModules(state: CombatState): number[] {
+  const set = new Set<number>();
+  for (const card of allCombatCards(state)) {
+    if (card.malfunctioning && card.moduleIndex !== null) {
+      set.add(card.moduleIndex);
+    }
+  }
+  return [...set].sort((a, b) => a - b);
+}
+
+/** Flags every card instance of a module across all piles — the whole module goes down. */
+function flagModule(state: CombatState, moduleIndex: number): void {
+  for (const card of allCombatCards(state)) {
+    if (card.moduleIndex === moduleIndex) {
+      card.malfunctioning = true;
+    }
+  }
 }
 
 /**
@@ -244,8 +298,12 @@ export function canPayToll(state: CombatState): boolean {
 }
 
 /** The AP this card costs to play right now — the repair cost while flipped. */
-export function cardPlayCost(state: CombatState, card: CombatCard): number {
-  return isCardMalfunctioning(state, card) ? MALFUNCTION_REPAIR_AP : getCard(card.cardId).apCost;
+export function cardPlayCost(_state: CombatState, card: CombatCard): number {
+  if (isCardMalfunctioning(card)) {
+    return MALFUNCTION_REPAIR_AP;
+  }
+  // Module modifiers (GDD §6.6) shave AP off this instance, floored at 0.
+  return Math.max(0, getCard(card.cardId).apCost - (card.apCostDelta ?? 0));
 }
 
 /** Unplayable cards (Infestations, §5.6) clog the hand until the discard step. */
@@ -253,7 +311,29 @@ export function isCardPlayable(card: CombatCard): boolean {
   return getCard(card.cardId).unplayable !== true;
 }
 
-export function playCard(state: CombatState, handIndex: number): void {
+/**
+ * The Discard keyword's cost (GDD §5.9): N other cards this card discards from hand as
+ * it plays. Always 0 for a malfunctioning instance — repairing it has no extra cost.
+ */
+export function cardDiscardCost(card: CombatCard): number {
+  return isCardMalfunctioning(card) ? 0 : (getCard(card.cardId).discardCost ?? 0);
+}
+
+/** Whether this card can be Jettisoned right now (GDD §5.9) — never while malfunctioning. */
+export function isCardJettisonable(card: CombatCard): boolean {
+  return !isCardMalfunctioning(card) && getCard(card.cardId).jettison !== undefined;
+}
+
+/**
+ * Plays the card at `handIndex`. `discardIndices` supplies the other-card targets for a
+ * Discard-keyword card (GDD §5.9); it must list exactly `cardDiscardCost` distinct hand
+ * indices, none equal to `handIndex`. The UI resolves the selection; the sim validates it.
+ */
+export function playCard(
+  state: CombatState,
+  handIndex: number,
+  discardIndices: readonly number[] = [],
+): void {
   if (state.outcome !== 'ongoing') {
     throw new Error('combat already ended');
   }
@@ -269,20 +349,33 @@ export function playCard(state: CombatState, handIndex: number): void {
     throw new Error(`cannot afford ${instance.cardId}: costs ${cost} AP, have ${state.ap}`);
   }
 
-  state.ap -= cost;
-  state.hand.splice(handIndex, 1);
-
-  if (isCardMalfunctioning(state, instance)) {
-    // Play-to-repair (§5.6): no card effects — the module comes back online and the
-    // card lands in the discard pile, presenting as its normal form again (derived).
-    state.malfunctioning = state.malfunctioning.filter((i) => i !== instance.moduleIndex);
+  if (isCardMalfunctioning(instance)) {
+    // Play-to-repair (§5.6): no card effects, no discard cost. Only *this* instance
+    // clears — sibling cards of the same module stay flagged, so a multi-card module
+    // is a multi-play tax.
+    state.ap -= cost;
+    state.hand.splice(handIndex, 1);
+    instance.malfunctioning = false;
     state.discardPile.push(instance);
     return;
   }
 
   const card = getCard(instance.cardId);
+  const discardCost = card.discardCost ?? 0;
+  validateDiscardSelection(state, handIndex, discardIndices, discardCost);
+  // Resolve the discard targets by reference before any splicing shifts indices.
+  const discards = discardIndices.map((i) => state.hand[i]);
+
+  state.ap -= cost;
+  state.hand = state.hand.filter((c) => c !== instance && !discards.includes(c));
+  state.discardPile.push(...discards);
+
   const rng = restoreRng(state.rng);
   for (const effect of card.effects) {
+    applyEffect(state, rng, effect);
+  }
+  // Modifier-appended effects (GDD §6.6) fire after the card's own effects.
+  for (const effect of instance.bonusEffects ?? []) {
     applyEffect(state, rng, effect);
   }
   (card.exhaust === true ? state.exhaustPile : state.discardPile).push(instance);
@@ -291,6 +384,67 @@ export function playCard(state: CombatState, handIndex: number): void {
   // An engine card may have ended the fight by arrival mid-play — escape stands.
   if (state.outcome === 'ongoing' && state.enemyHp <= 0) {
     state.outcome = 'victory';
+  }
+}
+
+function validateDiscardSelection(
+  state: CombatState,
+  handIndex: number,
+  discardIndices: readonly number[],
+  discardCost: number,
+): void {
+  if (discardIndices.length !== discardCost) {
+    throw new Error(
+      `this card discards exactly ${discardCost} card(s); got ${discardIndices.length}`,
+    );
+  }
+  const seen = new Set<number>();
+  for (const i of discardIndices) {
+    if (!Number.isInteger(i) || i < 0 || i >= state.hand.length) {
+      throw new Error(`no card at discard index ${i}`);
+    }
+    if (i === handIndex) {
+      throw new Error('a card cannot pay its own discard cost');
+    }
+    if (seen.has(i)) {
+      throw new Error(`duplicate discard index ${i}`);
+    }
+    seen.add(i);
+  }
+}
+
+/**
+ * Jettison (GDD §5.9): discard the card at `handIndex` for its declared benefit (Draw N
+ * or +N AP) instead of playing it — costs no AP, the floor that keeps travel cards from
+ * being dead at the boss (§5.4). Throws if the card has no Jettison (or is malfunctioning).
+ */
+export function jettisonCard(state: CombatState, handIndex: number): void {
+  if (state.outcome !== 'ongoing') {
+    throw new Error('combat already ended');
+  }
+  if (!Number.isInteger(handIndex) || handIndex < 0 || handIndex >= state.hand.length) {
+    throw new Error(`no card at hand index ${handIndex}`);
+  }
+  const instance = state.hand[handIndex];
+  if (!isCardJettisonable(instance)) {
+    throw new Error(`${instance.cardId} cannot be jettisoned`);
+  }
+  const jettison = getCard(instance.cardId).jettison;
+  if (jettison === undefined) {
+    throw new Error(`${instance.cardId} cannot be jettisoned`);
+  }
+  state.hand.splice(handIndex, 1);
+  // Jettisoning an exhaust card removes it for the rest of the fight — this is the
+  // escape valve for injected clog (Spore Cluster, GDD §5.6): it won't reshuffle back.
+  (getCard(instance.cardId).exhaust === true ? state.exhaustPile : state.discardPile).push(
+    instance,
+  );
+  if (jettison.benefit === 'ap') {
+    state.ap += jettison.amount;
+  } else {
+    const rng = restoreRng(state.rng);
+    drawCards(state, rng, jettison.amount);
+    state.rng = rng.getState();
   }
 }
 
@@ -398,32 +552,49 @@ export function endTurn(state: CombatState): void {
   const enemy = getEnemy(state.enemyId);
   const rng = restoreRng(state.rng);
 
-  const kept = Math.min(state.modifiers.retainCount, state.hand.length);
-  state.discardPile.push(...state.hand.splice(kept));
-  state.modifiers.retainCount = 0;
+  // Retain keyword (GDD §5.9): cards declaring `retain` survive the discard step and
+  // stay in hand; a malfunctioning instance never retains (it presents as a repair card).
+  const retained: CombatCard[] = [];
+  for (const card of state.hand) {
+    if (!card.malfunctioning && getCard(card.cardId).retain === true) {
+      retained.push(card);
+    } else {
+      state.discardPile.push(card);
+    }
+  }
+  state.hand = retained;
 
   // Snapshot before the attack so a layer spent this phase doesn't also tick this
   // phase — rechargeTurns counts full enemy phases the layer stays down.
   const recharging = state.shields.filter((layer) => layer.turnsUntilUp > 0);
-  resolveEnemyIntent(state, rng, activeIntents(state)[state.intentIndex]);
-  if (state.hullHp <= 0) {
-    state.outcome = 'defeat';
-    state.rng = rng.getState();
-    return;
+  if (state.staggered) {
+    // An organ's stagger (GDD §5.4) costs the enemy this action — but only once.
+    state.staggered = false;
+  } else {
+    resolveEnemyIntent(state, rng, activeIntents(state)[state.intentIndex]);
+    if (state.hullHp <= 0) {
+      state.outcome = 'defeat';
+      state.rng = rng.getState();
+      return;
+    }
   }
   for (const layer of recharging) {
     layer.turnsUntilUp -= 1;
   }
 
+  // Living organs act after the enemy's main action (GDD §5.4): the Spore-Sac floods.
+  applyOrganAbilities(state, rng);
+
   // Organic armor regrows after the enemy phase (GDD §5.7): chip damage spread
   // across turns is eaten; sustained damage within one turn breaks through.
-  // Phase-specific armor overrides the base definition.
+  // Phase-specific armor overrides the base definition. With an Armor-Node organ
+  // (GDD §5.4) the regrow is gated on that organ still living.
   const phaseArmor =
     state.phaseIndex >= 0 && enemy.phases !== undefined
       ? enemy.phases[state.phaseIndex].armor
       : undefined;
   const armor = phaseArmor ?? enemy.armor;
-  if (armor !== undefined) {
+  if (armor !== undefined && (!hasArmorRegenOrgan(state) || hasLivingArmorRegenOrgan(state))) {
     state.enemyArmor = Math.min(armor.amount, state.enemyArmor + armor.regen);
   }
 
@@ -506,7 +677,7 @@ function applyEffect(state: CombatState, rng: Rng, effect: CardEffect): void {
       state.modifiers.nextAttackBonus = 0;
       state.modifiers.nextAttackMultiplier = 1;
       const total = (effect.amount + bonus) * multiplier + state.modifiers.enemyVulnerable;
-      dealDamageToEnemy(state, total, effect.piercing === true);
+      dealDamageToEnemy(state, total, effect.piercing === true, effect.target === 'all');
       break;
     }
     case 'travel':
@@ -554,16 +725,16 @@ function applyEffect(state: CombatState, rng: Rng, effect: CardEffect): void {
     case 'gain-scrap':
       state.scrapGained += effect.amount;
       break;
-    case 'retain-cards':
-      state.modifiers.retainCount += effect.count;
-      break;
     case 'strip-armor':
       // Gone for the rest of the turn — regen brings it back after the enemy phase.
       state.enemyArmor = 0;
       break;
     case 'repair-all-modules':
-      // Repair Clone (§4.2) — the alternative to playing each Malfunction card.
-      state.malfunctioning = [];
+      // Repair Clone (§4.2) — the alternative to playing each Malfunction card: clears
+      // every flagged instance across all piles at once.
+      for (const c of allCombatCards(state)) {
+        c.malfunctioning = false;
+      }
       break;
     default: {
       const exhaustive: never = effect;
@@ -572,12 +743,47 @@ function applyEffect(state: CombatState, rng: Rng, effect: CardEffect): void {
   }
 }
 
+/** Living organ indices (GDD §5.4) — a valid single-target pick has partHp > 0. */
+export function isPartAlive(state: CombatState, partIndex: number): boolean {
+  return state.partHp[partIndex] !== undefined && state.partHp[partIndex] > 0;
+}
+
+/** Selects the single-target focus: null = core, else a living organ (else a no-op). */
+export function selectTarget(state: CombatState, target: number | null): void {
+  if (target === null || isPartAlive(state, target)) {
+    state.targetPart = target;
+  }
+}
+
 /**
  * One outgoing hit against the enemy — the single funnel for all player damage
- * (cards and damage innates), mirroring resolveIncomingHit. Armor (GDD §5.7)
- * absorbs non-piercing damage before HP; piercing bypasses it entirely.
+ * (cards and damage innates), mirroring resolveIncomingHit. `cleave` (GDD §5.4) hits the
+ * core and every living organ at once; otherwise the hit lands on the selected target
+ * (a living organ, else the core). Armor absorbs non-piercing core damage; organs have
+ * no armor.
  */
-function dealDamageToEnemy(state: CombatState, amount: number, piercing: boolean): void {
+function dealDamageToEnemy(
+  state: CombatState,
+  amount: number,
+  piercing: boolean,
+  cleave = false,
+): void {
+  if (cleave) {
+    damageCore(state, amount, piercing);
+    const parts = getEnemy(state.enemyId).parts ?? [];
+    for (let i = 0; i < parts.length; i++) {
+      damagePart(state, i, amount);
+    }
+    return;
+  }
+  if (state.targetPart !== null && isPartAlive(state, state.targetPart)) {
+    damagePart(state, state.targetPart, amount);
+    return;
+  }
+  damageCore(state, amount, piercing);
+}
+
+function damageCore(state: CombatState, amount: number, piercing: boolean): void {
   let remaining = amount;
   if (!piercing) {
     const absorbed = Math.min(state.enemyArmor, remaining);
@@ -586,6 +792,57 @@ function dealDamageToEnemy(state: CombatState, amount: number, piercing: boolean
   }
   state.enemyHp = Math.max(0, state.enemyHp - remaining);
   checkPhaseTransition(state);
+}
+
+function damagePart(state: CombatState, partIndex: number, amount: number): void {
+  if (!isPartAlive(state, partIndex)) return;
+  state.partHp[partIndex] = Math.max(0, state.partHp[partIndex] - amount);
+  if (state.partHp[partIndex] === 0) {
+    onPartDestroyed(state, partIndex);
+  }
+}
+
+function onPartDestroyed(state: CombatState, partIndex: number): void {
+  const part = getEnemy(state.enemyId).parts?.[partIndex];
+  if (part?.onDestroy === 'stagger') {
+    state.staggered = true;
+  } else if (part?.onDestroy === 'break-armor') {
+    state.enemyArmor = 0;
+    state.armorBroken = true;
+  }
+  // A destroyed organ can't stay the focus — fall back to the core.
+  if (state.targetPart === partIndex) {
+    state.targetPart = null;
+  }
+}
+
+/** Whether the enemy has an Armor-Node organ at all (gates the armor-regrow behavior). */
+function hasArmorRegenOrgan(state: CombatState): boolean {
+  return (getEnemy(state.enemyId).parts ?? []).some((p) => p.grants.kind === 'armor-regen');
+}
+
+/** Whether a living Armor-Node organ is keeping the armor regrowing (GDD §5.4). */
+function hasLivingArmorRegenOrgan(state: CombatState): boolean {
+  const parts = getEnemy(state.enemyId).parts ?? [];
+  return parts.some((p, i) => p.grants.kind === 'armor-regen' && isPartAlive(state, i));
+}
+
+/** Per-turn organ pressure (GDD §5.4): each living organ fires its granted ability. */
+function applyOrganAbilities(state: CombatState, rng: Rng): void {
+  const parts = getEnemy(state.enemyId).parts ?? [];
+  parts.forEach((part, i) => {
+    if (!isPartAlive(state, i)) return;
+    if (part.grants.kind === 'inject-each-turn') {
+      for (let n = 0; n < part.grants.count; n++) {
+        const position = rng.int(0, state.drawPile.length + 1);
+        state.drawPile.splice(position, 0, {
+          cardId: part.grants.cardId,
+          moduleIndex: null,
+          malfunctioning: false,
+        });
+      }
+    }
+  });
 }
 
 function checkPhaseTransition(state: CombatState): void {
@@ -621,7 +878,11 @@ function resolveEnemyIntent(state: CombatState, rng: Rng, intent: EnemyIntentDef
       // Not a hit — dodge, untargetable, and shields don't interact.
       for (let i = 0; i < intent.count; i++) {
         const position = rng.int(0, state.drawPile.length + 1);
-        state.drawPile.splice(position, 0, { cardId: intent.cardId, moduleIndex: null });
+        state.drawPile.splice(position, 0, {
+          cardId: intent.cardId,
+          moduleIndex: null,
+          malfunctioning: false,
+        });
       }
       break;
     default: {
@@ -664,7 +925,7 @@ function resolveIncomingHit(
   if (moduleTargeting !== undefined) {
     const target = pickTargetModule(state, rng, moduleTargeting);
     if (target !== null) {
-      state.malfunctioning.push(target);
+      flagModule(state, target);
     }
   }
 }
@@ -678,7 +939,7 @@ function resolveIncomingHit(
 function pickTargetModule(state: CombatState, rng: Rng, targeting: ModuleTargeting): number | null {
   const operational = state.modules
     .map((_, index) => index)
-    .filter((index) => !state.malfunctioning.includes(index));
+    .filter((index) => !isModuleMalfunctioning(state, index));
   if (operational.length === 0) {
     return null;
   }
@@ -745,8 +1006,11 @@ function applyOnDrawEffects(state: CombatState, card: CombatCard): void {
           layer.turnsUntilUp = layer.rechargeTurns;
         }
         break;
+      case 'gain-temp-shield':
+        state.tempShieldLayers += effect.count;
+        break;
       default: {
-        const exhaustive: never = effect.kind;
+        const exhaustive: never = effect;
         throw new Error(`unhandled on-draw effect: ${JSON.stringify(exhaustive)}`);
       }
     }
