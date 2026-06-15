@@ -1,6 +1,15 @@
+import { describeModuleCards } from './combat-view';
+import type { ModuleCardView } from './combat-view';
 import { getModule } from './data';
 import type { ModuleSlot } from './data';
-import { canInstallModule, canUninstallModule, canUpgradeReactor, craftCost } from './sim/economy';
+import {
+  canInstallModule,
+  canUninstallModule,
+  canUpgradeReactor,
+  craftCost,
+  slotUsage,
+} from './sim/economy';
+import type { SlotUsage } from './sim/economy';
 import type { Resources, RunState } from './sim/run-state';
 
 export interface ShipModuleView {
@@ -9,6 +18,8 @@ export interface ShipModuleView {
   slot: ModuleSlot;
   tier: 1 | 2;
   canUninstall: boolean;
+  /** Cards this module contributes to the deck (GDD §5.3) — for the inspect preview. */
+  cards: ModuleCardView[];
 }
 
 export interface CargoModuleView {
@@ -17,11 +28,14 @@ export interface CargoModuleView {
   slot: ModuleSlot;
   tier: 1 | 2;
   canInstall: boolean;
+  cards: ModuleCardView[];
 }
 
 export interface ShipView {
   modules: ShipModuleView[];
   cargo: CargoModuleView[];
+  /** Per-slot occupancy so the workbench can show used / free without re-deriving. */
+  slots: SlotUsage[];
   reactorLevel: number;
   canUpgradeReactor: boolean;
   resources: Resources;
@@ -37,6 +51,7 @@ export function buildShipView(run: RunState): ShipView {
       slot: getModule(mod.id).slot,
       tier: mod.tier,
       canUninstall: canUninstallModule(run, index),
+      cards: describeModuleCards(mod.id, mod.tier),
     })),
     cargo: run.cargo.map((mod, index) => ({
       id: mod.id,
@@ -44,7 +59,9 @@ export function buildShipView(run: RunState): ShipView {
       slot: getModule(mod.id).slot,
       tier: mod.tier,
       canInstall: canInstallModule(run, index),
+      cards: describeModuleCards(mod.id, mod.tier),
     })),
+    slots: slotUsage(run.hullId, run.modules),
     reactorLevel: run.reactorLevel,
     canUpgradeReactor: canUpgradeReactor(run),
     resources: { ...run.resources },
