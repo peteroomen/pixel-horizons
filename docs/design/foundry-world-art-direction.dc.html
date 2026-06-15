@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&family=VT323&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; background: #26272b; }
+    * { box-sizing: border-box; }
+    canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+  </style>
+</helmet>
+
+<div style="min-height: 100vh; min-width: fit-content; background: #26272b; padding: 56px 40px 90px; display: flex; flex-direction: column; align-items: center; gap: 46px; font-family: 'Space Mono', monospace;">
+
+  <!-- ============ HEADER ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 36px 44px; display: flex; flex-direction: column; gap: 18px;" data-screen-label="Header">
+    <div style="display: flex; align-items: baseline; gap: 20px;">
+      <div style="font-family: 'Press Start 2P', monospace; font-size: 19px; color: #1b1c20;">WORLD ART DIRECTION</div>
+      <div style="font-size: 14px; color: #6a6d76;">Pixel Horizons · the look inside the FOUNDRY frame</div>
+    </div>
+    <div style="font-size: 14px; color: #44464e; line-height: 1.75; max-width: 1000px;">The HUD (FOUNDRY) is done and good — this pass is everything <em>behind the glass</em>: the ship, the Bloom, and the infested lane that are currently programmer art. One thesis runs through all of it: <strong>two palettes, one law.</strong> The world is painted in Resurrect 64 — muted, ramped, shaded. The UI speaks in FOUNDRY's five pure accents. The eye never confuses them because <strong>ramped-and-muted = lore you look at; flat-and-pure = a signal you can act on.</strong> Everything below is buildable by a solo dev from generated + recolored + simple hand-drawn pixels. All art on this page is live <code style="background:#e7e5df;padding:1px 5px;">&lt;canvas&gt;</code>, integer-scaled, nearest-neighbor — exactly your render path.</div>
+  </div>
+
+  <!-- ============ 1 · THE TWO-PALETTE BRIDGE ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 32px 44px; display: flex; flex-direction: column; gap: 24px;" data-screen-label="Palette bridge">
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 13px; color: #1b1c20;">1 · TWO PALETTES, ONE LAW</div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px;">
+      <!-- Resurrect 64 -->
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-size: 13px; color: #1b1c20; font-weight: 700;">RESURRECT 64 — the world</div>
+        <div style="font-size: 12px; color: #6a6d76; line-height: 1.6;">Governs every sprite, planet and backdrop. Always used in 3–5 step <strong>ramps</strong> and never at full saturation. Organised here exactly as Kerrie Lake's ramps ship — I've labelled which ramps each faction draws from.</div>
+        <div id="r64-grid" style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px;"></div>
+        <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 4px; font-size: 11px; color: #44464e; line-height: 1.5;">
+          <div style="display:flex;gap:8px;align-items:center;"><span style="width:11px;height:11px;background:#547e64;flex-shrink:0;"></span><span style="width:11px;height:11px;background:#0eaf9b;flex-shrink:0;"></span><span style="width:11px;height:11px;background:#4d9be6;flex-shrink:0;"></span><strong>Collective</strong> — slate-greens, steel violets, teals &amp; blues (cool, hard, machined).</div>
+          <div style="display:flex;gap:8px;align-items:center;"><span style="width:11px;height:11px;background:#905ea9;flex-shrink:0;"></span><span style="width:11px;height:11px;background:#c32454;flex-shrink:0;"></span><span style="width:11px;height:11px;background:#a2a947;flex-shrink:0;"></span><strong>Bloom</strong> — purples, magentas/rose, sick yellow-greens (warm, wet, bio).</div>
+          <div style="display:flex;gap:8px;align-items:center;"><span style="width:11px;height:11px;background:#2e222f;flex-shrink:0;"></span><span style="width:11px;height:11px;background:#3e3546;flex-shrink:0;"></span><strong>Shared void</strong> — the darkest violets bottom out into FOUNDRY's #0b0d18.</div>
+        </div>
+      </div>
+
+      <!-- FOUNDRY accents + bridge -->
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-size: 13px; color: #1b1c20; font-weight: 700;">FOUNDRY — the UI &amp; the signals</div>
+        <div style="font-size: 12px; color: #6a6d76; line-height: 1.6;">Five pure accents. They live in the HUD — and they're the <strong>only</strong> fully-saturated pixels allowed to touch the world, reserved for gameplay-critical FX. Each one has a Resurrect 64 "cousin" the world art ramps toward, so the two palettes rhyme instead of clash.</div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: center;">
+            <div style="height: 34px; background: #ff9e2c; display: flex; align-items: center; justify-content: center; font-family: 'Silkscreen'; font-size: 10px; color: #14151a;">ORANGE</div>
+            <div style="font-size: 11px; color: #44464e; line-height: 1.5;"><strong>action.</strong> World use: muzzle flash, your projectiles, thruster ignition. Cousin ramp <span style="font-family:'Silkscreen';font-size:9px;background:#fb6b1d;color:#14151a;padding:1px 4px;">fb6b1d</span> <span style="font-family:'Silkscreen';font-size:9px;background:#f9c22b;color:#14151a;padding:1px 4px;">f9c22b</span></div>
+          </div>
+          <div style="display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: center;">
+            <div style="height: 34px; background: #ff4757; display: flex; align-items: center; justify-content: center; font-family: 'Silkscreen'; font-size: 10px; color: #14151a;">RED</div>
+            <div style="font-size: 11px; color: #44464e; line-height: 1.5;"><strong>enemy / danger.</strong> World use: incoming-fire flash, hit shake. Cousin <span style="font-family:'Silkscreen';font-size:9px;background:#ea4f36;color:#14151a;padding:1px 4px;">ea4f36</span> <span style="font-family:'Silkscreen';font-size:9px;background:#e83b3b;color:#fff;padding:1px 4px;">e83b3b</span></div>
+          </div>
+          <div style="display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: center;">
+            <div style="height: 34px; background: #6ad1e3; display: flex; align-items: center; justify-content: center; font-family: 'Silkscreen'; font-size: 10px; color: #14151a;">CYAN</div>
+            <div style="font-size: 11px; color: #44464e; line-height: 1.5;"><strong>shields / your tech.</strong> World use: shield bubble, cockpit &amp; engine glow. Cousin <span style="font-family:'Silkscreen';font-size:9px;background:#30e1b9;color:#14151a;padding:1px 4px;">30e1b9</span> <span style="font-family:'Silkscreen';font-size:9px;background:#8ff8e2;color:#14151a;padding:1px 4px;">8ff8e2</span></div>
+          </div>
+          <div style="display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: center;">
+            <div style="height: 34px; background: #ffb454; display: flex; align-items: center; justify-content: center; font-family: 'Silkscreen'; font-size: 10px; color: #14151a;">AMBER</div>
+            <div style="font-size: 11px; color: #44464e; line-height: 1.5;"><strong>armor / hazard / boss organ.</strong> World use: the Armor-Node's amber shell. Cousin <span style="font-family:'Silkscreen';font-size:9px;background:#f79617;color:#14151a;padding:1px 4px;">f79617</span> <span style="font-family:'Silkscreen';font-size:9px;background:#fbb954;color:#14151a;padding:1px 4px;">fbb954</span></div>
+          </div>
+          <div style="display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: center;">
+            <div style="height: 34px; background: #8ac926; display: flex; align-items: center; justify-content: center; font-family: 'Silkscreen'; font-size: 10px; color: #14151a;">GREEN</div>
+            <div style="font-size: 11px; color: #44464e; line-height: 1.5;"><strong>Bloom infestation.</strong> World use: spore glow, the Spore-Sac core. Cousin <span style="font-family:'Silkscreen';font-size:9px;background:#1ebc73;color:#14151a;padding:1px 4px;">1ebc73</span> <span style="font-family:'Silkscreen';font-size:9px;background:#cddf6c;color:#14151a;padding:1px 4px;">cddf6c</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background: #16181d; padding: 20px 24px; display: flex; gap: 28px; align-items: center;">
+      <div style="font-family: 'Press Start 2P'; font-size: 11px; color: #ff9e2c; line-height: 1.7; white-space: nowrap;">THE BRIDGE<br>RULE</div>
+      <div style="width: 2px; align-self: stretch; background: #3a3e48;"></div>
+      <div style="font-family: 'VT323', monospace; font-size: 21px; color: #c9cdd6; line-height: 1.35;">If a pixel is <span style="color:#9aa0ad;">muted and part of a ramp</span>, it's the world — lore, mass, atmosphere. If a pixel is <span style="color:#ff9e2c;">flat and pure-saturated</span>, it's a signal — a thing the player can read or act on. The world art ramps <em>toward</em> the accent it's near (your engine glows toward cyan; spores glow toward green), so the frame reads as one game — but a ramp never actually <em>reaches</em> the pure accent. That last step belongs to the HUD.</div>
+    </div>
+  </div>
+
+  <!-- ============ 2 · MECHANICAL vs ORGANIC LAW ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 32px 44px; display: flex; flex-direction: column; gap: 24px;" data-screen-label="Mechanical vs organic">
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 13px; color: #1b1c20;">2 · MECHANICAL vs ORGANIC — THE LAW</div>
+    <div style="font-size: 13px; color: #44464e; line-height: 1.7; max-width: 1000px;">The fiction is a hard contrast, so the <em>pixels</em> must be too. Every asset obeys one of two grammars. When in doubt: the Collective is <strong>drawn with a ruler</strong>; the Bloom is <strong>drawn with a sponge</strong>, and it deliberately breaks the grid the Collective respects.</div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 28px;">
+      <!-- mechanical -->
+      <div style="background: #0b0d18; padding: 24px; display: flex; flex-direction: column; gap: 18px;">
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <canvas id="cv-shape-mech" style="width: 144px; height: 144px;"></canvas>
+          <div style="font-family: 'Silkscreen'; font-size: 12px; color: #8ff8e2; line-height: 1.9;">COLLECTIVE<br><span style="color:#9aa0ad; font-size:10px;">mechanical · drawn with a ruler</span></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 9px; font-family: 'VT323'; font-size: 18px; color: #c9cdd6; line-height: 1.3;">
+          <div><span style="color:#30e1b9;">SHAPE</span> &nbsp;Rectilinear. 90° &amp; 45° only, bilateral symmetry. Reads as assembled from boxes.</div>
+          <div><span style="color:#30e1b9;">EDGE</span> &nbsp;&nbsp;1px selective outline in a darker hull tone. Crisp. Panel-line seams.</div>
+          <div><span style="color:#30e1b9;">SHADE</span> Hard cel banding, light from top. 3-step ramp per material + a cyan rim where energy runs.</div>
+          <div><span style="color:#30e1b9;">DITHER</span> Ordered / checkerboard, grid-aligned, sparingly — to fake a 4th metal tone.</div>
+          <div><span style="color:#30e1b9;">MOTION</span> Rigid &amp; snappy. On-grid moves, 1–2px recoil kick, 2-frame thruster flicker. No squash.</div>
+        </div>
+      </div>
+      <!-- organic -->
+      <div style="background: #0b0d18; padding: 24px; display: flex; flex-direction: column; gap: 18px;">
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <canvas id="cv-shape-org" style="width: 144px; height: 144px;"></canvas>
+          <div style="font-family: 'Silkscreen'; font-size: 12px; color: #cddf6c; line-height: 1.9;">THE BLOOM<br><span style="color:#9aa0ad; font-size:10px;">organic · drawn with a sponge</span></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 9px; font-family: 'VT323'; font-size: 18px; color: #c9cdd6; line-height: 1.3;">
+          <div><span style="color:#91db69;">SHAPE</span> &nbsp;Bulbous, asymmetric, branching. No straight run &gt;4px. Overhangs &amp; stray pixels break the grid.</div>
+          <div><span style="color:#91db69;">EDGE</span> &nbsp;&nbsp;Thick wet selout (violet), with a brighter pink "wet rim" highlight. Looks slimy.</div>
+          <div><span style="color:#91db69;">SHADE</span> Blotchy, not banded. Subsurface sick-green glow in pockets. Brighter flesh veins.</div>
+          <div><span style="color:#91db69;">DITHER</span> Noise / random mottle. Anti-grid — it's how flesh reads as wet and uneven.</div>
+          <div><span style="color:#91db69;">MOTION</span> Breathing. Sub-pixel wobble, slow squash-stretch, throbbing organs, swaying tendrils. Never still.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- dither demo -->
+    <div style="background: #0b0d18; padding: 20px 24px; display: flex; gap: 28px; align-items: center;">
+      <canvas id="cv-dither" style="width: 288px; height: 120px; flex-shrink: 0;"></canvas>
+      <div style="font-family: 'VT323'; font-size: 19px; color: #c9cdd6; line-height: 1.35;"><span style="color:#8ff8e2;">Left:</span> ordered dither — the Collective's way to stretch a 3-tone ramp into 4 without a new colour, every pixel on the grid. <span style="color:#cddf6c;">Right:</span> noise dither — the Bloom's mottle, seeded-random, deliberately ignoring the grid. Same two source colours; opposite grammar. <em>This single contrast is most of the readability.</em></div>
+    </div>
+  </div>
+
+  <!-- ============ 3 · GUNSHIP + MODULE COMPOSITING ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 32px 44px; display: flex; flex-direction: column; gap: 24px;" data-screen-label="Gunship and modules">
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 13px; color: #1b1c20;">3 · THE GUNSHIP — VISIBLE MODULE COMPOSITING</div>
+    <div style="font-size: 13px; color: #44464e; line-height: 1.7; max-width: 1000px;">Core fantasy: <strong>what you installed is what you see, and it's also your deck.</strong> So the ship is never one sprite — it's a base hull silhouette plus per-module overlay sprites composited onto fixed mount slots. Same data drives the card you hold and the part bolted to your hull. Here's the compositing language with a chunky "Gunship" hull.</div>
+
+    <div style="background: #0b0d18; padding: 28px; display: grid; grid-template-columns: auto auto 1fr; gap: 32px; align-items: center;">
+      <!-- base hull + slots -->
+      <div style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
+        <div style="position: relative; width: 308px; height: 196px;">
+          <canvas id="cv-ship" style="width: 308px; height: 196px;"></canvas>
+          <!-- slot markers (DOM annotation) -->
+          <div style="position:absolute; left:112px; top:14px; width:56px; height:42px; border:2px dashed #ff9e2c;"></div>
+          <div style="position:absolute; left:206px; top:32px; width:42px; height:36px; border:2px dashed #6ad1e3;"></div>
+          <div style="position:absolute; left:10px; top:78px; width:46px; height:52px; border:2px dashed #6ad1e3;"></div>
+          <div style="position:absolute; left:78px; top:128px; width:56px; height:36px; border:2px dashed #ffb454;"></div>
+        </div>
+        <div style="font-family: 'Silkscreen'; font-size: 10px; color: #9aa0ad;">BASE HULL + MOUNT SLOTS</div>
+      </div>
+
+      <!-- module tray -->
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="font-family: 'Silkscreen'; font-size: 10px; color: #9aa0ad; margin-bottom: 2px;">MODULE OVERLAYS</div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <canvas id="cv-mod-cannon" style="width: 96px; height: 60px; background:#11131c;"></canvas>
+          <div style="font-family:'VT323';font-size:17px;color:#c9cdd6;line-height:1.2;"><span style="color:#ff9e2c;">CANNON</span><br><span style="color:#6a6d76;font-size:14px;">→ Flak Volley / Cannon Burst</span></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <canvas id="cv-mod-shield" style="width: 96px; height: 72px; background:#11131c;"></canvas>
+          <div style="font-family:'VT323';font-size:17px;color:#c9cdd6;line-height:1.2;"><span style="color:#6ad1e3;">SHIELD PROJECTOR</span><br><span style="color:#6a6d76;font-size:14px;">→ Reinforce</span></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <canvas id="cv-mod-engine" style="width: 96px; height: 72px; background:#11131c;"></canvas>
+          <div style="font-family:'VT323';font-size:17px;color:#c9cdd6;line-height:1.2;"><span style="color:#30e1b9;">DRIVE POD</span><br><span style="color:#6a6d76;font-size:14px;">→ Telemetry Sync / travel</span></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <canvas id="cv-mod-armor" style="width: 96px; height: 72px; background:#11131c;"></canvas>
+          <div style="font-family:'VT323';font-size:17px;color:#c9cdd6;line-height:1.2;"><span style="color:#ffb454;">ARMOR PLATE</span><br><span style="color:#6a6d76;font-size:14px;">→ block / point-defense</span></div>
+        </div>
+      </div>
+
+      <!-- composited result -->
+      <div style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
+        <canvas id="cv-ship-built" style="width: 364px; height: 252px;"></canvas>
+        <div style="font-family: 'Silkscreen'; font-size: 10px; color: #8ff8e2;">⟵ INSTALLED &amp; FIRING</div>
+      </div>
+    </div>
+    <div style="font-size: 12px; color: #6a6d76; line-height: 1.7;"><strong>Why it's solo-dev safe:</strong> you hand-draw one base hull silhouette per ship class (a handful, total), then a small library of module overlays drawn once and reused everywhere. New ship build = new <em>composite</em>, zero new art. The muzzle is the only pure-orange pixel — the bridge rule firing live.</div>
+  </div>
+
+  <!-- ============ 4 · THE BLOOM — GRUNT + BOSS ORGANS ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 32px 44px; display: flex; flex-direction: column; gap: 24px;" data-screen-label="The Bloom">
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 13px; color: #1b1c20;">4 · THE BLOOM — GRUNT &amp; BOSS ORGANS</div>
+    <div style="font-size: 13px; color: #44464e; line-height: 1.7; max-width: 1000px;">The Bloom is wet coral-fungus that breaks the Collective's clean grid. Its silhouette sheds stray pixels; its body throbs. The boss problem is the interesting one: its <strong>targetable organs must read as distinct, attackable growths fused to the body</strong> — not HUD bars. Solution via the bridge rule: an organ is organic flesh that has grown a <em>flat pure-accent core</em>. That core is the only non-ramped pixel on the creature, so the eye instantly tags it "I can hit this," while the flesh around it stays lore.</div>
+
+    <div style="background: #0b0d18; padding: 28px; display: grid; grid-template-columns: auto 1fr; gap: 40px; align-items: center;">
+      <!-- grunt -->
+      <div style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
+        <canvas id="cv-grunt" style="width: 196px; height: 182px;"></canvas>
+        <div style="font-family: 'Silkscreen'; font-size: 11px; color: #cf657f;">MAWLING <span style="color:#6a6d76;">· grunt</span></div>
+        <div style="font-family: 'VT323'; font-size: 16px; color: #9aa0ad; line-height: 1.25; text-align: center; max-width: 196px;">Asymmetric biter. One sick-green eye, a wet maw, shed spores. No straight edge anywhere.</div>
+      </div>
+
+      <!-- boss with organ callouts -->
+      <div style="display: flex; align-items: center; gap: 28px;">
+        <div style="position: relative; width: 384px; height: 324px; flex-shrink: 0;">
+          <canvas id="cv-boss" style="width: 384px; height: 324px;"></canvas>
+          <!-- organ reticles (DOM annotation in FOUNDRY style) -->
+          <div style="position:absolute; left:250px; top:54px; width:78px; height:72px; border:2px solid #8ac926;">
+            <div style="position:absolute; top:-2px; left:-2px; width:8px; height:8px; border-top:2px solid #cddf6c; border-left:2px solid #cddf6c;"></div>
+            <div style="position:absolute; top:-2px; right:-2px; width:8px; height:8px; border-top:2px solid #cddf6c; border-right:2px solid #cddf6c;"></div>
+            <div style="position:absolute; bottom:-2px; left:-2px; width:8px; height:8px; border-bottom:2px solid #cddf6c; border-left:2px solid #cddf6c;"></div>
+            <div style="position:absolute; bottom:-2px; right:-2px; width:8px; height:8px; border-bottom:2px solid #cddf6c; border-right:2px solid #cddf6c;"></div>
+            <div style="position:absolute; top:-24px; left:0; font-family:'Silkscreen'; font-size:9px; color:#8ac926; white-space:nowrap;">SPORE-SAC</div>
+          </div>
+          <div style="position:absolute; left:248px; top:196px; width:96px; height:78px; border:2px solid #ffb454;">
+            <div style="position:absolute; top:-2px; left:-2px; width:8px; height:8px; border-top:2px solid #f9c22b; border-left:2px solid #f9c22b;"></div>
+            <div style="position:absolute; top:-2px; right:-2px; width:8px; height:8px; border-top:2px solid #f9c22b; border-right:2px solid #f9c22b;"></div>
+            <div style="position:absolute; bottom:-2px; left:-2px; width:8px; height:8px; border-bottom:2px solid #f9c22b; border-left:2px solid #f9c22b;"></div>
+            <div style="position:absolute; bottom:-2px; right:-2px; width:8px; height:8px; border-bottom:2px solid #f9c22b; border-right:2px solid #f9c22b;"></div>
+            <div style="position:absolute; bottom:-22px; right:0; font-family:'Silkscreen'; font-size:9px; color:#ffb454; white-space:nowrap;">ARMOR-NODE</div>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <div style="font-family: 'Silkscreen'; font-size: 13px; color: #f04f78;">ANCHORMAW <span style="color:#6a6d76; font-size:10px;">· lane boss</span></div>
+          <div style="display: flex; flex-direction: column; gap: 7px; font-family: 'VT323'; font-size: 18px; color: #c9cdd6; line-height: 1.3; max-width: 360px;">
+            <div><span style="color:#8ac926;">SPORE-SAC</span> — a soft translucent bladder, throbbing. Flat green core = targetable. Kill it to stop the infestation cards it injects into your hand.</div>
+            <div><span style="color:#ffb454;">ARMOR-NODE</span> — a hardened amber-plated nodule grown over the flesh. Reads "shelled." Kill it to strip the boss's ARMOR. Its plates are the only rectilinear thing on the creature — co-opted Collective wreckage.</div>
+            <div style="color:#9aa0ad;">Both are <em>fused</em> to the mass with continuous flesh and a shared wet rim — distinct silhouette, same body. Coral roots anchor it to the lane (it's part of the infestation, not a free ship).</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="font-size: 12px; color: #6a6d76; line-height: 1.7;"><strong>Solo-dev path:</strong> blob silhouette + noise-dither flesh is forgiving to draw — no clean lines to get wrong. Organs are small reusable sub-sprites stamped onto any boss body, so new bosses = new silhouette + a pick of organs. The targeting reticle is HUD (FOUNDRY), drawn by the UI layer, not painted into the sprite.</div>
+  </div>
+
+  <!-- ============ 5 · INFESTED LANE BACKDROP ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 32px 44px; display: flex; flex-direction: column; gap: 22px;" data-screen-label="Infested lane">
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 13px; color: #1b1c20;">5 · THE HYPERSPACE LANE — INFESTED, NOT EMPTY</div>
+    <div style="font-size: 13px; color: #44464e; line-height: 1.7; max-width: 1000px;">Right now the lane is a flat starfield with one diagonal streak. But the Bloom <em>infests the lanes</em> — so the backdrop should feel like you're swimming down an infected throat between safe nodes, not floating in open space. Layered for parallax: deep void → a distant cool realspace beacon (where you're trying to get) → the lane's diagonal current → Bloom coral creeping in from the top &amp; bottom edges → drifting spore motes. Procedural-friendly: Deep-Fold generates the starfield/nebula; the coral is stamped blob clusters; motes are particles.</div>
+    <div style="background: #0b0d18; padding: 18px; display: flex; justify-content: center;">
+      <canvas id="cv-lane" style="width: 1100px; height: 600px;"></canvas>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; font-size: 12px; color: #6a6d76; line-height: 1.65;">
+      <div><strong style="color:#44464e;">Depth by recolor.</strong> Far coral is dimmed toward void and shifted cooler; near coral is brighter and warmer. One blob sprite, two tints — instant parallax with no extra art.</div>
+      <div><strong style="color:#44464e;">The beacon gives direction.</strong> The one cool cluster is the realspace node you're traveling to (ties to TRAVEL 3/9 in the HUD). It's the only cool light in a warm-infected field, so the eye always knows "out is that way."</div>
+      <div><strong style="color:#44464e;">It lives.</strong> In-engine the coral breathes, motes drift across the current, and nodes pulse green on a slow sine — all cheap per-frame transforms, no new frames to draw.</div>
+    </div>
+  </div>
+
+  <!-- ============ 6 · HUD FRAMES THE WORLD ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 32px; display: flex; flex-direction: column; gap: 22px;" data-screen-label="HUD frames world">
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 13px; color: #1b1c20; padding: 0 12px;">6 · HOW THE HUD FRAMES THE WORLD</div>
+    <div style="display: flex; gap: 28px; font-size: 12px; color: #44464e; line-height: 1.65; padding: 0 12px;">
+      <div style="flex:1;"><strong>Full-bleed, plates float.</strong> The world canvas runs edge-to-edge <em>under</em> the FOUNDRY plates — no boxed viewport. The plates are instruments bolted over the glass, exactly as the HUD spec already floats them.</div>
+      <div style="flex:1;"><strong>Edge vignette.</strong> A soft darkening at the screen edges sinks the world into FOUNDRY's void so the plates sit on darkness, never on a busy starfield. Costs nothing, buys legibility.</div>
+      <div style="flex:1;"><strong>Scanlines on the world only.</strong> A 1px CRT scanline + faint flicker lives on the world layer — it's "the signal on the tube." The HUD plates stay razor-sharp DOM: the glass you read through is clean.</div>
+      <div style="flex:1;"><strong>The boundary.</strong> A 1px steel hairline where a plate meets canvas — the mount line. Chunky world pixels vs crisp small HUD pixel-font is itself the console-over-viewport cue.</div>
+    </div>
+
+    <!-- composite frame -->
+    <div style="width: 1400px; height: 790px; position: relative; overflow: hidden; background: #0b0d18; font-family: 'Silkscreen', monospace; flex-shrink: 0; margin: 0 auto;">
+      <canvas id="cv-hud" style="width: 1400px; height: 790px; position: absolute; inset: 0;"></canvas>
+      <!-- vignette -->
+      <div style="position:absolute; inset:0; pointer-events:none; background: radial-gradient(120% 90% at 50% 45%, rgba(11,13,24,0) 55%, rgba(11,13,24,0.55) 82%, rgba(11,13,24,0.9) 100%);"></div>
+      <!-- scanlines (world only; plates paint over) -->
+      <div style="position:absolute; inset:0; pointer-events:none; background: repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0px, rgba(0,0,0,0.18) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 3px);"></div>
+
+      <!-- FOUNDRY plates on top -->
+      <!-- player -->
+      <div style="position: absolute; left: 24px; top: 24px; background: #3a3e48; padding: 2px; clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);">
+        <div style="background: #16181d; padding: 14px 16px; clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px); display: flex; flex-direction: column; gap: 9px; min-width: 278px;">
+          <div style="display:flex; align-items:baseline; gap:12px;"><div style="font-size:11px; color:#9aa0ad;">HULL</div><div style="font-family:'VT323'; font-size:23px; color:#e8e6e0; line-height:1;">86/100</div></div>
+          <div style="width:100%; height:11px; background:#23262d;"><div style="width:86%; height:100%; background:#ff9e2c;"></div></div>
+          <div style="display:flex; align-items:center; gap:12px;"><div style="font-size:10px; color:#9aa0ad; width:64px;">SHIELDS</div><div style="display:flex; gap:5px;"><div style="width:15px;height:15px;background:#6ad1e3;"></div><div style="width:15px;height:15px;background:#6ad1e3;"></div><div style="width:15px;height:15px;border:2px solid #6ad1e3;"></div></div></div>
+          <div style="display:flex; align-items:center; gap:12px;"><div style="font-size:10px; color:#9aa0ad; width:64px;">AP</div><div style="display:flex; gap:5px;"><div style="width:15px;height:15px;background:#ff9e2c;"></div><div style="width:15px;height:15px;background:#ff9e2c;"></div><div style="width:15px;height:15px;border:2px solid #6b4a1e;"></div></div></div>
+        </div>
+      </div>
+      <!-- enemy -->
+      <div style="position: absolute; right: 24px; top: 24px; background: #3a3e48; padding: 2px; clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);">
+        <div style="background: #16181d; padding: 14px 16px; clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px); display: flex; flex-direction: column; gap: 9px; min-width: 320px;">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:16px;"><div style="font-size:11px; color:#e8e6e0;">ANCHORMAW</div><div style="display:flex; align-items:baseline; gap:10px;"><div style="font-family:'VT323'; font-size:16px; color:#ffb454; line-height:1;">⛨ 2</div><div style="font-family:'VT323'; font-size:23px; color:#ff8392; line-height:1;">26/26</div></div></div>
+          <div style="width:100%; height:11px; background:#23262d;"><div style="width:100%; height:100%; background:#ff4757;"></div></div>
+          <div style="width:100%; height:2px; background:#3a3e48;"></div>
+          <div style="display:flex; align-items:center; gap:10px;"><div style="background:#ff4757; color:#14151a; font-size:10px; padding:5px 8px;">ATTACK</div><div style="font-family:'VT323'; font-size:19px; color:#e8e6e0; flex:1;">Constrict</div><div style="border:2px solid #ff4757; color:#ff8392; font-family:'VT323'; font-size:14px; padding:1px 6px;">DMG ?</div></div>
+        </div>
+      </div>
+      <!-- meta -->
+      <div style="position: absolute; left: 24px; bottom: 210px; background: #3a3e48; padding: 2px; clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);">
+        <div style="background: #16181d; padding: 9px 14px; clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); display: flex; gap: 16px; align-items: baseline;">
+          <div style="font-family:'VT323'; font-size:17px; color:#e8e6e0;">TURN 3</div>
+          <div style="font-family:'VT323'; font-size:17px; color:#9aa0ad;">TRAVEL 3/9</div>
+          <div style="font-family:'VT323'; font-size:17px; color:#ffb454;">SCRAP 12</div>
+        </div>
+      </div>
+      <!-- end turn -->
+      <div style="position: absolute; right: 24px; bottom: 210px; display: flex; gap: 12px; align-items: center;">
+        <div style="background: #3a3e48; padding: 2px; clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);"><div style="background:#16181d; color:#e8e6e0; font-size:10px; padding:12px 16px; clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);">POINT-DEFENSE <span style="color:#ff9e2c;">(1 AP)</span></div></div>
+        <div style="background: #ff9e2c; color: #14151a; font-size: 11px; padding: 14px 22px; clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);">END TURN</div>
+      </div>
+      <!-- hand -->
+      <div style="position: absolute; left: 0; right: 0; bottom: 20px; display: flex; justify-content: center; gap: 14px;">
+        <div style="width: 150px; height: 156px; background: #3a3e48; padding: 2px; clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);"><div style="width:100%; height:100%; background:#1a1c22; clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); display:flex; flex-direction:column;"><div style="background:#23262d; padding:8px 10px; display:flex; gap:6px; align-items:center;"><div style="flex:1; font-size:9px; color:#e8e6e0; line-height:1.4;">FLAK VOLLEY</div><div style="width:18px; height:18px; background:#ff9e2c; color:#14151a; font-size:10px; display:flex; align-items:center; justify-content:center;">2</div></div><div style="font-family:'VT323'; font-size:16px; color:#c9cdd6; line-height:1.3; padding:10px;">Deal 6 piercing</div></div></div>
+        <div style="width: 150px; height: 156px; background: #3a3e48; padding: 2px; clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);"><div style="width:100%; height:100%; background:#1a1c22; clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); display:flex; flex-direction:column;"><div style="background:#23262d; padding:8px 10px; display:flex; gap:6px; align-items:center;"><div style="flex:1; font-size:9px; color:#e8e6e0; line-height:1.4;">REINFORCE</div><div style="width:18px; height:18px; background:#ff9e2c; color:#14151a; font-size:10px; display:flex; align-items:center; justify-content:center;">1</div></div><div style="font-family:'VT323'; font-size:16px; color:#c9cdd6; line-height:1.3; padding:10px;">Restore a shield layer</div></div></div>
+        <div style="width: 150px; height: 156px; background: #3a3e48; padding: 2px; clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); opacity:0.4;"><div style="width:100%; height:100%; background:#1a1c22; clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); display:flex; flex-direction:column;"><div style="background:#23262d; padding:8px 10px; display:flex; gap:6px; align-items:center;"><div style="flex:1; font-size:9px; color:#e8e6e0; line-height:1.4;">CANNON BURST</div><div style="width:18px; height:18px; background:#ff9e2c; color:#14151a; font-size:10px; display:flex; align-items:center; justify-content:center;">3</div></div><div style="font-family:'VT323'; font-size:16px; color:#c9cdd6; line-height:1.3; padding:10px;">Deal 3. Deal 3.</div></div></div>
+        <div style="width: 150px; height: 156px; background: #ffb454; padding: 2px; clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);"><div style="width:100%; height:100%; background:#211a10; clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); display:flex; flex-direction:column;"><div style="background:#3a2c14; padding:8px 10px; display:flex; gap:6px; align-items:center;"><div style="flex:1; font-size:9px; color:#ffb454; line-height:1.4;">VENT COOLANT</div><div style="width:18px; height:18px; background:#ff9e2c; color:#14151a; font-size:10px; display:flex; align-items:center; justify-content:center;">1</div></div><div style="font-family:'VT323'; font-size:16px; color:#d9c79a; line-height:1.3; padding:10px;">Repair ENGINES</div><div style="margin-top:auto; padding:0 10px 8px; font-size:8px; color:#ffb454;">MALFUNCTION</div></div></div>
+        <div style="width: 150px; height: 156px; background: #8ac926; padding: 2px; clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);"><div style="width:100%; height:100%; background:#131a0d; clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); display:flex; flex-direction:column;"><div style="background:#1d2a12; padding:8px 10px;"><div style="font-size:9px; color:#8ac926; line-height:1.4;">SPORE CYST</div></div><div style="font-family:'VT323'; font-size:16px; color:#9ab886; line-height:1.3; padding:10px;">Unplayable. Clogs your hand.</div><div style="margin-top:auto; padding:0 10px 8px; font-size:8px; color:#8ac926;">INFESTED</div></div></div>
+      </div>
+
+      <!-- annotation callouts -->
+      <div style="position:absolute; left:300px; top:150px; font-family:'VT323'; font-size:17px; color:#8ff8e2; text-shadow:1px 1px 0 #000;">↑ realspace beacon (TRAVEL goal)</div>
+      <div style="position:absolute; right:330px; bottom:330px; font-family:'VT323'; font-size:17px; color:#cddf6c; text-shadow:1px 1px 0 #000; text-align:right;">coral infests the lane edges →</div>
+    </div>
+    <div style="font-size: 12px; color: #6a6d76; line-height: 1.7; padding: 0 12px;">Everything above the world canvas here is the existing FOUNDRY HUD, untouched — only what's behind it changed. The player Gunship sits left, the Anchormaw right, both on the living lane, sunk into the vignette, under the scanline. That's the whole game read in one frame.</div>
+  </div>
+
+  <!-- ============ 7 · SOLO-DEV BUILD REALITY ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 32px 44px; display: flex; flex-direction: column; gap: 20px;" data-screen-label="Build reality">
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 13px; color: #1b1c20;">7 · BUILDABLE BY ONE PERSON</div>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px;">
+      <div style="display:flex; flex-direction:column; gap:8px;"><div style="font-family:'Silkscreen'; font-size:11px; color:#1b1c20;">PLANETS &amp; SPACE</div><div style="font-size:12px; color:#6a6d76; line-height:1.65;">Deep-Fold generators, then quantised to Resurrect 64 and dimmed into the void. Zero hand-pixeling — recolor is the whole job.</div></div>
+      <div style="display:flex; flex-direction:column; gap:8px;"><div style="font-family:'Silkscreen'; font-size:11px; color:#1b1c20;">SHIPS</div><div style="font-size:12px; color:#6a6d76; line-height:1.65;">A few base-hull silhouettes + a reusable module-overlay library, composited at runtime. The deck literally draws the sprite. New builds cost no new art.</div></div>
+      <div style="display:flex; flex-direction:column; gap:8px;"><div style="font-family:'Silkscreen'; font-size:11px; color:#1b1c20;">THE BLOOM</div><div style="font-size:12px; color:#6a6d76; line-height:1.65;">Blob + noise-dither flesh is the forgiving end of pixel art — no clean lines to botch. Organs &amp; tendrils are stamped sub-sprites shared across every Bloom enemy.</div></div>
+      <div style="display:flex; flex-direction:column; gap:8px;"><div style="font-family:'Silkscreen'; font-size:11px; color:#1b1c20;">FX &amp; SIGNALS</div><div style="font-size:12px; color:#6a6d76; line-height:1.65;">The pure FOUNDRY accents — muzzle, shield bubble, hit-flash, organ cores — are flat shapes drawn by code, not painted frames. The bridge rule <em>is</em> the FX budget.</div></div>
+    </div>
+    <div style="background:#16181d; padding:18px 24px; font-family:'VT323'; font-size:20px; color:#c9cdd6; line-height:1.4;">Net new hand-drawn art to ship this language on the combat screen: <span style="color:#ff9e2c;">~1 base hull, ~6 module overlays, ~3 Bloom bodies, ~4 organ/tendril stamps.</span> Everything else is generated, recolored, composited, or coded. That's the point — the look survives having no dedicated artist.</div>
+  </div>
+
+  <!-- ============ NEXT ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 28px 44px; display: flex; flex-direction: column; gap: 12px;" data-screen-label="Next steps">
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 12px; color: #1b1c20;">NEXT STEPS</div>
+    <div style="font-size: 13px; color: #44464e; line-height: 1.8;">These sprites are <em>direction</em>, drawn to prove the rules read — not final production assets. Where to go from here: ① I can push any one sprite to a tighter, production-ready frame (e.g. nail the Gunship hull + all six modules as a real sheet). ② Extend the language to the sector-map node and the platformer-mode clone, both of which fall straight out of the mechanical-vs-organic law. ③ Lock the exact Resurrect-64 sub-ramps per material into a written sprite-artist brief. Tell me which.</div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  componentDidMount() { this._tries = 0; this._boot(); }
+
+  _boot() {
+    const ready = document.getElementById('cv-ship') && document.fonts;
+    if (!ready && this._tries < 30) { this._tries++; return requestAnimationFrame(() => this._boot()); }
+    try { this._draw(); } catch (e) { console.error('art draw error', e); }
+  }
+
+  _draw() {
+    // ---------- helpers ----------
+    const R = (g, x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x|0, y|0, w|0, h|0); };
+    const hx = (c) => { c = c.replace('#',''); return [parseInt(c.slice(0,2),16), parseInt(c.slice(2,4),16), parseInt(c.slice(4,6),16)]; };
+    const mix = (a, b, t) => { const A = hx(a), B = hx(b); return `rgb(${Math.round(A[0]+(B[0]-A[0])*t)},${Math.round(A[1]+(B[1]-A[1])*t)},${Math.round(A[2]+(B[2]-A[2])*t)})`; };
+    const rng = (s) => () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+    const blob = (g, cx, cy, rx, ry, c, seed, wob) => {
+      const r = rng(seed); g.fillStyle = c;
+      for (let y = Math.floor(cy - ry - wob); y <= Math.ceil(cy + ry + wob); y++) {
+        const t = (y - cy) / ry; if (Math.abs(t) > 1) continue;
+        const half = rx * Math.sqrt(1 - t * t);
+        const wl = (r() - 0.5) * 2 * wob, wr = (r() - 0.5) * 2 * wob;
+        const x0 = Math.round(cx - half + wl), x1 = Math.round(cx + half + wr);
+        g.fillRect(x0, y, Math.max(1, x1 - x0), 1);
+      }
+    };
+    const dither = (g, x, y, w, h, c, seed, dens) => {
+      const r = rng(seed); g.fillStyle = c;
+      for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
+        if (r() < dens) { const px = x + xx, py = y + yy; const a = g.getImageData(px, py, 1, 1).data; if (a[3] > 0) g.fillRect(px, py, 1, 1); }
+      }
+    };
+    const outline = (g, w, h, col) => {
+      const img = g.getImageData(0, 0, w, h), d = img.data, op = (i) => d[i*4+3] > 0, add = [];
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const i = y*w+x; if (op(i)) continue;
+        let near = false;
+        if (x>0 && op(i-1)) near = true; else if (x<w-1 && op(i+1)) near = true;
+        else if (y>0 && op(i-w)) near = true; else if (y<h-1 && op(i+w)) near = true;
+        if (near) add.push([x, y]);
+      }
+      g.fillStyle = col; for (const [x, y] of add) g.fillRect(x, y, 1, 1);
+    };
+    const make = (w, h, fn, oc) => {
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const g = c.getContext('2d'); g.imageSmoothingEnabled = false; fn(g);
+      if (oc) outline(g, w, h, oc); return c;
+    };
+    const disp = (id, w, h) => {
+      const c = document.getElementById(id); if (!c) return null;
+      c.width = w; c.height = h; const g = c.getContext('2d'); g.imageSmoothingEnabled = false; return g;
+    };
+    const E = '#2e222f';   // shared darkest outline
+
+    // ---------- Resurrect 64 swatch grid (DOM) ----------
+    const R64 = ['2e222f','3e3546','625565','966c6c','ab947a','694f62','7f708a','9babb2','c7dcd0','ffffff','6e2727','b33831','ea4f36','f57d4a','ae2334','e83b3b','fb6b1d','f79617','f9c22b','7a3045','9e4539','cd683d','e6904e','fbb954','4c3e24','676633','a2a947','d5e04b','fbff86','165a4c','239063','1ebc73','91db69','cddf6c','313638','374e4a','547e64','92a984','b2ba90','0b5e65','0b8a8f','0eaf9b','30e1b9','8ff8e2','323353','484a77','4d65b4','4d9be6','8fd3ff','45293f','6b3e75','905ea9','a884f3','eaaded','753c54','a24b6f','cf657f','ed8099','831c5d','c32454','f04f78','f68181','fca790','fdcbb0'];
+    const grid = document.getElementById('r64-grid');
+    if (grid && !grid.childElementCount) {
+      R64.forEach((h) => { const d = document.createElement('div'); d.title = '#' + h; d.style.cssText = 'width:100%;aspect-ratio:1;background:#' + h + ';'; grid.appendChild(d); });
+    }
+
+    // ---------- module sprites ----------
+    const cannon = make(16, 10, (g) => {
+      R(g,0,5,7,4,'#3e3546'); R(g,0,5,7,1,'#625565');
+      R(g,3,2,6,6,'#547e64'); R(g,3,2,6,1,'#92a984'); R(g,3,7,6,1,'#374e4a');
+      R(g,5,4,2,2,'#0b8a8f');
+      R(g,9,4,6,2,'#374e4a'); R(g,9,4,6,1,'#547e64');
+      R(g,15,4,1,2,'#f9c22b'); R(g,14,4,1,2,'#fb6b1d');
+    }, E);
+    const shieldM = make(14, 12, (g) => {
+      R(g,2,8,8,3,'#3e3546'); R(g,2,8,8,1,'#625565');
+      R(g,5,5,3,3,'#625565');
+      R(g,3,2,8,3,'#0b8a8f'); R(g,3,2,8,1,'#8ff8e2'); R(g,3,4,8,1,'#0b5e65');
+      R(g,11,3,1,1,'#30e1b9'); R(g,12,5,1,1,'#8ff8e2'); R(g,11,7,1,1,'#30e1b9');
+    }, E);
+    const engineM = make(14, 12, (g) => {
+      R(g,4,3,8,6,'#374e4a'); R(g,4,3,8,1,'#547e64'); R(g,4,8,8,1,'#313638');
+      R(g,10,4,2,4,'#625565'); R(g,5,5,4,1,'#0b8a8f');
+      R(g,2,4,2,4,'#3e3546');
+      R(g,0,5,2,2,'#30e1b9'); R(g,1,5,1,2,'#8ff8e2');
+    }, E);
+    const armorM = make(14, 12, (g) => {
+      R(g,2,2,10,8,'#547e64'); R(g,2,2,10,1,'#92a984'); R(g,2,9,10,1,'#374e4a');
+      R(g,2,2,1,8,'#92a984'); R(g,11,2,1,8,'#374e4a');
+      R(g,2,5,10,1,'#fbb954');
+      R(g,4,4,1,1,'#313638'); R(g,9,4,1,1,'#313638'); R(g,4,7,1,1,'#313638'); R(g,9,7,1,1,'#313638');
+    }, E);
+
+    // ---------- base hull (Gunship) ----------
+    const shipFn = (g) => {
+      // engine block
+      R(g,2,8,5,12,'#374e4a'); R(g,2,8,5,2,'#547e64'); R(g,2,18,5,2,'#313638'); R(g,3,10,3,1,'#0b8a8f');
+      // thruster nozzles
+      R(g,0,10,2,3,'#3e3546'); R(g,0,11,1,1,'#30e1b9');
+      R(g,0,15,2,3,'#3e3546'); R(g,0,16,1,1,'#30e1b9');
+      // fuselage
+      R(g,6,10,30,8,'#547e64'); R(g,6,10,30,2,'#92a984'); R(g,8,10,26,1,'#b2ba90'); R(g,6,16,30,2,'#374e4a');
+      // nose taper
+      R(g,36,11,3,6,'#547e64'); R(g,36,11,3,1,'#92a984'); R(g,39,12,2,4,'#92a984'); R(g,41,13,1,2,'#b2ba90');
+      // bridge
+      R(g,14,6,12,4,'#547e64'); R(g,14,6,12,1,'#b2ba90'); R(g,14,9,12,1,'#374e4a');
+      // cockpit
+      R(g,21,7,4,2,'#0b8a8f'); R(g,22,7,3,1,'#8ff8e2');
+      // fins
+      R(g,8,3,4,7,'#625565'); R(g,8,3,4,1,'#9babb2'); R(g,9,18,5,5,'#374e4a'); R(g,9,22,5,1,'#313638');
+      // panel seams
+      R(g,16,11,1,5,'#374e4a'); R(g,24,11,1,5,'#374e4a'); R(g,30,11,1,5,'#374e4a');
+      // side vent
+      R(g,10,13,4,3,'#3e3546'); R(g,10,13,4,1,'#625565');
+      // energy conduit
+      R(g,17,12,9,1,'#0b5e65'); R(g,19,12,4,1,'#0eaf9b');
+      // running lights
+      R(g,13,17,1,1,'#fb6b1d'); R(g,21,17,1,1,'#fb6b1d'); R(g,29,17,1,1,'#fb6b1d');
+    };
+    const ship = make(44, 28, shipFn, E);
+
+    // ---------- Bloom grunt ----------
+    const gruntFn = (g) => {
+      blob(g,14,13,9,9,'#905ea9',7,2);
+      blob(g,13,11,4,4,'#a884f3',11,1);
+      blob(g,15,16,4,4,'#6b3e75',13,1);
+      R(g,9,6,8,1,'#eaaded');
+      // maw (left)
+      R(g,4,11,7,6,'#831c5d'); R(g,5,12,5,4,'#c32454');
+      R(g,5,11,1,1,'#fca790'); R(g,7,11,1,1,'#fca790'); R(g,9,11,1,1,'#fca790');
+      R(g,6,16,1,1,'#fca790'); R(g,8,16,1,1,'#fca790');
+      // eye
+      R(g,17,9,3,3,'#165a4c'); R(g,18,9,2,2,'#91db69'); R(g,18,9,1,1,'#cddf6c');
+      // spore spots
+      R(g,21,13,2,2,'#1ebc73'); R(g,19,17,1,1,'#91db69'); R(g,15,20,2,1,'#a2a947');
+      dither(g,8,8,14,10,'#a24b6f',7,0.12);
+      // shed pixels
+      R(g,26,11,1,1,'#905ea9'); R(g,2,18,1,1,'#6b3e75'); R(g,24,5,1,1,'#d5e04b'); R(g,3,8,1,1,'#c32454');
+    };
+    const grunt = make(28, 26, gruntFn, E);
+
+    // ---------- Anchormaw boss ----------
+    const bossFn = (g) => {
+      // main mass
+      blob(g,34,28,22,22,'#6b3e75',23,3);
+      blob(g,29,21,13,12,'#905ea9',29,2);
+      blob(g,38,38,15,12,'#45293f',31,2);
+      blob(g,27,19,6,5,'#a24b6f',37,1);
+      // wet rim
+      R(g,22,8,14,1,'#eaaded'); R(g,20,9,3,1,'#a884f3');
+      // maw (center-left)
+      R(g,8,22,16,12,'#831c5d'); R(g,10,24,12,8,'#45293f'); R(g,12,26,8,4,'#c32454');
+      // teeth
+      for (const tx of [9,12,15,18,21]) R(g,tx,21,1,2,'#fdcbb0');
+      for (const tx of [10,13,16,19]) R(g,tx,33,1,2,'#fdcbb0');
+      R(g,7,25,2,1,'#fca790'); R(g,7,30,2,1,'#fca790');
+      // SPORE-SAC (upper right)
+      blob(g,46,16,9,8,'#165a4c',41,1);
+      blob(g,46,16,7,6,'#1ebc73',43,1);
+      blob(g,45,15,4,3,'#91db69',45,1);
+      R(g,45,15,2,2,'#cddf6c');
+      R(g,48,18,1,1,'#fbff86'); R(g,44,18,1,1,'#d5e04b');
+      // ARMOR-NODE (lower right)
+      R(g,44,34,15,12,'#753c54');
+      R(g,45,35,13,10,'#9e4539'); R(g,45,35,13,1,'#e6904e');
+      R(g,46,36,5,4,'#fbb954'); R(g,52,36,5,4,'#f79617'); R(g,46,41,11,3,'#e6904e');
+      R(g,46,36,5,1,'#f9c22b');
+      R(g,48,38,1,1,'#4c3e24'); R(g,54,38,1,1,'#4c3e24');
+      // coral roots (anchor to lane)
+      R(g,20,48,2,6,'#45293f'); R(g,28,49,2,5,'#6b3e75'); R(g,36,48,2,6,'#45293f'); R(g,44,49,1,5,'#6b3e75'); R(g,15,46,2,5,'#45293f');
+      // spore motes
+      R(g,58,12,1,1,'#cddf6c'); R(g,6,18,1,1,'#91db69'); R(g,60,40,1,1,'#a2a947'); R(g,5,40,1,1,'#1ebc73');
+      dither(g,16,12,38,32,'#a24b6f',17,0.07);
+    };
+    const boss = make(64, 54, bossFn, E);
+
+    // ---------- shape-law demos ----------
+    const shapeMech = make(24, 24, (g) => {
+      R(g,4,6,16,12,'#547e64'); R(g,4,6,16,2,'#92a984'); R(g,4,16,16,2,'#374e4a');
+      R(g,2,9,2,6,'#3e3546'); R(g,20,9,2,6,'#3e3546');
+      R(g,9,2,6,4,'#625565'); R(g,9,2,6,1,'#9babb2');
+      R(g,11,9,2,2,'#0b8a8f'); R(g,11,9,1,1,'#8ff8e2');
+      // ordered dither band
+      for (let y=12;y<15;y++) for (let x=5;x<19;x++) if ((x+y)%2===0) R(g,x,y,1,1,'#374e4a');
+    }, E);
+    const shapeOrg = make(24, 24, (g) => {
+      blob(g,12,13,9,9,'#905ea9',3,2);
+      blob(g,10,10,4,4,'#a884f3',9,1);
+      blob(g,14,17,4,3,'#45293f',5,1);
+      R(g,9,5,7,1,'#eaaded');
+      R(g,7,12,2,2,'#1ebc73'); R(g,16,15,1,1,'#cddf6c'); R(g,11,18,2,1,'#a2a947');
+      dither(g,6,7,13,11,'#a24b6f',8,0.14);
+      R(g,21,9,1,1,'#905ea9'); R(g,3,16,1,1,'#6b3e75'); R(g,18,4,1,1,'#d5e04b');
+    }, E);
+
+    // dither contrast demo (48x20): left ordered, right noise, same 2 colors
+    const gd = disp('cv-dither', 48, 20);
+    if (gd) {
+      R(gd,0,0,48,20,'#374e4a');
+      // ordered left half
+      for (let y=0;y<20;y++) for (let x=0;x<22;x++) if ((x+y)%2===0) R(gd,x,y,1,1,'#92a984');
+      // divider
+      R(gd,23,0,2,20,'#0b0d18');
+      // noise right half
+      const r = rng(99);
+      for (let y=0;y<20;y++) for (let x=26;x<48;x++) if (r()<0.45) R(gd,x,y,1,1,'#92a984');
+    }
+
+    // ---------- blit single-sprite canvases ----------
+    const sm = disp('cv-shape-mech', 24, 24); if (sm) sm.drawImage(shapeMech, 0, 0);
+    const so = disp('cv-shape-org', 24, 24); if (so) so.drawImage(shapeOrg, 0, 0);
+    const gs = disp('cv-ship', 44, 28); if (gs) gs.drawImage(ship, 0, 0);
+    const gc = disp('cv-mod-cannon', 16, 10); if (gc) gc.drawImage(cannon, 0, 0);
+    const gsh = disp('cv-mod-shield', 14, 12); if (gsh) gsh.drawImage(shieldM, 0, 0);
+    const ge = disp('cv-mod-engine', 14, 12); if (ge) ge.drawImage(engineM, 0, 0);
+    const ga = disp('cv-mod-armor', 14, 12); if (ga) ga.drawImage(armorM, 0, 0);
+    const gg = disp('cv-grunt', 28, 26); if (gg) gg.drawImage(grunt, 0, 0);
+    const gb = disp('cv-boss', 64, 54); if (gb) gb.drawImage(boss, 0, 0);
+
+    // ---------- composited ship (hull + modules) ----------
+    const gbuilt = disp('cv-ship-built', 52, 36);
+    if (gbuilt) {
+      gbuilt.drawImage(ship, 4, 5);
+      gbuilt.drawImage(cannon, 16, 1);        // top cannon slot
+      gbuilt.drawImage(shieldM, 32, 2);       // front-top projector
+      gbuilt.drawImage(engineM, 0, 9);        // rear drive pod (over engine block)
+      gbuilt.drawImage(armorM, 16, 22);       // lower flank armor
+      // muzzle flash (pure orange FX — the bridge rule live)
+      R(gbuilt,40,6,3,1,'#f9c22b'); R(gbuilt,43,5,2,3,'#fb6b1d'); R(gbuilt,45,6,2,1,'#f79617'); R(gbuilt,47,6,1,1,'#fbb954');
+    }
+
+    // ---------- lane backdrop ----------
+    const drawLane = (g, W, H, seed) => {
+      const r = rng(seed);
+      // void gradient (top cool -> bottom faintly infected)
+      for (let y = 0; y < H; y++) R(g, 0, y, W, 1, mix('#0b0d18', '#17111f', y / H));
+      // far stars
+      const starCols = ['#3e3546','#484a77','#625565','#374e4a'];
+      for (let i = 0; i < W * H * 0.03; i++) {
+        const x = (r()*W)|0, y = (r()*H)|0;
+        R(g, x, y, 1, 1, starCols[(r()*starCols.length)|0]);
+      }
+      for (let i = 0; i < 18; i++) { const x=(r()*W)|0,y=(r()*H)|0; R(g,x,y,1,1, r()<0.5?'#8fd3ff':'#9babb2'); }
+      // realspace beacon (cool, far) upper-right-ish
+      const bx = (W*0.66)|0, by = (H*0.26)|0;
+      blob(g, bx, by, 5, 4, mix('#323353','#0b0d18',0.3), 4, 1);
+      blob(g, bx, by, 3, 2, '#4d65b4', 6, 1);
+      R(g, bx-1, by-1, 2, 2, '#8fd3ff'); R(g, bx, by, 1, 1, '#c7dcd0');
+      for (const [dx,dy] of [[-4,-3],[4,-2],[3,3],[-3,3]]) R(g,bx+dx,by+dy,1,1,'#4d9be6');
+      // diagonal lane current (haze band, matches existing streak)
+      for (let t = 0; t <= 1; t += 1/(W*1.4)) {
+        const x = (t*W)|0, y = (H*0.18 + t*H*0.6)|0;
+        if (r()<0.5) R(g, x, y, 1, 1, mix('#17111f','#3a2740',0.5));
+        if (r()<0.18) R(g, x, y-1, 1, 1, '#45293f');
+      }
+      // coral infestation along top & bottom edges + a few mid
+      const coral = (cx, cy, sc, depth, sd) => {
+        const dim = (c) => mix(c, '#0b0d18', depth*0.62);
+        blob(g, cx, cy, 3+sc, 2+sc*0.8, dim('#6b3e75'), sd, 1+sc*0.3);
+        blob(g, cx, cy - sc*0.3, 2+sc*0.6, 1+sc*0.5, dim('#905ea9'), sd+5, 1);
+        R(g, cx, cy - 2 - sc, 1, 1, dim('#91db69'));
+        R(g, cx + sc, cy - 1, 1, 1, dim('#1ebc73'));
+        R(g, cx - sc, cy, 1, 1, dim('#a2a947'));
+        // tendrils into the lane
+        const dir = cy < H/2 ? 1 : -1;
+        R(g, cx-1, cy + dir*2, 1, 2+sc, dim('#45293f'));
+        R(g, cx+2, cy + dir, 1, 1+sc, dim('#6b3e75'));
+      };
+      // top edge clusters
+      coral(18, 6, 4, 0.0, 21); coral(70, 4, 3, 0.3, 22); coral(120, 8, 5, 0.0, 23);
+      coral(165, 3, 2, 0.5, 24); coral(205, 7, 4, 0.15, 25);
+      // bottom edge clusters
+      coral(30, H-6, 5, 0.0, 31); coral(95, H-4, 3, 0.35, 32); coral(150, H-8, 5, 0.0, 33);
+      coral(190, H-5, 4, 0.2, 34); coral(60, H-3, 2, 0.5, 35);
+      // mid-depth drifting growths
+      coral(108, 64, 2, 0.55, 41); coral(48, 80, 2, 0.5, 42);
+      // spore motes
+      for (let i = 0; i < 60; i++) {
+        const x=(r()*W)|0, y=(r()*H)|0, near = r();
+        const c = near<0.5 ? mix('#1ebc73','#0b0d18',0.4) : (near<0.8?'#91db69':'#cddf6c');
+        R(g, x, y, 1, 1, c);
+      }
+    };
+    const gl = disp('cv-lane', 220, 120); if (gl) drawLane(gl, 220, 120, 1234);
+
+    // ---------- HUD composite scene ----------
+    const gh = disp('cv-hud', 280, 158);
+    if (gh) {
+      drawLane(gh, 280, 158, 777);
+      // player gunship (left-center)
+      gh.drawImage(ship, 36, 74);
+      // a grunt drifting mid
+      gh.drawImage(grunt, 150, 96);
+      // boss (right)
+      gh.drawImage(boss, 198, 34);
+      // player muzzle FX firing right
+      R(gh,82,86,3,1,'#f9c22b'); R(gh,85,85,3,3,'#fb6b1d'); R(gh,88,86,4,1,'#f79617');
+    }
+  }
+}
+</script>
+</body>
+</html>

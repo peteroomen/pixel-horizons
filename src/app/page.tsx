@@ -181,6 +181,30 @@ export default function Home() {
         onEventUpdate={onEventUpdate}
       />
 
+      {/* World framing (World Art Direction §6): the canvas runs full-bleed under the
+          FOUNDRY plates; a vignette sinks it into the void and a 1px scanline lives on
+          the world only. Both are pointer-events-none and paint under every overlay. */}
+      {(phase === 'lane' || phase === 'surface') && (
+        <>
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                'radial-gradient(120% 90% at 50% 45%, rgba(11,13,24,0) 55%, rgba(11,13,24,0.55) 82%, rgba(11,13,24,0.9) 100%)',
+            }}
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                'repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0, rgba(0,0,0,0.18) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 3px)',
+            }}
+          />
+        </>
+      )}
+
       {/* Title: a saved expedition exists */}
       {phase === 'title' && mapView !== null && (
         <TitleOverlay
