@@ -381,30 +381,31 @@ describe('card effects', () => {
     return state;
   }
 
-  it('buff-next-attack is flat and consumed by the next damage effect', () => {
+  it('Charged is flat and consumed by the next damage effect', () => {
     const state = fresh(['card-lock-on', 'card-missile-salvo']);
     playCard(state, 0);
-    expect(state.modifiers.nextAttackBonus).toBe(3);
+    expect(state.shipStatuses).toEqual([{ id: 'status-charged', magnitude: 3 }]);
     playCard(state, 0);
     expect(state.enemyHp).toBe(getEnemy(LAMPREY).maxHp - 11);
-    expect(state.modifiers.nextAttackBonus).toBe(0);
+    expect(state.shipStatuses).toHaveLength(0);
   });
 
-  it('amplify-next-attack multiplies and is consumed', () => {
+  it('Overcharged multiplies and is consumed', () => {
     const state = fresh(['card-overcharge', 'card-cannon-burst']);
     playCard(state, 0);
-    // First hit doubled (3 × 2), second hit plain — modifiers are per-hit, not per-card.
+    // First hit doubled (3 × 2), second hit plain — buffs are per-hit, not per-card.
     playCard(state, 0);
     expect(state.enemyHp).toBe(getEnemy(LAMPREY).maxHp - 9);
-    expect(state.modifiers.nextAttackMultiplier).toBe(1);
+    expect(state.shipStatuses).toHaveLength(0);
   });
 
-  it('vulnerable adds to every hit for the rest of the fight', () => {
+  it('Marked adds to every hit against its target for the rest of the fight', () => {
     const state = fresh(['card-tracer-lock', 'card-cannon-burst']);
     playCard(state, 0);
     playCard(state, 0);
     expect(state.enemyHp).toBe(getEnemy(LAMPREY).maxHp - 10);
-    expect(state.modifiers.enemyVulnerable).toBe(2);
+    // Tracer Lock with no organ focused marks the core; the mark persists.
+    expect(state.coreStatuses).toEqual([{ id: 'status-marked', magnitude: 2 }]);
   });
 
   it('travel accumulates as a bare counter', () => {
@@ -579,18 +580,18 @@ describe('hull innate abilities (GDD §4.1)', () => {
     expect(canUseInnate(state)).toBe(true);
   });
 
-  it('Point-Defense throws when unaffordable and skips next-attack modifiers', () => {
+  it('Point-Defense throws when unaffordable and skips ship attack buffs', () => {
     const state = createCombat(gunshipRun(), LAMPREY);
     state.ap = 0;
     expect(canUseInnate(state)).toBe(false);
     expect(() => activateInnate(state)).toThrow('cannot afford');
     state.ap = 1;
-    state.modifiers.nextAttackBonus = 3;
-    state.modifiers.enemyVulnerable = 2;
+    state.shipStatuses.push({ id: 'status-charged', magnitude: 3 });
+    state.coreStatuses.push({ id: 'status-marked', magnitude: 2 });
     activateInnate(state);
-    // Vulnerable applies per hit; a saved-up Lock-On is NOT eaten by the innate.
+    // Marked applies per hit; a saved-up Charged is NOT eaten by the innate.
     expect(state.enemyHp).toBe(getEnemy(LAMPREY).maxHp - 4);
-    expect(state.modifiers.nextAttackBonus).toBe(3);
+    expect(state.shipStatuses).toEqual([{ id: 'status-charged', magnitude: 3 }]);
   });
 
   it('Point-Defense can land the killing blow', () => {
@@ -1300,5 +1301,31 @@ describe('enemy organs (GDD §5.4)', () => {
     state.partHp[0] = 0;
     selectTarget(state, 0);
     expect(state.targetPart).toBeNull();
+  });
+
+  it('Tracer Lock marks the focused organ, not the core or other organs', () => {
+    const state = createCombat(gunshipRun('organs'), GATEMAW);
+    selectTarget(state, 1);
+    state.hand = hand('card-tracer-lock');
+    playCard(state, 0);
+    expect(state.partStatuses[1]).toEqual([{ id: 'status-marked', magnitude: 2 }]);
+    expect(state.partStatuses[0]).toEqual([]);
+    expect(state.coreStatuses).toEqual([]);
+    // A hit on the marked organ takes the +2; the core (unmarked) does not.
+    state.hand = hand('card-missile-salvo'); // 8
+    playCard(state, 0);
+    expect(state.partHp[1]).toBe(22 - 10); // 8 + 2 marked
+  });
+
+  it('a mark on one organ does not help hits against the core', () => {
+    const state = createCombat(gunshipRun('organs'), GATEMAW);
+    state.coreStatuses.push({ id: 'status-marked', magnitude: 2 });
+    const coreBefore = state.enemyHp;
+    state.enemyArmor = 0;
+    selectTarget(state, 0);
+    state.hand = hand('card-missile-salvo'); // 8 → organ 0, which is unmarked
+    playCard(state, 0);
+    expect(state.partHp[0]).toBe(18 - 8); // no mark bonus on this organ
+    expect(state.enemyHp).toBe(coreBefore); // core untouched
   });
 });

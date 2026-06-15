@@ -3,6 +3,7 @@
 import type { CombatView, IntentDetail, IntentView } from '@/game/main';
 import Plate from '@/components/foundry/Plate';
 import StatBar from '@/components/foundry/StatBar';
+import InfoChip from '@/components/foundry/InfoChip';
 
 interface EnemyPlateProps {
   view: CombatView;
@@ -46,6 +47,21 @@ export default function EnemyPlate({ view, onSelectTarget }: EnemyPlateProps) {
           </span>
         </div>
 
+        {/* Core debuffs (GDD §5.10) — tap a chip to explain it */}
+        {view.enemyStatuses.length > 0 && (
+          <div className="pointer-events-auto flex flex-wrap items-center gap-1">
+            {view.enemyStatuses.map((status) => (
+              <InfoChip
+                key={status.id}
+                label={status.name}
+                value={status.value}
+                description={status.description}
+                tone={status.tone}
+              />
+            ))}
+          </div>
+        )}
+
         {/* HP bar — tap to focus the core (GDD §5.4) when organs are present */}
         {view.enemyParts.length > 0 ? (
           <button
@@ -76,33 +92,48 @@ export default function EnemyPlate({ view, onSelectTarget }: EnemyPlateProps) {
               Tap a target to focus fire
             </div>
             {view.enemyParts.map((part, index) => (
-              <button
-                key={part.name}
-                type="button"
-                disabled={!part.alive}
-                onClick={() => onSelectTarget?.(part.selected ? null : index)}
-                className={`pointer-events-auto touch-manipulation block w-full rounded-sm border px-1.5 py-1 text-left ${
-                  part.alive ? 'active:bg-white/5' : 'opacity-40'
-                } ${part.selected ? 'border-fd-orange bg-fd-orange/15' : 'border-fd-strip'}`}
-              >
-                <div className="flex items-baseline justify-between gap-1">
-                  <span className="font-label uppercase text-[8px] sm:text-[9px] text-fd-amber">
-                    {part.name}
-                    <span className="ml-1 text-fd-muted">{part.ability}</span>
-                  </span>
-                  <span className="flex items-baseline gap-1.5">
-                    {part.selected && <FocusTag />}
-                    <span className="font-readout text-[11px] sm:text-[13px] text-fd-ink">
-                      {part.hp}/{part.maxHp}
+              <div key={part.name}>
+                <button
+                  type="button"
+                  disabled={!part.alive}
+                  onClick={() => onSelectTarget?.(part.selected ? null : index)}
+                  className={`pointer-events-auto touch-manipulation block w-full rounded-sm border px-1.5 py-1 text-left ${
+                    part.alive ? 'active:bg-white/5' : 'opacity-40'
+                  } ${part.selected ? 'border-fd-orange bg-fd-orange/15' : 'border-fd-strip'}`}
+                >
+                  <div className="flex items-baseline justify-between gap-1">
+                    <span className="font-label uppercase text-[8px] sm:text-[9px] text-fd-amber">
+                      {part.name}
+                      <span className="ml-1 text-fd-muted">{part.ability}</span>
                     </span>
-                  </span>
-                </div>
-                <StatBar
-                  value={part.hp}
-                  max={part.maxHp}
-                  fillClassName={part.alive ? 'bg-fd-amber' : 'bg-fd-muted'}
-                />
-              </button>
+                    <span className="flex items-baseline gap-1.5">
+                      {part.selected && <FocusTag />}
+                      <span className="font-readout text-[11px] sm:text-[13px] text-fd-ink">
+                        {part.hp}/{part.maxHp}
+                      </span>
+                    </span>
+                  </div>
+                  <StatBar
+                    value={part.hp}
+                    max={part.maxHp}
+                    fillClassName={part.alive ? 'bg-fd-amber' : 'bg-fd-muted'}
+                  />
+                </button>
+                {/* This organ's debuffs (GDD §5.10) — sits below its row, tap to explain */}
+                {part.alive && part.statuses.length > 0 && (
+                  <div className="pointer-events-auto mt-0.5 flex flex-wrap items-center gap-1 pl-1.5">
+                    {part.statuses.map((status) => (
+                      <InfoChip
+                        key={status.id}
+                        label={status.name}
+                        value={status.value}
+                        description={status.description}
+                        tone={status.tone}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         )}

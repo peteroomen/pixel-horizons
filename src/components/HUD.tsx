@@ -5,6 +5,7 @@ import PlayerPlate from '@/components/PlayerPlate';
 import EnemyPlate from '@/components/EnemyPlate';
 import MetaStrip from '@/components/MetaStrip';
 import ButtonBar from '@/components/ButtonBar';
+import { InfoChipProvider } from '@/components/foundry/InfoChip';
 
 interface HUDProps {
   view: CombatView;
@@ -24,7 +25,7 @@ export default function HUD({
   onSelectTarget,
 }: HUDProps) {
   return (
-    <>
+    <InfoChipProvider>
       {/* Top: hero plates — content-sized at the screen edges, not full-width columns */}
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-2 sm:p-6">
         <PlayerPlate view={view} />
@@ -43,6 +44,6 @@ export default function HUD({
           onPayToll={onPayToll}
         />
       </div>
-    </>
+    </InfoChipProvider>
   );
 }

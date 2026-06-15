@@ -3,6 +3,7 @@
 import type { CombatView } from '@/game/main';
 import Plate from '@/components/foundry/Plate';
 import StatBar from '@/components/foundry/StatBar';
+import InfoChip from '@/components/foundry/InfoChip';
 
 interface PlayerPlateProps {
   view: CombatView;
@@ -67,6 +68,21 @@ export default function PlayerPlate({ view }: PlayerPlateProps) {
             />
           ))}
         </div>
+
+        {/* Powers/buffs (GDD §5.10) — always visible, tap a chip to explain it */}
+        {view.shipStatuses.length > 0 && (
+          <div className="pointer-events-auto flex flex-wrap items-center gap-1">
+            {view.shipStatuses.map((status) => (
+              <InfoChip
+                key={status.id}
+                label={status.name}
+                value={status.value}
+                description={status.description}
+                tone={status.tone}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Malfunction warnings */}
         {view.modules

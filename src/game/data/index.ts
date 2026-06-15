@@ -4,6 +4,7 @@ import { EVENT_DEFS } from './events';
 import { HULL_DEFS } from './hulls';
 import { MODIFIER_DEFS } from './modifiers';
 import { MODULE_DEFS } from './modules';
+import { STATUS_DEFS, type StatusDef } from './statuses';
 import type {
   CardDef,
   CardId,
@@ -16,6 +17,7 @@ import type {
   ModifierId,
   ModuleDef,
   ModuleId,
+  StatusId,
 } from './types';
 
 export * from './types';
@@ -26,6 +28,8 @@ export { MODIFIER_DEFS } from './modifiers';
 export { HULL_DEFS } from './hulls';
 export { ENEMY_DEFS } from './enemies';
 export { EVENT_DEFS } from './events';
+export { STATUS_DEFS } from './statuses';
+export type { StatusDef, StatusDecay, StatusStack, StatusDisplay } from './statuses';
 
 const cardsById = new Map<CardId, CardDef>(CARD_DEFS.map((c) => [c.id, c]));
 const modulesById = new Map<ModuleId, ModuleDef>(MODULE_DEFS.map((m) => [m.id, m]));
@@ -33,6 +37,7 @@ const modifiersById = new Map<ModifierId, ModifierDef>(MODIFIER_DEFS.map((m) => 
 const hullsById = new Map<HullId, HullDef>(HULL_DEFS.map((h) => [h.id, h]));
 const enemiesById = new Map<EnemyId, EnemyDef>(ENEMY_DEFS.map((e) => [e.id, e]));
 const eventsById = new Map<string, EventDef>(EVENT_DEFS.map((e) => [e.id, e]));
+const statusesById = new Map<StatusId, StatusDef>(STATUS_DEFS.map((s) => [s.id, s]));
 
 function lookup<T>(map: Map<string, T>, id: string, kind: string): T {
   const def = map.get(id);
@@ -64,4 +69,8 @@ export function getEnemy(id: EnemyId): EnemyDef {
 
 export function getEvent(id: string): EventDef {
   return lookup(eventsById, id, 'event');
+}
+
+export function getStatus(id: StatusId): StatusDef {
+  return lookup(statusesById, id, 'status');
 }

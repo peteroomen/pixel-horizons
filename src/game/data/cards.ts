@@ -23,7 +23,7 @@ export const CARD_DEFS: readonly CardDef[] = [
     id: 'card-overcharge',
     name: 'Overcharge',
     apCost: 0,
-    effects: [{ kind: 'amplify-next-attack', multiplier: 2 }],
+    effects: [{ kind: 'apply-status', status: 'status-overcharged', magnitude: 2, to: 'self' }],
     // Weapon signature (GDD §5.9): a one-shot spike that doesn't dilute the deck.
     exhaust: true,
   },
@@ -37,7 +37,10 @@ export const CARD_DEFS: readonly CardDef[] = [
     id: 'card-tracer-lock',
     name: 'Tracer Lock',
     apCost: 1,
-    effects: [{ kind: 'debuff-target-vulnerable', amount: 2 }],
+    // Targeted skill (GDD §5.10): Marks the focused organ/core, then Exhausts — a setup
+    // you spend, not a free blanket modifier on every hit.
+    effects: [{ kind: 'apply-status', status: 'status-marked', magnitude: 2, to: 'target' }],
+    exhaust: true,
   },
   {
     id: 'card-heavy-flak',
@@ -63,7 +66,9 @@ export const CARD_DEFS: readonly CardDef[] = [
     id: 'card-charge-capacitor',
     name: 'Charge Capacitor',
     apCost: 1,
-    effects: [{ kind: 'buff-next-attack', bonus: 5 }],
+    effects: [{ kind: 'apply-status', status: 'status-charged', magnitude: 5, to: 'self' }],
+    // Exhaust (GDD §5.10): a spike you spend, not a free per-turn stack.
+    exhaust: true,
   },
   {
     id: 'card-slag-shot',
@@ -87,7 +92,9 @@ export const CARD_DEFS: readonly CardDef[] = [
     id: 'card-lock-on',
     name: 'Lock-On',
     apCost: 1,
-    effects: [{ kind: 'buff-next-attack', bonus: 3 }],
+    effects: [{ kind: 'apply-status', status: 'status-charged', magnitude: 3, to: 'self' }],
+    // Exhaust (GDD §5.10): a spike you spend, not a free per-turn stack.
+    exhaust: true,
   },
   {
     id: 'card-cannon-burst',
@@ -244,7 +251,9 @@ export const CARD_DEFS: readonly CardDef[] = [
     id: 'card-combat-sim',
     name: 'Combat Sim',
     apCost: 1,
-    effects: [{ kind: 'buff-next-attack', bonus: 3 }],
+    effects: [{ kind: 'apply-status', status: 'status-charged', magnitude: 3, to: 'self' }],
+    // Exhaust (GDD §5.10): a spike you spend, not a free per-turn stack.
+    exhaust: true,
   },
   {
     id: 'card-repair-clone',
