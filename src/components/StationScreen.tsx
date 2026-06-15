@@ -45,13 +45,24 @@ function MerchantScreen({ view, handle }: { view: MerchantView; handle: GameHand
                   Owned
                 </span>
               ) : (
-                <FoundryButton
-                  variant="secondary"
-                  disabled={!offer.canBuy}
-                  onClick={() => handle.buyModule(i)}
-                >
-                  Buy
-                </FoundryButton>
+                <div className="flex flex-col items-end gap-1">
+                  <FoundryButton
+                    variant="secondary"
+                    disabled={!offer.canBuy}
+                    onClick={() => handle.buyModule(i)}
+                  >
+                    Buy
+                  </FoundryButton>
+                  {offer.blockReason !== null && (
+                    <span
+                      className={`font-label text-[7px] uppercase sm:text-[9px] ${
+                        offer.blockReason === 'need-slot' ? 'text-fd-orange' : 'text-fd-amber'
+                      }`}
+                    >
+                      {offer.blockReason === 'need-slot' ? 'Need slot' : 'Need scrap'}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           ))}

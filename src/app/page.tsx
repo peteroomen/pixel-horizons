@@ -169,7 +169,7 @@ export default function Home() {
   const hasDash = surfaceView !== null && surfaceView.dashCooldownSeconds !== null;
 
   return (
-    <main className="fixed inset-0 touch-none select-none bg-fd-void">
+    <main className="fixed inset-0 select-none bg-fd-void">
       <GameCanvas
         onCombatUpdate={onCombatUpdate}
         onReady={onReady}

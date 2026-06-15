@@ -220,6 +220,10 @@ export const CARD_DEFS: readonly CardDef[] = [
     effects: [],
     unplayable: true,
     onDraw: [{ kind: 'lose-shield-layer', count: 1 }],
+    // Clog with an out (GDD §5.6): you eat the on-draw shield loss, but can Jettison the
+    // cluster to clear it. `exhaust` makes the jettison permanent so it can't reshuffle back.
+    exhaust: true,
+    jettison: { benefit: 'ap', amount: 0 },
   },
 
   // Clone Bay matrices

@@ -18,7 +18,9 @@ export default function FoundryButton({
       <button
         type="button"
         disabled={disabled}
-        className={`pointer-events-auto chamfer chamfer-5 sm:chamfer-8 bg-fd-orange font-label text-[8px] sm:text-fd-label uppercase text-fd-ink-dark min-h-11 sm:min-h-[52px] px-4 active:bg-fd-orange-press disabled:opacity-40 disabled:pointer-events-none ${className ?? ''}`}
+        // touch-manipulation kills the mobile double-tap-zoom delay/ghost-tap that made
+        // buttons need repeated taps on a physical phone (desktop emulation hides it).
+        className={`pointer-events-auto touch-manipulation chamfer chamfer-5 sm:chamfer-8 bg-fd-orange font-label text-[8px] sm:text-fd-label uppercase text-fd-ink-dark min-h-11 sm:min-h-[52px] px-4 active:bg-fd-orange-press disabled:opacity-40 disabled:pointer-events-none ${className ?? ''}`}
         {...rest}
       >
         {children}
@@ -38,7 +40,10 @@ export default function FoundryButton({
       <button
         type="button"
         disabled={disabled}
-        className={`chamfer chamfer-5 sm:chamfer-8 ${fill} ${text} font-label text-[8px] sm:text-fd-label uppercase min-h-11 sm:min-h-[52px] px-4 w-full`}
+        // touch-manipulation kills the mobile double-tap-zoom delay/ghost-tap that made
+        // buttons need repeated taps on a physical phone (desktop emulation hides it).
+        // pointer-events-auto so the button works inside pointer-events-none HUD overlays.
+        className={`pointer-events-auto touch-manipulation chamfer chamfer-5 sm:chamfer-8 ${fill} ${text} font-label text-[8px] sm:text-fd-label uppercase min-h-11 sm:min-h-[52px] px-4 w-full`}
         {...rest}
       >
         {children}

@@ -434,7 +434,11 @@ export function jettisonCard(state: CombatState, handIndex: number): void {
     throw new Error(`${instance.cardId} cannot be jettisoned`);
   }
   state.hand.splice(handIndex, 1);
-  state.discardPile.push(instance);
+  // Jettisoning an exhaust card removes it for the rest of the fight — this is the
+  // escape valve for injected clog (Spore Cluster, GDD §5.6): it won't reshuffle back.
+  (getCard(instance.cardId).exhaust === true ? state.exhaustPile : state.discardPile).push(
+    instance,
+  );
   if (jettison.benefit === 'ap') {
     state.ap += jettison.amount;
   } else {

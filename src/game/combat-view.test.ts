@@ -192,7 +192,9 @@ describe('buildCombatView', () => {
     expect(card.unplayable).toBe(true);
     expect(card.affordable).toBe(false);
     expect(card.malfunction).toBe(false);
-    expect(card.text).toBe('Unplayable · Drawn: −1 shield layer');
+    // Jettison is the escape valve for the clog (GDD §5.6) — it reads on the card.
+    expect(card.text).toBe('Unplayable · Drawn: −1 shield layer · Jettison to clear');
+    expect(card.jettisonable).toBe(true);
   });
 
   it('reflects shield recharge after a layer absorbs a hit', () => {

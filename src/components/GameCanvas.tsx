@@ -113,5 +113,9 @@ export default function GameCanvas({
     };
   }, []);
 
-  return <div ref={hostRef} className="flex h-full w-full items-center justify-center" />;
+  // touch-none lives on the canvas host (not the whole app) so gameplay swipes don't
+  // scroll/refresh the page, while DOM menu overlays above it keep native touch scroll/tap.
+  return (
+    <div ref={hostRef} className="flex h-full w-full touch-none items-center justify-center" />
+  );
 }

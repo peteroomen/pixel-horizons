@@ -262,6 +262,12 @@ export interface EnemyDef {
   armor?: { amount: number; regen: number };
   /** Targetable organs (GDD §5.4) — bosses/elites only; default undefined = single-target. */
   parts?: EnemyPart[];
+  /**
+   * Gate guardians (GDD §7.5): fought only at the sector gate, never rolled as a random
+   * lane encounter. Excluded from the default lane pool — the dedicated boss fight
+   * (`main.startBossFight`) and the `?enemy=` dev knob still reach them.
+   */
+  boss?: boolean;
 }
 
 export interface EnemyPhase {

@@ -81,6 +81,7 @@ export const ENEMY_DEFS: readonly EnemyDef[] = [
     id: 'enemy-gatemaw',
     name: 'Gatemaw',
     archetype: 'Gate Guardian',
+    boss: true,
     maxHp: 70,
     pattern: 'cycle',
     scrapReward: { min: 15, max: 25 },

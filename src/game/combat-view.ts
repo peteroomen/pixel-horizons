@@ -307,11 +307,16 @@ function describeCardText(card: CardDef): string {
   }
   parts.push(...(card.onDraw ?? []).map(describeOnDraw), ...card.effects.map(describeEffect));
   if (card.jettison !== undefined) {
-    const benefit =
-      card.jettison.benefit === 'ap'
-        ? `+${card.jettison.amount} AP`
-        : `Draw ${card.jettison.amount}`;
-    parts.push(`Jettison: ${benefit}`);
+    if (card.jettison.amount === 0) {
+      // Zero-benefit jettison (Spore Cluster) is purely an escape valve — clear the clog.
+      parts.push('Jettison to clear');
+    } else {
+      const benefit =
+        card.jettison.benefit === 'ap'
+          ? `+${card.jettison.amount} AP`
+          : `Draw ${card.jettison.amount}`;
+      parts.push(`Jettison: ${benefit}`);
+    }
   }
   return parts.join(' · ');
 }

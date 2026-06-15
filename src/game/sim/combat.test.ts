@@ -283,6 +283,18 @@ describe('Jettison keyword (GDD §5.9)', () => {
     expect(ids(state.hand)).toEqual(['card-missile-salvo']);
   });
 
+  it('exhausts an exhaust card so injected clog clears for good (Spore Cluster)', () => {
+    const state = createCombat(gunshipRun(), SPORECASTER);
+    state.hand = hand('card-spore-cluster');
+    const spore = state.hand[0];
+    expect(isCardJettisonable(spore)).toBe(true);
+    jettisonCard(state, 0);
+    // Goes to the exhaust pile, not discard — it can never reshuffle back into the fight.
+    expect(state.exhaustPile).toContain(spore);
+    expect(state.discardPile).not.toContain(spore);
+    expect(ids(state.hand)).toEqual([]);
+  });
+
   it('throws for a card with no Jettison, and a malfunctioning instance refuses', () => {
     const state = createCombat(gunshipRun(), LAMPREY);
     state.hand = hand('card-missile-salvo');

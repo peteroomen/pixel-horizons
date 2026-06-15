@@ -51,10 +51,18 @@ export default function EnemyPlate({ view, onSelectTarget }: EnemyPlateProps) {
           <button
             type="button"
             onClick={() => onSelectTarget?.(null)}
-            className={`pointer-events-auto block w-full text-left ${
-              view.targetIsCore ? 'ring-1 ring-fd-orange' : ''
+            className={`pointer-events-auto touch-manipulation block w-full rounded-sm border px-1.5 py-1 text-left ${
+              view.targetIsCore
+                ? 'border-fd-orange bg-fd-orange/15'
+                : 'border-transparent active:bg-white/5'
             }`}
           >
+            <div className="mb-0.5 flex items-baseline justify-between gap-1">
+              <span className="font-label uppercase text-[7px] sm:text-[9px] text-fd-muted">
+                Core
+              </span>
+              {view.targetIsCore && <FocusTag />}
+            </div>
             <StatBar value={view.enemyHp} max={view.enemyMaxHp} fillClassName="bg-fd-red" />
           </button>
         ) : (
@@ -64,23 +72,29 @@ export default function EnemyPlate({ view, onSelectTarget }: EnemyPlateProps) {
         {/* Targetable organs (GDD §5.4): tap to focus single-target fire */}
         {view.enemyParts.length > 0 && (
           <div className="space-y-1">
+            <div className="font-label uppercase text-[7px] sm:text-[9px] text-fd-orange">
+              Tap a target to focus fire
+            </div>
             {view.enemyParts.map((part, index) => (
               <button
                 key={part.name}
                 type="button"
                 disabled={!part.alive}
                 onClick={() => onSelectTarget?.(part.selected ? null : index)}
-                className={`pointer-events-auto block w-full text-left ${
-                  part.alive ? '' : 'opacity-40'
-                } ${part.selected ? 'ring-1 ring-fd-orange' : ''}`}
+                className={`pointer-events-auto touch-manipulation block w-full rounded-sm border px-1.5 py-1 text-left ${
+                  part.alive ? 'active:bg-white/5' : 'opacity-40'
+                } ${part.selected ? 'border-fd-orange bg-fd-orange/15' : 'border-fd-strip'}`}
               >
                 <div className="flex items-baseline justify-between gap-1">
-                  <span className="font-label uppercase text-[6px] sm:text-[9px] text-fd-amber">
+                  <span className="font-label uppercase text-[8px] sm:text-[9px] text-fd-amber">
                     {part.name}
                     <span className="ml-1 text-fd-muted">{part.ability}</span>
                   </span>
-                  <span className="font-readout text-[10px] sm:text-[13px] text-fd-ink">
-                    {part.hp}/{part.maxHp}
+                  <span className="flex items-baseline gap-1.5">
+                    {part.selected && <FocusTag />}
+                    <span className="font-readout text-[11px] sm:text-[13px] text-fd-ink">
+                      {part.hp}/{part.maxHp}
+                    </span>
                   </span>
                 </div>
                 <StatBar
@@ -113,6 +127,15 @@ export default function EnemyPlate({ view, onSelectTarget }: EnemyPlateProps) {
         </div>
       </div>
     </Plate>
+  );
+}
+
+/** The "this is what your single-target fire hits" badge (GDD §5.4). */
+function FocusTag() {
+  return (
+    <span className="shrink-0 bg-fd-orange text-fd-ink-dark font-label uppercase text-[6px] sm:text-[8px] px-1 py-0.5">
+      ◎ Target
+    </span>
   );
 }
 
