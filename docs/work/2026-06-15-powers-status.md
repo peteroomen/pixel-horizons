@@ -84,10 +84,19 @@ Built the slice in green layers as planned; no major surprises. The status model
 - **UI:** `PlayerPlate.tsx`, `EnemyPlate.tsx`, `MetaStrip.tsx`.
 - **Tests:** `combat.test.ts`, `combat-view.test.ts`, `status.test.ts`.
 
+## Tooltip-fix follow-up (same PR, commit `fbd721a`)
+
+Two `InfoChip` bugs surfaced on a 375px playtest and were fixed in this PR: (1) the bubble was
+absolutely positioned inside the plates, whose chamfer `clip-path` clipped it off-screen at the top
+— now it renders in a **portal to `document.body`** with fixed positioning that flips below and
+clamps to the viewport; (2) each chip held its own open state (multiple tooltips at once) — now a
+single open chip is coordinated through an **`InfoChipProvider`** context wrapping the combat HUD.
+Browser-verified at 375px; 435 tests still green.
+
 ## Deferred to next session
 
 - Migrating `dodge`/`untargetable`/`intentRevealed` mechanics fully into the status system (display-only today).
-- A second tooltip open doesn't auto-close the first (each chip toggles independently) — fine on phone, but a tap-outside-to-close could be a polish follow-up.
+- Tap-outside-to-close on tooltips — intentionally skipped (races with the single-open coordinator; the "one at a time, new tap dismisses previous" requirement is met without it). Easy follow-up if wanted.
 - Numbers tuning for the now-Exhaust buff economy → 5.5 balance pass.
 - New status-bearing enemies / more status kinds when an encounter needs them.
 
