@@ -53,6 +53,23 @@ export function hasSlotRoom(
   return installedSlotCount(modules, slot) < hullSlotLimit(hullId, slot);
 }
 
+const ALL_SLOTS: readonly ModuleSlot[] = ['weapon', 'utility', 'engine', 'clone-bay'];
+
+/** Per-slot occupancy for the workbench/shop slot picture — `used` of `limit`. */
+export interface SlotUsage {
+  slot: ModuleSlot;
+  used: number;
+  limit: number;
+}
+
+export function slotUsage(hullId: string, modules: readonly ModuleInstance[]): SlotUsage[] {
+  return ALL_SLOTS.map((slot) => ({
+    slot,
+    used: installedSlotCount(modules, slot),
+    limit: hullSlotLimit(hullId, slot),
+  }));
+}
+
 // ── Prices ──
 
 export function modulePrice(moduleId: string): number {

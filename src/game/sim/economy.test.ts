@@ -26,6 +26,7 @@ import {
   modulePrice,
   repairHull,
   sellBiominerals,
+  slotUsage,
   uninstallModule,
   upgradeModule,
   upgradeReactor,
@@ -35,6 +36,23 @@ function makeRun(overrides: Partial<ReturnType<typeof createRunState>> = {}) {
   const run = createRunState('test-economy');
   return Object.assign(run, overrides);
 }
+
+// ── Slot picture ──
+
+describe('slotUsage', () => {
+  it('reports used / limit per slot for the starting Scout loadout', () => {
+    // Scout: weapon 1, utility 2, engine 2 + the implicit clone-bay; starting modules are
+    // light-laser (weapon), phase-shifter (utility), 2× thruster (engine), print matrix.
+    const run = createRunState('test-slots');
+    const usage = slotUsage(run.hullId, run.modules);
+    expect(usage).toEqual([
+      { slot: 'weapon', used: 1, limit: 1 },
+      { slot: 'utility', used: 1, limit: 2 },
+      { slot: 'engine', used: 2, limit: 2 },
+      { slot: 'clone-bay', used: 1, limit: 1 },
+    ]);
+  });
+});
 
 // ── Hull repair ──
 

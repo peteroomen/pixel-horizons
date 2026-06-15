@@ -115,7 +115,9 @@ export default function Home() {
   const onPhaseChange = useCallback((next: GamePhase) => {
     setPhase(next);
     setAbandonArmed(false);
-    if (next === 'map') setWorkbenchOpen(false);
+    // The workbench is an explicit per-screen open (map "Ship" / station "Workbench"),
+    // so it should never carry across a phase change.
+    setWorkbenchOpen(false);
   }, []);
 
   const onSurfaceUpdate = useCallback((next: SurfaceView) => {
@@ -347,9 +349,28 @@ export default function Home() {
         </>
       )}
 
-      {/* Shop / Engineer station screens */}
+      {/* Shop / Engineer station screens — Workbench is reachable from here (4.8) */}
       {(phase === 'shop' || phase === 'engineer') && stationView !== null && handle !== null && (
-        <StationScreen view={stationView} handle={handle} />
+        <>
+          <StationScreen
+            view={stationView}
+            handle={handle}
+            onOpenWorkbench={() => {
+              handle.openWorkbench();
+              setWorkbenchOpen(true);
+            }}
+          />
+          {workbenchOpen && shipView !== null && (
+            <Workbench
+              view={shipView}
+              handle={handle}
+              onClose={() => {
+                handle.closeWorkbench();
+                setWorkbenchOpen(false);
+              }}
+            />
+          )}
+        </>
       )}
 
       {/* Event: text node with choices (GDD §4.4) */}

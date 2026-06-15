@@ -304,6 +304,37 @@ function describeIntentDetail(intent: EnemyIntentDef): IntentDetail {
   }
 }
 
+/** One generated card, projected for the workbench/shop preview (no combat state). */
+export interface ModuleCardView {
+  name: string;
+  apCost: number;
+  text: string;
+  exhaust: boolean;
+  /** RETAIN / JETTISON / CLEAVE chips — EXHAUST keeps its own flag, as in combat. */
+  keywords: string[];
+}
+
+/**
+ * The cards a module contributes to the deck (GDD §5.3), described for the workbench
+ * and shop so a module can be inspected before buying/installing. Reuses the combat
+ * card-text + keyword derivation so previews match what shows in a fight. Falls back to
+ * mk1 when a tier-2 module has no mk2 cards, exactly like `generateCombatDeck`.
+ */
+export function describeModuleCards(moduleId: string, tier: 1 | 2 = 1): ModuleCardView[] {
+  const def = getModule(moduleId);
+  const moduleTier = def.tiers[tier === 2 ? 'mk2' : 'mk1'] ?? def.tiers.mk1;
+  return moduleTier.cards.map((cardId) => {
+    const card = getCard(cardId);
+    return {
+      name: card.name,
+      apCost: card.apCost,
+      text: describeCardText(card),
+      exhaust: card.exhaust === true,
+      keywords: cardKeywords(card),
+    };
+  });
+}
+
 /** Keyword chips for the card UI (GDD §5.9). EXHAUST keeps its own dedicated chip. */
 function cardKeywords(card: CardDef): string[] {
   const keywords: string[] = [];

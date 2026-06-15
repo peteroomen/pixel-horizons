@@ -72,6 +72,7 @@ export type {
   InnateView,
   IntentDetail,
   IntentView,
+  ModuleCardView,
   ModuleView,
   ShieldLayerView,
 } from './combat-view';
@@ -79,7 +80,10 @@ export type { SurfaceItemView, SurfaceView } from './surface-view';
 export type { MapEdgeView, MapNodeView, MapView } from './map-view';
 export type { EventChoiceView, EventView } from './event-view';
 export type { ShipModuleView, CargoModuleView, ShipView } from './ship-view';
+export type { ModuleSlot } from './data';
+export type { SlotUsage } from './sim/economy';
 export type {
+  OfferBlock,
   ShopOfferView,
   UpgradeOfferView,
   MerchantView,
@@ -613,7 +617,9 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       surfaceMode?.input(action, pressed);
     },
     openWorkbench(): void {
-      if (phase !== 'map') return;
+      // Reachable from the map and from station nodes (4.8) — install/uninstall
+      // already accept those phases; this just re-emits the current ship view.
+      if (phase !== 'map' && phase !== 'shop' && phase !== 'engineer') return;
       callbacks.onShipUpdate?.(buildShipView(run));
     },
     closeWorkbench(): void {
