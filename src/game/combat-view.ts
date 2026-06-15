@@ -1,4 +1,4 @@
-import { getCard, getEnemy, getHull, getModule, MALFUNCTION_REPAIR_AP } from './data';
+import { getCard, getEnemy, getHull, getModule, getStatus, MALFUNCTION_REPAIR_AP } from './data';
 import type {
   CardDef,
   CardEffect,
@@ -6,7 +6,9 @@ import type {
   ModuleTargeting,
   OnDrawEffect,
   PartAbility,
+  StatusDef,
 } from './data';
+import type { Status } from './sim/status';
 import type { CombatOutcome, CombatState } from './sim/combat';
 import {
   canPayToll,
@@ -61,7 +63,17 @@ export interface ModuleView {
   malfunctioning: boolean;
 }
 
-/** A targetable boss organ (GDD §5.4) — its bar, ability tag, and selection state. */
+/** A status chip (GDD §5.10): label/value + tooltip. `tone` drives buff-vs-debuff styling. */
+export interface StatusView {
+  id: string;
+  name: string;
+  description: string;
+  /** Magnitude formatted per the def's display rule: `+3`, `×2`, `40%`, `2`, or ''. */
+  value: string;
+  tone: 'buff' | 'debuff';
+}
+
+/** A targetable boss organ (GDD §5.4) — its bar, ability tag, selection state, and debuffs. */
 export interface EnemyPartView {
   name: string;
   hp: number;
@@ -69,6 +81,7 @@ export interface EnemyPartView {
   ability: string;
   alive: boolean;
   selected: boolean;
+  statuses: StatusView[];
 }
 
 export interface InnateView {
@@ -110,11 +123,15 @@ export interface CombatView {
   tempShieldLayers: number;
   modules: ModuleView[];
   innate: InnateView;
+  /** Player Powers/buffs (GDD §5.10) — Charged, Overcharged, plus derived Evasion/Cloak/Scan. */
+  shipStatuses: StatusView[];
   enemyName: string;
   enemyHp: number;
   enemyMaxHp: number;
   /** Bulwark armor pool currently up (GDD §5.7); 0 for unarmored enemies. */
   enemyArmor: number;
+  /** Debuffs on the enemy core (GDD §5.10) — Marked, … */
+  enemyStatuses: StatusView[];
   /** Targetable boss organs (GDD §5.4); empty for normal single-HP enemies. */
   enemyParts: EnemyPartView[];
   /** True when single-target attacks hit the core (no organ selected). */
@@ -172,10 +189,12 @@ export function buildCombatView(state: CombatState): CombatView {
       requiresCardTarget: innate.effect.kind === 'discard-to-draw',
       passive: innate.uses === 'passive',
     },
+    shipStatuses: buildShipStatuses(state),
     enemyName: enemy.name,
     enemyHp: state.enemyHp,
     enemyMaxHp: enemy.maxHp,
     enemyArmor: state.enemyArmor,
+    enemyStatuses: state.coreStatuses.map(statusToView),
     enemyParts: (enemy.parts ?? []).map((part, index) => ({
       name: part.name,
       hp: state.partHp[index] ?? 0,
@@ -183,6 +202,7 @@ export function buildCombatView(state: CombatState): CombatView {
       ability: PART_ABILITY_LABELS[part.grants.kind],
       alive: (state.partHp[index] ?? 0) > 0,
       selected: state.targetPart === index,
+      statuses: (state.partStatuses[index] ?? []).map(statusToView),
     })),
     targetIsCore: state.targetPart === null,
     intent: {
@@ -338,6 +358,61 @@ function describeOnDraw(effect: OnDrawEffect): string {
   }
 }
 
+/** Formats a status's magnitude per its display rule for a chip value. */
+function formatStatusValue(def: StatusDef, magnitude: number): string {
+  switch (def.display) {
+    case 'plus':
+      return `+${magnitude}`;
+    case 'times':
+      return `×${magnitude}`;
+    case 'percent':
+      return `${magnitude}%`;
+    case 'turns':
+      return `${magnitude}`;
+    case 'none':
+      return '';
+  }
+}
+
+function statusToView(status: Status): StatusView {
+  const def = getStatus(status.id);
+  return {
+    id: def.id,
+    name: def.name,
+    description: def.description,
+    value: formatStatusValue(def, status.magnitude),
+    tone: def.side === 'ship' ? 'buff' : 'debuff',
+  };
+}
+
+function statusViewFromDef(id: string, magnitude: number): StatusView {
+  return statusToView({ id, magnitude });
+}
+
+/**
+ * Ship buffs the player sees: the real `shipStatuses` instances plus the three legacy
+ * `CombatModifiers` still living outside the status system (ADR 008), surfaced read-only
+ * so the plate is complete.
+ */
+function buildShipStatuses(state: CombatState): StatusView[] {
+  const views = state.shipStatuses.map(statusToView);
+  if (state.modifiers.dodgeChance > 0) {
+    views.push(statusViewFromDef('status-dodge', Math.round(state.modifiers.dodgeChance * 100)));
+  }
+  if (state.modifiers.untargetableTurns > 0) {
+    views.push(statusViewFromDef('status-cloak', state.modifiers.untargetableTurns));
+  }
+  if (state.modifiers.intentRevealed) {
+    views.push(statusViewFromDef('status-scanned', 0));
+  }
+  return views;
+}
+
+/** Replaces `{n}` in a status's card text with the applied magnitude. */
+function formatStatusText(template: string, magnitude: number): string {
+  return template.replace('{n}', String(magnitude));
+}
+
 function describeEffect(effect: CardEffect): string {
   switch (effect.kind) {
     case 'damage': {
@@ -357,12 +432,8 @@ function describeEffect(effect: CardEffect): string {
       return `${Math.round(effect.chance * 100)}% dodge this turn`;
     case 'untargetable':
       return effect.turns === 1 ? 'Untargetable 1 turn' : `Untargetable ${effect.turns} turns`;
-    case 'buff-next-attack':
-      return `Next attack +${effect.bonus}`;
-    case 'amplify-next-attack':
-      return `Next attack ×${effect.multiplier}`;
-    case 'debuff-target-vulnerable':
-      return `Enemy takes +${effect.amount} from every hit`;
+    case 'apply-status':
+      return formatStatusText(getStatus(effect.status).cardText, effect.magnitude);
     case 'reveal-intent':
       return 'Reveal enemy intent';
     case 'draw':

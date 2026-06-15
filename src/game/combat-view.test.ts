@@ -255,3 +255,73 @@ describe('lane and anchor projection', () => {
     expect(buildCombatView(gunshipCombat()).anchor).toBeNull();
   });
 });
+
+describe('status projection (GDD §5.10)', () => {
+  it('projects ship buffs with formatted values and buff tone', () => {
+    const state = gunshipCombat();
+    state.shipStatuses.push({ id: 'status-charged', magnitude: 3 });
+    state.shipStatuses.push({ id: 'status-overcharged', magnitude: 2 });
+    const view = buildCombatView(state);
+    expect(view.shipStatuses).toEqual([
+      {
+        id: 'status-charged',
+        name: 'Charged',
+        description: expect.any(String),
+        value: '+3',
+        tone: 'buff',
+      },
+      {
+        id: 'status-overcharged',
+        name: 'Overcharged',
+        description: expect.any(String),
+        value: '×2',
+        tone: 'buff',
+      },
+    ]);
+  });
+
+  it('derives Evasion/Cloak chips from the legacy modifiers', () => {
+    const state = gunshipCombat();
+    state.modifiers.dodgeChance = 0.4;
+    state.modifiers.untargetableTurns = 2;
+    const ids = buildCombatView(state).shipStatuses.map((s) => `${s.id}:${s.value}`);
+    expect(ids).toEqual(['status-dodge:40%', 'status-cloak:2']);
+  });
+
+  it('projects enemy core debuffs with debuff tone', () => {
+    const state = gunshipCombat();
+    state.coreStatuses.push({ id: 'status-marked', magnitude: 2 });
+    const view = buildCombatView(state);
+    expect(view.enemyStatuses).toEqual([
+      {
+        id: 'status-marked',
+        name: 'Marked',
+        description: expect.any(String),
+        value: '+2',
+        tone: 'debuff',
+      },
+    ]);
+  });
+
+  it('projects per-organ debuffs on the part view', () => {
+    const state = createCombat(createRunState('organ-status', 'hull-gunship'), 'enemy-gatemaw');
+    state.partStatuses[1].push({ id: 'status-marked', magnitude: 2 });
+    const parts = buildCombatView(state).enemyParts;
+    expect(parts[0].statuses).toEqual([]);
+    expect(parts[1].statuses).toEqual([
+      {
+        id: 'status-marked',
+        name: 'Marked',
+        description: expect.any(String),
+        value: '+2',
+        tone: 'debuff',
+      },
+    ]);
+  });
+
+  it('renders apply-status card text from the catalog template', () => {
+    const state = gunshipCombat();
+    state.hand = hand('card-tracer-lock');
+    expect(buildCombatView(state).hand[0].text).toContain('Mark target: +2 damage taken');
+  });
+});

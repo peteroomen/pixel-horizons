@@ -10,6 +10,8 @@ import type {
 } from '../data';
 import { generateCombatDeck } from './deck';
 import type { CombatCard } from './deck';
+import { applyStatus, consumeAttackBuffs, sumMagnitude, tickStatuses } from './status';
+import type { Status } from './status';
 import { restoreRng } from './rng';
 import type { Rng, RngState } from './rng';
 import type { RunState } from './run-state';
@@ -54,12 +56,6 @@ export interface ShieldLayer {
 }
 
 export interface CombatModifiers {
-  /** Flat bonus consumed by the next damage effect (Lock-On, Charge Capacitor…). */
-  nextAttackBonus: number;
-  /** Multiplier consumed by the next damage effect (Overcharge). */
-  nextAttackMultiplier: number;
-  /** Extra damage the enemy takes per hit, rest of the fight (Tracer Lock). */
-  enemyVulnerable: number;
   /** Chance each incoming hit misses; covers one enemy phase, then resets. */
   dodgeChance: number;
   /** Enemy attacks auto-miss while > 0; ticks down once per enemy phase. */
@@ -98,6 +94,12 @@ export interface CombatState {
   armorBroken: boolean;
   /** Set by an organ's `stagger` on-destroy — the enemy skips its next action. */
   staggered: boolean;
+  /** Player Powers/buffs (GDD §5.10, ADR 008): Charged, Overcharged, … */
+  shipStatuses: Status[];
+  /** Debuffs on the enemy core (Marked, …). */
+  coreStatuses: Status[];
+  /** Debuffs per organ, parallel to `partHp` (GDD §5.4); [] for enemies without organs. */
+  partStatuses: Status[][];
   /** Index into the enemy's intent list — the telegraphed action for its next phase. */
   intentIndex: number;
   hullId: HullId;
@@ -166,6 +168,9 @@ export function createCombat(run: RunState, enemyId: EnemyId, lane?: LaneContext
     targetPart: null,
     armorBroken: false,
     staggered: false,
+    shipStatuses: [],
+    coreStatuses: [],
+    partStatuses: enemy.parts?.map(() => []) ?? [],
     intentIndex: enemy.pattern === 'random' ? rng.int(0, enemy.intents.length) : 0,
     hullId: run.hullId,
     hullHp: run.hullHp,
@@ -190,9 +195,6 @@ export function createCombat(run: RunState, enemyId: EnemyId, lane?: LaneContext
     scrapGained: 0,
     phaseIndex: -1,
     modifiers: {
-      nextAttackBonus: 0,
-      nextAttackMultiplier: 1,
-      enemyVulnerable: 0,
       dodgeChance: 0,
       untargetableTurns: 0,
       intentRevealed: false,
@@ -476,9 +478,9 @@ export function activateInnate(state: CombatState, handIndex?: number): void {
         throw new Error(`cannot afford ${innate.id}: costs ${effect.apCost} AP, have ${state.ap}`);
       }
       state.ap -= effect.apCost;
-      // Deliberately skips next-attack modifiers — Point-Defense must not eat a
-      // Lock-On meant for a weapon card. Vulnerable applies to every hit as printed.
-      dealDamageToEnemy(state, effect.amount + state.modifiers.enemyVulnerable, false);
+      // Deliberately skips Charged/Overcharged — Point-Defense must not eat a Lock-On
+      // meant for a weapon card. Marked still applies, per-target, in the funnel.
+      dealDamageToEnemy(state, effect.amount, false);
       break;
     }
     case 'discard-to-draw': {
@@ -613,6 +615,10 @@ export function endTurn(state: CombatState): void {
   if (state.modifiers.untargetableTurns > 0) {
     state.modifiers.untargetableTurns -= 1;
   }
+  // Duration statuses tick down once per enemy phase (GDD §5.10).
+  tickStatuses(state.shipStatuses);
+  tickStatuses(state.coreStatuses);
+  for (const list of state.partStatuses) tickStatuses(list);
 
   rollNextIntent(state, rng, enemy);
   state.turn += 1;
@@ -670,13 +676,11 @@ export function applyCombatResult(run: RunState, state: CombatState): void {
 function applyEffect(state: CombatState, rng: Rng, effect: CardEffect): void {
   switch (effect.kind) {
     case 'damage': {
-      // Next-attack modifiers are consumed by the first damage effect, so only the
-      // first hit of a multi-hit card benefits; vulnerable applies to every hit.
-      const bonus = state.modifiers.nextAttackBonus;
-      const multiplier = state.modifiers.nextAttackMultiplier;
-      state.modifiers.nextAttackBonus = 0;
-      state.modifiers.nextAttackMultiplier = 1;
-      const total = (effect.amount + bonus) * multiplier + state.modifiers.enemyVulnerable;
+      // Charged/Overcharged are consumed by the first damage effect, so only the first
+      // hit of a multi-hit card benefits. Marked (vulnerable) is per-target, added in
+      // the damage funnel against whichever organ/core the hit lands on.
+      const { bonus, multiplier } = consumeAttackBuffs(state.shipStatuses);
+      const total = (effect.amount + bonus) * multiplier;
       dealDamageToEnemy(state, total, effect.piercing === true, effect.target === 'all');
       break;
     }
@@ -707,14 +711,12 @@ function applyEffect(state: CombatState, rng: Rng, effect: CardEffect): void {
     case 'untargetable':
       state.modifiers.untargetableTurns += effect.turns;
       break;
-    case 'buff-next-attack':
-      state.modifiers.nextAttackBonus += effect.bonus;
-      break;
-    case 'amplify-next-attack':
-      state.modifiers.nextAttackMultiplier *= effect.multiplier;
-      break;
-    case 'debuff-target-vulnerable':
-      state.modifiers.enemyVulnerable += effect.amount;
+    case 'apply-status':
+      if (effect.to === 'self') {
+        applyStatus(state.shipStatuses, effect.status, effect.magnitude);
+      } else {
+        applyStatus(targetStatusList(state), effect.status, effect.magnitude);
+      }
       break;
     case 'reveal-intent':
       state.modifiers.intentRevealed = true;
@@ -755,6 +757,14 @@ export function selectTarget(state: CombatState, target: number | null): void {
   }
 }
 
+/** The status list a `to: 'target'` effect lands on: the focused living organ, else the core. */
+function targetStatusList(state: CombatState): Status[] {
+  if (state.targetPart !== null && isPartAlive(state, state.targetPart)) {
+    return state.partStatuses[state.targetPart];
+  }
+  return state.coreStatuses;
+}
+
 /**
  * One outgoing hit against the enemy — the single funnel for all player damage
  * (cards and damage innates), mirroring resolveIncomingHit. `cleave` (GDD §5.4) hits the
@@ -784,7 +794,8 @@ function dealDamageToEnemy(
 }
 
 function damageCore(state: CombatState, amount: number, piercing: boolean): void {
-  let remaining = amount;
+  // Marked (GDD §5.10) is added before armor, matching the old global-vulnerable order.
+  let remaining = amount + sumMagnitude(state.coreStatuses, 'status-marked');
   if (!piercing) {
     const absorbed = Math.min(state.enemyArmor, remaining);
     state.enemyArmor -= absorbed;
@@ -796,7 +807,8 @@ function damageCore(state: CombatState, amount: number, piercing: boolean): void
 
 function damagePart(state: CombatState, partIndex: number, amount: number): void {
   if (!isPartAlive(state, partIndex)) return;
-  state.partHp[partIndex] = Math.max(0, state.partHp[partIndex] - amount);
+  const dmg = amount + sumMagnitude(state.partStatuses[partIndex], 'status-marked');
+  state.partHp[partIndex] = Math.max(0, state.partHp[partIndex] - dmg);
   if (state.partHp[partIndex] === 0) {
     onPartDestroyed(state, partIndex);
   }

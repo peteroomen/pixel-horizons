@@ -15,6 +15,8 @@ export type ModuleTierLevel = 1 | 2;
 
 export type ModifierId = string;
 
+export type StatusId = string;
+
 export interface ModuleInstance {
   id: ModuleId;
   tier: ModuleTierLevel;
@@ -35,9 +37,12 @@ export type CardEffect =
   | { kind: 'temp-shield-layer'; count: number }
   | { kind: 'dodge-chance'; chance: number }
   | { kind: 'untargetable'; turns: number }
-  | { kind: 'buff-next-attack'; bonus: number }
-  | { kind: 'amplify-next-attack'; multiplier: number }
-  | { kind: 'debuff-target-vulnerable'; amount: number }
+  /**
+   * Apply a Power/status (GDD §5.10, ADR 008). `to: 'self'` → ship; `to: 'target'` →
+   * the focused enemy organ, else the core. Replaces the old next-attack/vulnerable
+   * effect kinds — those are now the `status-charged`/`-overcharged`/`-marked` statuses.
+   */
+  | { kind: 'apply-status'; status: StatusId; magnitude: number; to: 'self' | 'target' }
   | { kind: 'strip-armor' }
   | { kind: 'reveal-intent' }
   | { kind: 'draw'; count: number }
