@@ -1,40 +1,78 @@
-import { Application, Container, Graphics, Ticker } from 'pixi.js';
+import { Application, Container, Graphics, Sprite, Ticker } from 'pixi.js';
 
 import type { CombatView } from '@/game/combat-view';
 import { VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from './pixel-scale';
+import { anchormawBoss, bloomGrunt, compositeShip, laneBackdrop, muzzleFlash } from './sprites';
+import type { ShipModuleKind } from './sprites';
+import { nearestTexture } from './textures';
 
 const FLASH_MS = 160;
-const PLAYER_X = 120;
-const ENEMY_X = VIRTUAL_WIDTH - 140;
-const CENTER_Y = VIRTUAL_HEIGHT / 2;
+const PX = 3; // sprite pixel size in virtual units — integer so nearest-neighbor stays crisp
+const PLAYER_X = 150;
+const ENEMY_X = VIRTUAL_WIDTH - 170;
+const CENTER_Y = VIRTUAL_HEIGHT / 2 + 24; // sit the ships below the top HUD plates
 
 /**
- * Placeholder battle viewport (Slice 2.2): starfield, mechanical player ship vs organic
- * Bloom enemy, red hit-flash when either side loses HP, enemy fades on death, shield
- * ring while layers are up. All numbers/intents live in the DOM HUD — this layer is
- * scenery. `sync` is called once per combat event, never per frame; the only ticker
- * work is decaying the hit flashes.
+ * Battle viewport (World Art Direction): the infested lane backdrop, the player's
+ * Gunship composited from its installed modules, and the Bloom grunt / Anchormaw boss
+ * with its visible organs — all pixel-art sprites on nearest-neighbor textures, the
+ * design's exact render path. Numbers/intents/organ reticles live in the DOM HUD; this
+ * layer is the world behind the glass. `sync` runs once per combat event, never per
+ * frame; the ticker only animates flashes, idle bob, and breathing.
  */
 export interface SpaceRenderer {
   sync(view: CombatView): void;
   destroy(): void;
 }
 
+/** Maps an installed module's name to the overlay category bolted onto the hull. */
+function moduleKind(name: string): ShipModuleKind {
+  const n = name.toLowerCase();
+  if (/flak|cannon|missile|laser|railgun|gun/.test(n)) return 'cannon';
+  if (n.includes('shield')) return 'shield';
+  if (/thruster|engine|hauler|drive/.test(n)) return 'engine';
+  return 'armor'; // matrices, scanners, phase shifter → a generic plate
+}
+
+function shipKindsKey(view: CombatView): string {
+  const kinds = new Set<ShipModuleKind>();
+  for (const m of view.modules) kinds.add(moduleKind(m.name));
+  return (['cannon', 'shield', 'engine', 'armor'] as ShipModuleKind[])
+    .filter((k) => kinds.has(k))
+    .join(',');
+}
+
 export function createSpaceRenderer(app: Application): SpaceRenderer {
   const scene = new Container();
   app.stage.addChild(scene);
 
-  scene.addChild(buildStarfield());
+  // ── Infested lane backdrop (drawn chunky, scaled to fill the virtual scene) ──
+  const laneW = Math.ceil(VIRTUAL_WIDTH / PX);
+  const laneH = Math.ceil(VIRTUAL_HEIGHT / PX);
+  const lane = new Sprite(nearestTexture(laneBackdrop(laneW, laneH, 1234)));
+  lane.scale.set(PX);
+  scene.addChild(lane);
 
-  const playerShip = buildPlayerShip();
-  playerShip.position.set(PLAYER_X, CENTER_Y);
-  scene.addChild(playerShip);
-
-  const shieldRing = new Graphics().ellipse(0, 0, 46, 30).stroke({ width: 2, color: 0x4fc3f7 });
+  const shieldRing = new Graphics().ellipse(0, 0, 70, 46).stroke({ width: 2, color: 0x6ad1e3 });
   shieldRing.position.set(PLAYER_X, CENTER_Y);
   scene.addChild(shieldRing);
 
-  const enemyShip = buildEnemyShip();
+  // Player ship + muzzle share the composite frame, so the same anchor/scale aligns them.
+  const playerShip = new Sprite();
+  playerShip.anchor.set(0.5);
+  playerShip.scale.set(PX);
+  playerShip.position.set(PLAYER_X, CENTER_Y);
+  scene.addChild(playerShip);
+
+  const muzzle = new Sprite(nearestTexture(muzzleFlash()));
+  muzzle.anchor.set(0.5);
+  muzzle.scale.set(PX);
+  muzzle.position.set(PLAYER_X, CENTER_Y);
+  muzzle.visible = false;
+  scene.addChild(muzzle);
+
+  const enemyShip = new Sprite();
+  enemyShip.anchor.set(0.5);
   enemyShip.position.set(ENEMY_X, CENTER_Y);
   scene.addChild(enemyShip);
 
@@ -44,15 +82,38 @@ export function createSpaceRenderer(app: Application): SpaceRenderer {
   let enemyFlashMs = 0;
   let isBoss = false;
   let bossPhase = -1;
+  let kindsKey: string | null = null;
+  let enemyIsBoss: boolean | null = null;
+  let elapsed = 0;
 
-  const tick = (ticker: Ticker) => {
+  const setPlayerShip = (key: string): void => {
+    const kinds = key === '' ? [] : (key.split(',') as ShipModuleKind[]);
+    if (kindsKey !== null) playerShip.texture.destroy(true); // not the initial EMPTY
+    playerShip.texture = nearestTexture(compositeShip(kinds));
+  };
+
+  const setEnemyShip = (boss: boolean): void => {
+    if (enemyIsBoss !== null) enemyShip.texture.destroy(true); // not the initial EMPTY
+    enemyShip.texture = nearestTexture(boss ? anchormawBoss() : bloomGrunt());
+  };
+
+  const tick = (ticker: Ticker): void => {
+    elapsed += ticker.deltaMS;
     playerFlashMs = Math.max(0, playerFlashMs - ticker.deltaMS);
     enemyFlashMs = Math.max(0, enemyFlashMs - ticker.deltaMS);
-    playerShip.tint = playerFlashMs > 0 ? 0xff4444 : 0xffffff;
+
+    // Collective: rigid idle bob. Bloom: slow breathing squash. (The "it lives" cue.)
+    playerShip.y = CENTER_Y + Math.round(Math.sin(elapsed / 900) * 1) * PX;
+    const breathe = 1 + Math.sin(elapsed / 700) * 0.03;
+    const baseScale = isBoss ? PX * 1.25 : PX;
+    enemyShip.scale.set(baseScale, baseScale * breathe);
+
+    playerShip.tint = playerFlashMs > 0 ? 0xff4757 : 0xffffff;
+    muzzle.visible = enemyFlashMs > 0 && playerShip.alpha > 0.5;
     if (enemyFlashMs > 0) {
-      enemyShip.tint = 0xff4444;
+      enemyShip.tint = 0xff4757;
     } else if (isBoss && bossPhase >= 0) {
-      enemyShip.tint = 0xff6688;
+      enemyShip.tint = 0xff8392;
     } else {
       enemyShip.tint = 0xffffff;
     }
@@ -61,78 +122,34 @@ export function createSpaceRenderer(app: Application): SpaceRenderer {
 
   return {
     sync(view: CombatView): void {
-      if (prevHullHp !== null && view.hullHp < prevHullHp) {
-        playerFlashMs = FLASH_MS;
-      }
-      if (prevEnemyHp !== null && view.enemyHp < prevEnemyHp) {
-        enemyFlashMs = FLASH_MS;
-      }
+      if (prevHullHp !== null && view.hullHp < prevHullHp) playerFlashMs = FLASH_MS;
+      if (prevEnemyHp !== null && view.enemyHp < prevEnemyHp) enemyFlashMs = FLASH_MS;
       prevHullHp = view.hullHp;
       prevEnemyHp = view.enemyHp;
 
       isBoss = view.boss;
       bossPhase = view.bossPhase ?? -1;
-      enemyShip.scale.set(view.boss ? 1.6 : 1);
+
+      const nextKey = shipKindsKey(view);
+      if (nextKey !== kindsKey) {
+        setPlayerShip(nextKey);
+        kindsKey = nextKey;
+      }
+      if (enemyIsBoss !== view.boss) {
+        setEnemyShip(view.boss);
+        enemyIsBoss = view.boss;
+      }
 
       const layersUp = view.shields.filter((layer) => layer.up).length + view.tempShieldLayers;
       shieldRing.visible = layersUp > 0;
-      shieldRing.alpha = Math.min(0.25 + layersUp * 0.2, 0.85);
+      shieldRing.alpha = Math.min(0.3 + layersUp * 0.2, 0.85);
 
       enemyShip.alpha = view.enemyHp > 0 ? 1 : 0.15;
       playerShip.alpha = view.hullHp > 0 ? 1 : 0.15;
     },
     destroy(): void {
       app.ticker.remove(tick);
-      scene.destroy({ children: true });
+      scene.destroy({ children: true, texture: true });
     },
   };
-}
-
-/** Fixed pseudo-random star placement — deterministic math, no RNG stream consumed. */
-function buildStarfield(): Graphics {
-  const stars = new Graphics();
-  for (let i = 0; i < 110; i++) {
-    const x = (i * 131 + 47) % VIRTUAL_WIDTH;
-    const y = (i * 73 + 29) % VIRTUAL_HEIGHT;
-    const size = i % 7 === 0 ? 2 : 1;
-    const dim = i % 3 === 0;
-    stars.rect(x, y, size, size).fill({ color: dim ? 0x4a4a6a : 0x9a9ac0 });
-  }
-  return stars;
-}
-
-/** Chunky mechanical Collective ship, nose pointing right. Origin at its center. */
-function buildPlayerShip(): Graphics {
-  const ship = new Graphics()
-    .rect(-32, -10, 48, 20)
-    .fill(0x7a8a99)
-    .rect(16, -6, 12, 12)
-    .fill(0xaabbcc)
-    .rect(-32, -16, 16, 6)
-    .fill(0x5a6a79)
-    .rect(-32, 10, 16, 6)
-    .fill(0x5a6a79)
-    .rect(-38, -4, 6, 8)
-    .fill(0x4fc3f7)
-    .rect(4, -4, 8, 8)
-    .fill(0x223344);
-  return ship;
-}
-
-/** Fleshy organic Bloom mass, maw pointing left. Origin at its center. */
-function buildEnemyShip(): Graphics {
-  const blob = new Graphics()
-    .rect(-16, -18, 36, 36)
-    .fill(0x8a3a5a)
-    .rect(-24, -10, 8, 20)
-    .fill(0xa44a6a)
-    .rect(-30, -4, 6, 8)
-    .fill(0xd06a8a)
-    .rect(20, -12, 8, 24)
-    .fill(0x6a2a4a)
-    .rect(-12, -8, 6, 6)
-    .fill(0xffd0e0)
-    .rect(-12, 4, 6, 6)
-    .fill(0xffd0e0);
-  return blob;
 }
