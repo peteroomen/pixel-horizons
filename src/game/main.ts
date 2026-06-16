@@ -70,6 +70,7 @@ import { REPRINT_SCRAP_COST } from './data/surface';
 export type {
   CardView,
   CombatView,
+  EnemyPartView,
   InnateView,
   IntentDetail,
   IntentView,
