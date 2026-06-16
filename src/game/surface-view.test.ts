@@ -124,3 +124,44 @@ describe('SurfaceView — projected items (3.3)', () => {
     expect(surfaceViewEquals(a, b)).toBe(true);
   });
 });
+
+describe('SurfaceView — clone survival (3.4)', () => {
+  it('exposes HP, death, shield, and corpse state', () => {
+    const loadout = projectLoadout([{ id: 'mod-shield-generator', tier: 1 }], 3);
+    const state = createSurface(['####', '#PD#', '####'], { loadout });
+    const view = buildSurfaceView(state);
+    expect(view.cloneHp).toBe(state.clone.maxHp);
+    expect(view.cloneMaxHp).toBe(state.clone.maxHp);
+    expect(view.cloneDead).toBe(false);
+    expect(view.shieldReady).toBe(true);
+    expect(view.corpsePresent).toBe(false);
+  });
+
+  it('shieldReady is null without a Shield Generator', () => {
+    const state = createSurface(['####', '#PD#', '####']);
+    expect(buildSurfaceView(state).shieldReady).toBeNull();
+  });
+
+  it('first re-print is free, then costs Scrap', () => {
+    const state = createSurface(['####', '#PD#', '####']);
+    state.clone.dead = true;
+    expect(buildSurfaceView(state).reprintScrapCost).toBe(0);
+    state.reprintsUsed = 1;
+    expect(buildSurfaceView(state).reprintScrapCost).toBeGreaterThan(0);
+  });
+
+  it('detects HP, death, and corpse changes', () => {
+    const state = createSurface(['####', '#PD#', '####']);
+    const a = buildSurfaceView(state);
+    state.clone.hp -= 1;
+    expect(surfaceViewEquals(a, buildSurfaceView(state))).toBe(false);
+
+    state.clone.hp = state.clone.maxHp;
+    state.corpse = {
+      resources: { scrap: 1, biominerals: 0, coreCrystals: 0, blueprints: 0 },
+      x: 0,
+      y: 0,
+    };
+    expect(surfaceViewEquals(a, buildSurfaceView(state))).toBe(false);
+  });
+});

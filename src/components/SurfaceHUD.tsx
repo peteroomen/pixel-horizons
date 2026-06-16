@@ -36,6 +36,27 @@ export default function SurfaceHUD({ view }: SurfaceHUDProps) {
             POD T-{formatTimer(view.podSecondsLeft)}
           </div>
         )}
+        {/* Clone HP pips (GDD §6.3) */}
+        <div
+          className="flex items-center gap-1"
+          aria-label={`HP ${view.cloneHp} of ${view.cloneMaxHp}`}
+        >
+          <span className="text-white/60">HP</span>
+          {Array.from({ length: view.cloneMaxHp }, (_, i) => (
+            <span
+              key={i}
+              className={i < view.cloneHp ? 'text-[#e94560]' : 'text-white/20'}
+              aria-hidden
+            >
+              {i < view.cloneHp ? '◆' : '◇'}
+            </span>
+          ))}
+        </div>
+        {view.shieldReady !== null && (
+          <div className={view.shieldReady ? 'text-[#4fc3f7]' : 'text-white/40'}>
+            SHIELD {view.shieldReady ? 'UP' : '…'}
+          </div>
+        )}
         {/* Projected items (GDD §6.3): dim = over the reactor cap */}
         {view.items.map((item, i) => (
           <div
