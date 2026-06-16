@@ -39,6 +39,7 @@ import { buildMerchantView, buildEngineerView } from './station-view';
 import type { StationView } from './station-view';
 import { projectLoadout } from './surface/items';
 import type { SurfaceView } from './surface-view';
+import { REPRINT_SCRAP_COST } from './data/surface';
 
 /**
  * The React↔game boundary (ADR 001) and the run-loop orchestrator (ADR 005).
@@ -151,6 +152,8 @@ export interface GameHandle {
   launchPod(): void;
   /** Surface phase: recall the clone to orbit (backpack lost, deposits safe). */
   abandonSurface(): void;
+  /** Cloning Bay: re-print a dead clone (first per visit free, then costs Scrap). */
+  reprintClone(): void;
   /** Surface result screen: bank pod deposits into the run and return to the map. */
   continueFromNode(): void;
   /** Title screen: continue the saved run. */
@@ -402,6 +405,14 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     setPhase('map');
   };
 
+  // Re-print affordability depends on the run's banked Scrap, which the surface
+  // sim is deliberately blind to (3.2 invariant) — fill it in on the way out.
+  const enrichSurfaceView = (view: SurfaceView): SurfaceView => {
+    if (!view.cloneDead) return view;
+    const canReprint = view.reprintScrapCost === 0 || run.resources.scrap >= view.reprintScrapCost;
+    return { ...view, canReprint };
+  };
+
   const enterSurface = (): void => {
     surfaceMode = startSurfaceMode(
       app,
@@ -410,7 +421,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
         podWindowMs,
         loadout: projectLoadout(run.modules, run.reactorLevel),
       },
-      { onUpdate: (view) => callbacks.onSurfaceUpdate?.(view) },
+      { onUpdate: (view) => callbacks.onSurfaceUpdate?.(enrichSurfaceView(view)) },
     );
     setPhase('surface');
   };
@@ -577,6 +588,17 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     },
     abandonSurface(): void {
       surfaceMode?.abandon();
+    },
+    reprintClone(): void {
+      if (phase !== 'surface' || surfaceMode === null) return;
+      const state = surfaceMode.state();
+      if (!state.clone.dead) return;
+      // First re-print per visit is free; subsequent ones cost Scrap (GDD §6.4).
+      if (state.reprintsUsed > 0) {
+        if (run.resources.scrap < REPRINT_SCRAP_COST) return;
+        run.resources.scrap -= REPRINT_SCRAP_COST;
+      }
+      surfaceMode.reprint();
     },
     continueFromNode(): void {
       if (phase !== 'surface' || surfaceMode === null) return;

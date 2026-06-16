@@ -8,7 +8,15 @@ import {
 } from '@/game/data/surface';
 import type { InputState } from './clone';
 import { baselineLoadout } from './items';
-import { abandonSurface, canLaunchPod, createSurface, launchPod, updateSurface } from './surface';
+import {
+  abandonSurface,
+  canLaunchPod,
+  createSurface,
+  isAwaitingReprint,
+  launchPod,
+  reprintClone,
+  updateSurface,
+} from './surface';
 import type { SurfaceState } from './surface';
 
 /**
@@ -275,10 +283,103 @@ describe('createSurface/updateSurface — loadout integration (3.3)', () => {
           jumpVelocityMultiplier: 1,
           moveSpeedMultiplier: 1,
           dash: null,
+          maxHp: 3,
+          meleeDamage: 1,
+          regenMsPerHp: null,
         },
       },
     });
     expect(state.clone.capabilities.maxAirJumps).toBe(2);
     expect(state.clone.airJumpsLeft).toBe(2);
+  });
+});
+
+// A full bramble row at the clone's resting height → continuous contact damage
+// the knockback can't escape (single tiles would push the clone clear). The pod
+// sits far right; the clone dies near spawn long before it could reach it.
+const BRAMBLE_ARENA: string[] = ['############', '#P........D#', '#^^^^^^^^^^#', '############'];
+
+/** Run IDLE steps until the clone dies (or a step budget is exhausted). */
+function killOnBramble(state: SurfaceState): void {
+  for (let i = 0; i < 30; i++) updateSurface(state, IDLE, FIXED_DT_MS); // settle
+  state.clone.hp = 1;
+  for (let i = 0; i < 150 && !state.clone.dead; i++) updateSurface(state, IDLE, FIXED_DT_MS);
+}
+
+describe('clone death + corpse + re-print', () => {
+  it('drops the backpack as a corpse on death', () => {
+    const state = createSurface(BRAMBLE_ARENA);
+    state.clone.backpack.scrap = 4;
+    killOnBramble(state);
+
+    expect(state.clone.dead).toBe(true);
+    expect(state.outcome).toBe('ongoing'); // not a run-ender
+    expect(isAwaitingReprint(state)).toBe(true);
+    expect(state.corpse).not.toBeNull();
+    expect(state.corpse?.resources.scrap).toBe(4);
+    expect(state.clone.backpack.scrap).toBe(0);
+  });
+
+  it('re-print resets the clone and counts the re-print', () => {
+    const state = createSurface(BRAMBLE_ARENA);
+    killOnBramble(state);
+    expect(state.reprintsUsed).toBe(0);
+
+    reprintClone(state);
+    expect(state.clone.dead).toBe(false);
+    expect(state.clone.hp).toBe(state.clone.maxHp);
+    expect(state.reprintsUsed).toBe(1);
+    expect(state.clone.body.x).toBe(state.map.spawnX);
+  });
+
+  it('a second death overwrites the corpse (single-instance, prior loot lost)', () => {
+    const state = createSurface(BRAMBLE_ARENA);
+    state.clone.backpack.scrap = 4;
+    killOnBramble(state);
+    reprintClone(state);
+    state.clone.backpack.scrap = 1; // less the second time
+    state.clone.hp = 1;
+    for (let i = 0; i < 150 && !state.clone.dead; i++) updateSurface(state, IDLE, FIXED_DT_MS);
+    expect(state.corpse?.resources.scrap).toBe(1);
+  });
+
+  it('re-print is a no-op when the clone is alive', () => {
+    const state = createSurface(BRAMBLE_ARENA);
+    reprintClone(state);
+    expect(state.reprintsUsed).toBe(0);
+  });
+
+  it('cannot manually launch while dead', () => {
+    const state = createSurface(BRAMBLE_ARENA);
+    killOnBramble(state);
+    expect(canLaunchPod(state)).toBe(false);
+  });
+
+  it('a pod launch while dead strands the run and the corpse loot is lost', () => {
+    const state = createSurface(BRAMBLE_ARENA, { podWindowMs: 5000 });
+    state.clone.backpack.scrap = 3;
+    killOnBramble(state);
+    expect(state.corpse?.resources.scrap).toBe(3);
+
+    state.pod!.remainingMs = FIXED_DT_MS;
+    updateSurface(state, IDLE, FIXED_DT_MS);
+    expect(state.outcome).toBe('stranded');
+    expect(state.lostBackpack?.scrap).toBe(3);
+    expect(state.corpse).toBeNull();
+  });
+});
+
+describe('corpse run', () => {
+  it('recovers corpse resources when the clone walks near it', () => {
+    const state = createSurface(POD_ARENA);
+    for (let i = 0; i < 30; i++) updateSurface(state, IDLE, FIXED_DT_MS); // settle off the pod
+    state.corpse = {
+      resources: { scrap: 3, biominerals: 0, coreCrystals: 0, blueprints: 0 },
+      x: state.clone.body.x,
+      y: state.clone.body.y,
+    };
+    updateSurface(state, IDLE, FIXED_DT_MS);
+    expect(state.corpse).toBeNull();
+    expect(state.clone.backpack.scrap).toBe(3);
   });
 });

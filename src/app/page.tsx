@@ -253,7 +253,7 @@ export default function Home() {
             onInput={(action, pressed) => handleRef.current?.surfaceInput(action, pressed)}
           />
 
-          {surfaceView !== null && surfaceView.outcome === 'ongoing' && (
+          {surfaceView !== null && surfaceView.outcome === 'ongoing' && !surfaceView.cloneDead && (
             <div className="pointer-events-none absolute inset-x-0 top-2 flex flex-col items-center gap-2 sm:top-4">
               {/* Early return (GDD §6.2): mined out? Walk to the pod and leave. */}
               {surfaceView.canLaunch && (
@@ -273,6 +273,44 @@ export default function Home() {
               >
                 {abandonArmed ? 'CONFIRM ABANDON?' : 'ABANDON'}
               </button>
+            </div>
+          )}
+
+          {/* Cloning Bay (GDD §6.10): the clone died — re-print or give up. */}
+          {surfaceView !== null && surfaceView.outcome === 'ongoing' && surfaceView.cloneDead && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-black/75">
+              <span className="retro text-2xl text-[#e94560] sm:text-4xl">CLONE LOST</span>
+              <span className="retro max-w-[18rem] text-center text-[10px] text-white/70 sm:text-xs">
+                Backpack dropped at the death point. Re-print and corpse-run to recover it before
+                the pod launches.
+              </span>
+              <div className="flex flex-col items-center gap-2">
+                <FoundryButton
+                  variant="primary"
+                  disabled={!surfaceView.canReprint}
+                  onClick={() => handleRef.current?.reprintClone()}
+                >
+                  {surfaceView.reprintScrapCost === 0
+                    ? 'Re-print (Free)'
+                    : `Re-print (${surfaceView.reprintScrapCost} Scrap)`}
+                </FoundryButton>
+                {!surfaceView.canReprint && surfaceView.reprintScrapCost > 0 && (
+                  <span className="retro text-[8px] text-[#e94560] sm:text-[10px]">
+                    Not enough Scrap
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={onAbandon}
+                  className={`retro pointer-events-auto border-2 px-2 py-1 text-[8px] sm:text-[10px] ${
+                    abandonArmed
+                      ? 'border-[#e94560] bg-[#e94560]/20 text-[#e94560]'
+                      : 'border-[#4a4a6a] bg-[#1a1a2e]/80 text-white/60'
+                  }`}
+                >
+                  {abandonArmed ? 'CONFIRM ABANDON?' : 'ABANDON RUN'}
+                </button>
+              </div>
             </div>
           )}
 

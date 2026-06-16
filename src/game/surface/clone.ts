@@ -10,10 +10,17 @@ import {
   COYOTE_TIME_MS,
   DASH_GHOST_MS,
   DASH_SCAN_STEP_PX,
+  DEATH_FADE_MS,
   GRAVITY,
+  HIT_FLASH_MS,
+  HIT_SHAKE_MS,
+  HITSTUN_MS,
+  IFRAMES_MS,
   JUMP_BUFFER_MS,
   JUMP_CUT_MULTIPLIER,
   JUMP_VELOCITY,
+  KNOCKBACK_VX,
+  KNOCKBACK_VY,
   MAX_FALL_SPEED,
   MOVE_SPEED,
   TILE_SIZE,
@@ -76,16 +83,42 @@ export interface CloneState {
   dashFromY: number;
   /**
    * Resources carried by the clone — banked only when deposited at the pod,
-   * lost on a stranded launch (and dropped at the death point in 3.4).
+   * lost on a stranded launch, dropped at the death point as a corpse (3.4).
    * Capacity is enforced by surface.ts, not here — 3.3 makes it module-driven.
    */
   backpack: Resources;
+
+  // ── Combat / survival (GDD §6.3, §6.10) ──
+  /** Current hit points; death at 0. */
+  hp: number;
+  /** Maximum hit points from the Clone Bay matrix. */
+  maxHp: number;
+  /** Remaining invincibility (ms) — blocks damage, sprite blinks (GDD §6.3). */
+  iframesMs: number;
+  /** Remaining hit-stun input lock (ms) — knockback persists, input ignored. */
+  hitstunMs: number;
+  /** True once HP reaches 0 — sim freezes the clone until re-print/abandon. */
+  dead: boolean;
+  /** Remaining death fade-to-black (ms, cosmetic; sim-timed for determinism). */
+  deathFadeMs: number;
+  /** Remaining red-flash overlay (ms, cosmetic). */
+  hitFlashMs: number;
+  /** Remaining camera-shake (ms, cosmetic). */
+  shakeMs: number;
+  /** Accrued grounded time toward the next regen tick (Repair Matrix). */
+  regenAccumMs: number;
+  /** Shield Bubble live state, or null when no Shield Generator is projected. */
+  shield: { ready: boolean; cooldownMs: number; rechargeMs: number } | null;
 }
+
+/** What a damageClone call resolved to — surface.ts/renderer react to it. */
+export type DamageResult = 'ignored' | 'shielded' | 'damaged' | 'died';
 
 /** Spawn the clone at the level's designated spawn point. */
 export function createClone(
   map: Tilemap,
   capabilities: CloneCapabilities = BASELINE_CAPABILITIES,
+  shieldCooldownMs: number | null = null,
 ): CloneState {
   return {
     body: {
@@ -113,7 +146,89 @@ export function createClone(
     dashFromX: 0,
     dashFromY: 0,
     backpack: { scrap: 0, biominerals: 0, coreCrystals: 0, blueprints: 0 },
+    hp: capabilities.maxHp,
+    maxHp: capabilities.maxHp,
+    iframesMs: 0,
+    hitstunMs: 0,
+    dead: false,
+    deathFadeMs: 0,
+    hitFlashMs: 0,
+    shakeMs: 0,
+    regenAccumMs: 0,
+    shield:
+      shieldCooldownMs === null
+        ? null
+        : { ready: true, cooldownMs: 0, rechargeMs: shieldCooldownMs },
   };
+}
+
+/**
+ * Respawn a printed clone at the pod (or spawn) for a re-print (GDD §6.4) —
+ * resets position, HP, and all transient combat/movement state in place. The
+ * corpse from the prior death is owned by surface.ts, not touched here.
+ */
+export function respawnClone(clone: CloneState, x: number, y: number): void {
+  clone.body.x = x;
+  clone.body.y = y;
+  clone.body.vx = 0;
+  clone.body.vy = 0;
+  clone.facing = 1;
+  clone.grounded = false;
+  clone.coyoteMs = 0;
+  clone.jumpBufferMs = 0;
+  clone.jumpHeld = false;
+  clone.attackElapsedMs = -1;
+  clone.attackCooldownMs = 0;
+  clone.airJumpsLeft = clone.capabilities.maxAirJumps;
+  clone.dashCooldownMs = 0;
+  clone.dashGhostMs = 0;
+  clone.hp = clone.maxHp;
+  clone.iframesMs = 0;
+  clone.hitstunMs = 0;
+  clone.dead = false;
+  clone.deathFadeMs = 0;
+  clone.hitFlashMs = 0;
+  clone.shakeMs = 0;
+  clone.regenAccumMs = 0;
+  if (clone.shield !== null) {
+    clone.shield.ready = true;
+    clone.shield.cooldownMs = 0;
+  }
+}
+
+/**
+ * Apply one hit to the clone (GDD §6.3, §6.10). No-op during i-frames or death.
+ * A ready Shield Bubble absorbs the hit (pops, recharges) without HP loss or
+ * knockback. Otherwise: HP loss, i-frames, hit-stun, and knockback away from
+ * sourceX. Returns what happened so callers drive feedback / Dropper fling.
+ */
+export function damageClone(clone: CloneState, amount: number, sourceX: number): DamageResult {
+  if (clone.dead || clone.iframesMs > 0) return 'ignored';
+
+  clone.iframesMs = IFRAMES_MS;
+  clone.hitFlashMs = HIT_FLASH_MS;
+  clone.shakeMs = HIT_SHAKE_MS;
+  clone.regenAccumMs = 0;
+
+  if (clone.shield !== null && clone.shield.ready) {
+    clone.shield.ready = false;
+    clone.shield.cooldownMs = clone.shield.rechargeMs;
+    return 'shielded';
+  }
+
+  clone.hp -= amount;
+  clone.hitstunMs = HITSTUN_MS;
+  const dir = clone.body.x + clone.body.w / 2 >= sourceX ? 1 : -1;
+  clone.body.vx = dir * KNOCKBACK_VX;
+  clone.body.vy = KNOCKBACK_VY;
+
+  if (clone.hp <= 0) {
+    clone.hp = 0;
+    clone.dead = true;
+    clone.deathFadeMs = DEATH_FADE_MS;
+    return 'died';
+  }
+  return 'damaged';
 }
 
 /**
@@ -159,18 +274,36 @@ export function updateClone(
   map: Tilemap,
   input: InputState,
   dtMs: number,
+  /** Environmental horizontal impulse (px/s) for this step — e.g. a Sandstorm Vent. */
+  externalVx = 0,
 ): { brokenTiles: number[] } {
-  // 1. Horizontal movement (instant — no acceleration this slice)
-  const dx = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-  clone.body.vx = dx * MOVE_SPEED * clone.capabilities.moveSpeedMultiplier;
-  if (dx !== 0) {
-    clone.facing = dx > 0 ? 1 : -1;
+  // 0. Tick combat timers (i-frames, hit-stun, hit-feedback, shield recharge)
+  clone.iframesMs = Math.max(0, clone.iframesMs - dtMs);
+  clone.hitstunMs = Math.max(0, clone.hitstunMs - dtMs);
+  clone.hitFlashMs = Math.max(0, clone.hitFlashMs - dtMs);
+  clone.shakeMs = Math.max(0, clone.shakeMs - dtMs);
+  if (clone.shield !== null && !clone.shield.ready) {
+    clone.shield.cooldownMs = Math.max(0, clone.shield.cooldownMs - dtMs);
+    if (clone.shield.cooldownMs <= 0) clone.shield.ready = true;
+  }
+
+  // Hit-stun ignores input but preserves knockback velocity (set in damageClone).
+  const locked = clone.hitstunMs > 0;
+
+  // 1. Horizontal movement (instant — no acceleration this slice). During
+  // hit-stun the knockback vx persists untouched; otherwise input drives it.
+  const dx = locked ? 0 : (input.right ? 1 : 0) - (input.left ? 1 : 0);
+  if (!locked) {
+    clone.body.vx = dx * MOVE_SPEED * clone.capabilities.moveSpeedMultiplier;
+    if (dx !== 0) {
+      clone.facing = dx > 0 ? 1 : -1;
+    }
   }
 
   // 1b. Phase dash: blink to the farthest free spot within range, scanning
   // far-to-near — intervening solids are skipped, which IS the through-walls
   // behavior. Fully blocked = no-op without spending the cooldown.
-  const dashRising = input.dash && !clone.prevDash;
+  const dashRising = input.dash && !clone.prevDash && !locked;
   const dashConfig = clone.capabilities.dash;
   if (dashRising && dashConfig !== null && clone.dashCooldownMs <= 0) {
     for (let d = dashConfig.distancePx; d >= DASH_SCAN_STEP_PX; d -= DASH_SCAN_STEP_PX) {
@@ -189,7 +322,7 @@ export function updateClone(
   clone.dashGhostMs = Math.max(0, clone.dashGhostMs - dtMs);
 
   // 2. Jump buffer: rising edge of jump button
-  const jumpRising = input.jump && !clone.prevJump;
+  const jumpRising = input.jump && !clone.prevJump && !locked;
   if (jumpRising) {
     clone.jumpBufferMs = JUMP_BUFFER_MS;
   }
@@ -221,7 +354,9 @@ export function updateClone(
     clone.jumpHeld = false;
   }
 
-  // 6. Move body + update grounded / coyote
+  // 6. Move body + update grounded / coyote. Environmental impulses (vents)
+  // ride on vx so the AABB sweep still resolves collisions against them.
+  clone.body.vx += externalVx;
   const wasGrounded = clone.grounded;
   const moveResult = moveBody(clone.body, map, dtMs);
   clone.grounded = moveResult.onGround;
@@ -237,8 +372,18 @@ export function updateClone(
     clone.coyoteMs = COYOTE_TIME_MS;
   }
 
+  // Regen (Repair Matrix): accrue grounded time; heal 1 HP per regenMsPerHp.
+  const regen = clone.capabilities.regenMsPerHp;
+  if (regen !== null && clone.grounded && clone.hp > 0 && clone.hp < clone.maxHp) {
+    clone.regenAccumMs += dtMs;
+    if (clone.regenAccumMs >= regen) {
+      clone.hp += 1;
+      clone.regenAccumMs -= regen;
+    }
+  }
+
   // 7. Attack: rising-edge starts swing; tick elapsed; break tiles in window
-  const attackRising = input.attack && !clone.prevAttack;
+  const attackRising = input.attack && !clone.prevAttack && !locked;
   if (attackRising && clone.attackCooldownMs <= 0 && clone.attackElapsedMs < 0) {
     clone.attackElapsedMs = 0;
     clone.attackCooldownMs = ATTACK_COOLDOWN_MS;

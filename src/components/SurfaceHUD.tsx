@@ -36,15 +36,40 @@ export default function SurfaceHUD({ view }: SurfaceHUDProps) {
             POD T-{formatTimer(view.podSecondsLeft)}
           </div>
         )}
-        {/* Projected items (GDD §6.3): dim = over the reactor cap */}
-        {view.items.map((item, i) => (
-          <div
-            key={`${item.name}-${i}`}
-            className={item.active ? 'text-[#4fc3f7]/90' : 'text-white/30 line-through'}
-          >
-            {item.name.toUpperCase()}
+        {/* Clone HP pips (GDD §6.3) */}
+        <div
+          className="flex items-center gap-1"
+          aria-label={`HP ${view.cloneHp} of ${view.cloneMaxHp}`}
+        >
+          <span className="text-white/60">HP</span>
+          {Array.from({ length: view.cloneMaxHp }, (_, i) => (
+            <span
+              key={i}
+              className={i < view.cloneHp ? 'text-[#e94560]' : 'text-white/20'}
+              aria-hidden
+            >
+              {i < view.cloneHp ? '◆' : '◇'}
+            </span>
+          ))}
+        </div>
+        {view.shieldReady !== null && (
+          <div className={view.shieldReady ? 'text-[#4fc3f7]' : 'text-white/40'}>
+            SHIELD {view.shieldReady ? 'UP' : '…'}
           </div>
-        ))}
+        )}
+        {/* Projected traversal items (GDD §6.3): dim = over the reactor cap.
+            The Clone Bay chassis (e.g. "Baseline Clone") isn't a traversal item —
+            the HP pips already convey the clone — so it's left off this strip. */}
+        {view.items
+          .filter((item) => !item.chassis)
+          .map((item, i) => (
+            <div
+              key={`${item.name}-${i}`}
+              className={item.active ? 'text-[#4fc3f7]/90' : 'text-white/30 line-through'}
+            >
+              {item.name.toUpperCase()}
+            </div>
+          ))}
         {view.dashCooldownSeconds !== null && view.dashCooldownSeconds > 0 && (
           <div className="text-white/60">DASH {view.dashCooldownSeconds}s</div>
         )}

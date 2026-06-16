@@ -144,3 +144,33 @@ describe('projectLoadout — tier 2 items', () => {
     expect(mk2.yieldMultiplier).toBeGreaterThanOrEqual(mk1.yieldMultiplier);
   });
 });
+
+describe('projectLoadout — clone matrix combat stats (GDD §6.3)', () => {
+  it('baseline clone (no modules) is 3 HP, 1 melee, no regen', () => {
+    const { capabilities } = projectLoadout([], 0);
+    expect(capabilities.maxHp).toBe(3);
+    expect(capabilities.meleeDamage).toBe(1);
+    expect(capabilities.regenMsPerHp).toBeNull();
+  });
+
+  it('Standard Print Matrix sets 3 HP (chassis — active even at reactor 0)', () => {
+    const { capabilities } = projectLoadout([{ id: 'mod-standard-print-matrix', tier: 1 }], 0);
+    expect(capabilities.maxHp).toBe(3);
+  });
+
+  it('Scavenger Matrix is a 2-HP chassis', () => {
+    const { capabilities } = projectLoadout([{ id: 'mod-scavenger-matrix', tier: 1 }], 0);
+    expect(capabilities.maxHp).toBe(2);
+  });
+
+  it('Enforcer Matrix is 2 HP with +1 melee', () => {
+    const { capabilities } = projectLoadout([{ id: 'mod-enforcer-matrix', tier: 1 }], 0);
+    expect(capabilities.maxHp).toBe(2);
+    expect(capabilities.meleeDamage).toBe(2);
+  });
+
+  it('Repair Matrix carries a self-heal cadence', () => {
+    const { capabilities } = projectLoadout([{ id: 'mod-repair-matrix', tier: 1 }], 0);
+    expect(capabilities.regenMsPerHp).toBeGreaterThan(0);
+  });
+});

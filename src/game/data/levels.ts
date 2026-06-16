@@ -2,7 +2,10 @@
  * Hand-crafted test levels. One level = string[] where every row has equal length.
  * Legend: '#' solid, '*' breakable rock (yields nothing), 'b' biomineral deposit,
  * 's' scrap cache, 'P' spawn (counts as empty), 'D' pod marker (counts as empty),
- * '.' empty.
+ * '.' empty. 3.4 threats: '^' spike bramble, '~' crumbling sandstone, 'V' sandstorm
+ * vent, 'H'/'G'/'C' Bloom Hopper / Scrap Grubber / Ceiling Dropper spawns.
+ * Place a 'V' on a tile whose square directly below is solid (the grate roots on
+ * that ground) and with clear tiles above it for the dust plume — never floating.
  *
  * TILE_SIZE = 16 px; CLONE body = 12 × 20 px; POD = 32 × 48 px (2×3 tiles).
  * Jump apex ≈ 380² / (2 × 1500) ≈ 48 px = 3 tiles → max climbable step = 3 tiles.
@@ -49,10 +52,10 @@ export const ROCKY_TEST_LEVEL: string[] = [
   /* 10 */ '#..........................................................#',
   /* 11 */ '#..........................................................#',
   /* 12 */ '#..........................................................#',
-  /* 13 */ '#..........................................................#',
-  /* 14 */ '#...........................####b....##....................#',
+  /* 13 */ '#.........H.....G.......................C..................#',
+  /* 14 */ '#....~~.....................####b....##....................#',
   /* 15 */ '#.PD..................######.........##...........######...#',
-  /* 16 */ '#.....................######.........##...........##...#...#',
+  /* 16 */ '#.........^.........V.######.........##...........##...#...#',
   /* 17 */ '##....bb######....######.........sh.##..bbsbb.h*..##..c#####',
   /* 18 */ '############################################################',
   /* 19 */ '############################################################',

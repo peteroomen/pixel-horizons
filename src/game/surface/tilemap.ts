@@ -9,6 +9,27 @@ export const TILE_SCRAP_CACHE = 4;
 export const TILE_DEPOSIT_HIDDEN = 5;
 /** Core Crystal vein — the rare reactor-upgrade resource (GDD §6.5). */
 export const TILE_CORE_CRYSTAL = 6;
+/** Spike Bramble hazard (GDD §6.8): non-solid; deals contact damage on overlap. */
+export const TILE_SPIKE_BRAMBLE = 7;
+/** Crumbling Sandstone (GDD §6.8): solid; breaks ~0.5s after standing, re-forms ~8s. */
+export const TILE_CRUMBLING = 8;
+
+export type SurfaceEnemyType = 'hopper' | 'grubber' | 'dropper';
+
+/** A spawn-point token resolved from the level grid (GDD §6.9 E1/E2/E3 tokens). */
+export interface EnemySpawn {
+  type: SurfaceEnemyType;
+  /** Top-left px of the spawn tile. */
+  x: number;
+  y: number;
+}
+
+/** A Sandstorm Vent emitter resolved from a 'V' token. */
+export interface Vent {
+  /** Top-left px of the vent tile. */
+  x: number;
+  y: number;
+}
 
 export interface Tilemap {
   width: number;
@@ -20,9 +41,13 @@ export interface Tilemap {
   /** Top-left px of the 'D' pod marker tile, or null if the level has no pod. */
   podX: number | null;
   podY: number | null;
+  /** Enemy spawn points from E-tokens (GDD §6.7) — positions only; enemies.ts owns AI. */
+  enemySpawns: EnemySpawn[];
+  /** Sandstorm Vent emitters from 'V' tokens (GDD §6.8). */
+  vents: Vent[];
   /**
-   * Incremented by breakTile so the renderer knows to redraw the tile layer.
-   * Plain number — no object identity needed.
+   * Incremented by breakTile (and the crumble state machine) so the renderer
+   * knows to redraw the tile layer. Plain number — no object identity needed.
    */
   version: number;
 }
@@ -38,6 +63,12 @@ export interface Tilemap {
  *   's' = TILE_SCRAP_CACHE
  *   'h' = TILE_DEPOSIT_HIDDEN
  *   'c' = TILE_CORE_CRYSTAL
+ *   '^' = TILE_SPIKE_BRAMBLE (non-solid hazard)
+ *   '~' = TILE_CRUMBLING (solid sandstone that breaks under weight)
+ *   'H' = Bloom Hopper spawn (empty after parsing; recorded in enemySpawns)
+ *   'G' = Scrap Grubber spawn (empty after parsing; recorded in enemySpawns)
+ *   'C' = Ceiling Dropper spawn (empty after parsing; recorded in enemySpawns)
+ *   'V' = Sandstorm Vent (empty after parsing; recorded in vents)
  *   'P' = spawn tile (empty after parsing; spawnX/spawnY record the position)
  *   'D' = pod marker (empty after parsing; podX/podY record the position — the
  *         pod is an entity, never a solid tile). At most one per level.
@@ -58,6 +89,8 @@ export function parseLevel(rows: string[]): Tilemap {
   }
 
   const tiles: number[] = new Array(width * height).fill(TILE_EMPTY);
+  const enemySpawns: EnemySpawn[] = [];
+  const vents: Vent[] = [];
   let spawnCount = 0;
   let spawnX = 0;
   let spawnY = 0;
@@ -65,9 +98,17 @@ export function parseLevel(rows: string[]): Tilemap {
   let podX: number | null = null;
   let podY: number | null = null;
 
+  const ENEMY_TOKENS: Record<string, SurfaceEnemyType> = {
+    H: 'hopper',
+    G: 'grubber',
+    C: 'dropper',
+  };
+
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const ch = rows[y][x];
+      const px = x * TILE_SIZE;
+      const py = y * TILE_SIZE;
       if (ch === '#') {
         tiles[y * width + x] = TILE_SOLID;
       } else if (ch === '*') {
@@ -80,17 +121,27 @@ export function parseLevel(rows: string[]): Tilemap {
         tiles[y * width + x] = TILE_DEPOSIT_HIDDEN;
       } else if (ch === 'c') {
         tiles[y * width + x] = TILE_CORE_CRYSTAL;
+      } else if (ch === '^') {
+        tiles[y * width + x] = TILE_SPIKE_BRAMBLE;
+      } else if (ch === '~') {
+        tiles[y * width + x] = TILE_CRUMBLING;
+      } else if (ch in ENEMY_TOKENS) {
+        enemySpawns.push({ type: ENEMY_TOKENS[ch], x: px, y: py });
+        tiles[y * width + x] = TILE_EMPTY;
+      } else if (ch === 'V') {
+        vents.push({ x: px, y: py });
+        tiles[y * width + x] = TILE_EMPTY;
       } else if (ch === 'P') {
         spawnCount++;
         // Spawn tile itself is empty; clone spawns at its top-left corner
-        spawnX = x * TILE_SIZE;
-        spawnY = y * TILE_SIZE;
+        spawnX = px;
+        spawnY = py;
         tiles[y * width + x] = TILE_EMPTY;
       } else if (ch === 'D') {
         podCount++;
         // Pod marker tile is empty; the pod AABB anchors at its top-left corner
-        podX = x * TILE_SIZE;
-        podY = y * TILE_SIZE;
+        podX = px;
+        podY = py;
         tiles[y * width + x] = TILE_EMPTY;
       } else if (ch !== '.') {
         throw new Error(`parseLevel: unknown character '${ch}' at (${x}, ${y})`);
@@ -105,7 +156,7 @@ export function parseLevel(rows: string[]): Tilemap {
     throw new Error(`parseLevel: expected at most 1 pod marker ('D'), found ${podCount}`);
   }
 
-  return { width, height, tiles, spawnX, spawnY, podX, podY, version: 0 };
+  return { width, height, tiles, spawnX, spawnY, podX, podY, enemySpawns, vents, version: 0 };
 }
 
 /**
@@ -119,14 +170,24 @@ export function tileAt(map: Tilemap, tx: number, ty: number): number {
   return map.tiles[ty * map.width + tx];
 }
 
-/** Solid tiles and all breakable kinds block movement — deposits are rock you can stand on. */
+/**
+ * Solid tiles and all breakable rock kinds block movement — deposits are rock
+ * you can stand on, Crumbling Sandstone too (until it gives way). Spike Bramble
+ * is a pass-through hazard, never solid (GDD §6.8 — you walk into it).
+ */
 export function isSolid(tile: number): boolean {
-  return tile !== TILE_EMPTY;
+  return tile !== TILE_EMPTY && tile !== TILE_SPIKE_BRAMBLE;
 }
 
-/** True for every tile type a melee swing can break. */
+/** Resource/rock tiles a melee swing can mine — excludes hazards and bedrock. */
 function isBreakable(tile: number): boolean {
-  return tile !== TILE_EMPTY && tile !== TILE_SOLID;
+  return (
+    tile === TILE_BREAKABLE ||
+    tile === TILE_DEPOSIT_BIOMINERAL ||
+    tile === TILE_SCRAP_CACHE ||
+    tile === TILE_DEPOSIT_HIDDEN ||
+    tile === TILE_CORE_CRYSTAL
+  );
 }
 
 /**
