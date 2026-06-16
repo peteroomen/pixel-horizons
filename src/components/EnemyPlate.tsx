@@ -4,7 +4,7 @@ import type { CombatView, EnemyPartView, IntentDetail, IntentView } from '@/game
 import Plate from '@/components/foundry/Plate';
 import StatBar from '@/components/foundry/StatBar';
 import InfoChip from '@/components/foundry/InfoChip';
-import { DamageFloaters, HitFlash, useDamageFloaters } from '@/components/combat-fx';
+import { HitFlash, useHitFlash } from '@/components/combat-fx';
 
 interface EnemyPlateProps {
   view: CombatView;
@@ -18,7 +18,7 @@ const INTENT_KIND_LABELS: Record<IntentView['kind'], string> = {
 };
 
 export default function EnemyPlate({ view, onSelectTarget }: EnemyPlateProps) {
-  const core = useDamageFloaters(view.enemyHp);
+  const coreHitKey = useHitFlash(view.enemyHp);
   return (
     <Plate
       chamfer="chamfer-6 sm:chamfer-10"
@@ -43,9 +43,8 @@ export default function EnemyPlate({ view, onSelectTarget }: EnemyPlateProps) {
                 ⛨ {view.enemyArmor}
               </span>
             )}
-            <span className="relative font-readout text-[18px] sm:text-fd-numeral text-fd-ink">
+            <span className="font-readout text-[18px] sm:text-fd-numeral text-fd-ink">
               {view.enemyHp}/{view.enemyMaxHp}
-              <DamageFloaters floaters={core.floaters} onDone={core.remove} tone="enemy" />
             </span>
           </span>
         </div>
@@ -67,7 +66,7 @@ export default function EnemyPlate({ view, onSelectTarget }: EnemyPlateProps) {
 
         {/* HP bar — tap to focus the core (GDD §5.4) when organs are present */}
         {view.enemyParts.length > 0 ? (
-          <HitFlash hitKey={core.hitKey}>
+          <HitFlash hitKey={coreHitKey}>
             <button
               type="button"
               onClick={() => onSelectTarget?.(null)}
@@ -87,7 +86,7 @@ export default function EnemyPlate({ view, onSelectTarget }: EnemyPlateProps) {
             </button>
           </HitFlash>
         ) : (
-          <HitFlash hitKey={core.hitKey}>
+          <HitFlash hitKey={coreHitKey}>
             <StatBar value={view.enemyHp} max={view.enemyMaxHp} fillClassName="bg-fd-red" />
           </HitFlash>
         )}
@@ -137,10 +136,10 @@ function OrganRow({
   index: number;
   onSelectTarget?: (target: number | null) => void;
 }) {
-  const fx = useDamageFloaters(part.hp);
+  const hitKey = useHitFlash(part.hp);
   return (
     <div>
-      <HitFlash hitKey={fx.hitKey}>
+      <HitFlash hitKey={hitKey}>
         <button
           type="button"
           disabled={!part.alive}
@@ -154,11 +153,10 @@ function OrganRow({
               {part.name}
               <span className="ml-1 text-fd-muted">{part.ability}</span>
             </span>
-            <span className="relative flex items-baseline gap-1.5">
+            <span className="flex items-baseline gap-1.5">
               {part.selected && <FocusTag />}
-              <span className="relative font-readout text-[11px] sm:text-[13px] text-fd-ink">
+              <span className="font-readout text-[11px] sm:text-[13px] text-fd-ink">
                 {part.hp}/{part.maxHp}
-                <DamageFloaters floaters={fx.floaters} onDone={fx.remove} tone="enemy" />
               </span>
             </span>
           </div>

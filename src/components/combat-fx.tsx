@@ -1,98 +1,36 @@
 'use client';
 
 import { motion, useAnimationControls, useReducedMotion } from 'motion/react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { hpDrop } from './combat-fx-core';
 
 /**
- * The React side of the combat juice layer (Slice 6.6). Every effect is driven off the
- * change in a single HP / pip value between renders — combat pushes a fresh `CombatView`
- * once per event (never per frame), so a value falling between two renders *is* a hit.
- * These primitives keep that derivation co-located with the element it decorates, so a
- * floating number always lands on the exact bar that took the damage (no global
- * coordinate math). All motion respects `prefers-reduced-motion`.
+ * The React side of the combat juice layer (Slice 6.6). Bar flashes and pip pops are
+ * driven off the change in a single HP / pip value between renders — combat pushes a
+ * fresh `CombatView` once per event (never per frame), so a value falling between two
+ * renders *is* a hit. The eye-catching part — floating damage numbers — lives in the
+ * Pixi world over the ship/enemy sprites (`space-renderer.ts`), not here, so it shares a
+ * layer with the future weapon effects. All motion respects `prefers-reduced-motion`.
  */
 
-const FLOATER_RISE_PX = 26;
-const FLOATER_MS = 750;
 const FLASH_MS = 280;
 
-export type FxTone = 'enemy' | 'ship';
-
-interface Floater {
-  id: number;
-  amount: number;
-}
-
 /**
- * Watches a single HP value. Each time it drops, queues a floating damage number and
- * bumps `hitKey` (so the decorated element can flash/shake). Floaters self-expire once
- * their animation completes — removal is keyed by id, never by the effect cleanup, so
- * two hits in quick succession don't cancel each other's pruning.
+ * Watches a single HP value and returns a key that bumps each time it drops, so the
+ * decorated bar can flash/shake (see `HitFlash`). The first reading never counts as a hit.
  */
-export function useDamageFloaters(hp: number): {
-  floaters: Floater[];
-  hitKey: number;
-  remove: (id: number) => void;
-} {
+export function useHitFlash(hp: number): number {
   const prev = useRef<number | null>(null);
-  const nextId = useRef(0);
-  const [floaters, setFloaters] = useState<Floater[]>([]);
   const [hitKey, setHitKey] = useState(0);
 
   useEffect(() => {
     const drop = hpDrop(prev.current, hp);
     prev.current = hp;
-    if (drop === null) return;
-    const id = (nextId.current += 1);
-    setFloaters((current) => [...current, { id, amount: drop }]);
-    setHitKey((k) => k + 1);
+    if (drop !== null) setHitKey((k) => k + 1);
   }, [hp]);
 
-  const remove = useCallback((id: number) => {
-    setFloaters((current) => current.filter((f) => f.id !== id));
-  }, []);
-
-  return { floaters, hitKey, remove };
-}
-
-const TONE_CLASS: Record<FxTone, string> = {
-  enemy: 'text-fd-red',
-  ship: 'text-fd-orange',
-};
-
-/**
- * Renders the rising `−N` numbers from `useDamageFloaters`. Absolutely positioned so it
- * never shifts the plate layout; anchor it inside a `relative` element next to the HP
- * readout it belongs to. `pointer-events-none` so it can never eat a card/target tap.
- */
-export function DamageFloaters({
-  floaters,
-  onDone,
-  tone = 'enemy',
-}: {
-  floaters: Floater[];
-  onDone: (id: number) => void;
-  tone?: FxTone;
-}) {
-  const reduced = useReducedMotion() ?? false;
-  return (
-    <span className="pointer-events-none absolute -top-1 right-0 z-20 block" aria-hidden>
-      {floaters.map((f) => (
-        <motion.span
-          key={f.id}
-          className={`absolute right-0 top-0 font-readout text-[15px] sm:text-fd-numeral ${TONE_CLASS[tone]} drop-shadow-[0_1px_0_rgba(0,0,0,0.6)]`}
-          initial={{ opacity: 0, y: 0, scale: reduced ? 1 : 1.35 }}
-          animate={{ opacity: [0, 1, 1, 0], y: reduced ? 0 : -FLOATER_RISE_PX, scale: 1 }}
-          transition={{ duration: FLOATER_MS / 1000, times: [0, 0.12, 0.7, 1], ease: 'easeOut' }}
-          onAnimationComplete={() => onDone(f.id)}
-        >
-          −{f.amount}
-        </motion.span>
-      ))}
-    </span>
-  );
+  return hitKey;
 }
 
 /**

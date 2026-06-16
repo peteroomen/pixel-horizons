@@ -1,4 +1,4 @@
-import { Application, Container, Graphics, Sprite, Ticker } from 'pixi.js';
+import { Application, Container, Graphics, Sprite, Text, Ticker } from 'pixi.js';
 
 import type { CombatView } from '@/game/combat-view';
 import { MAX_SHAKE, shakeAmplitude } from '@/components/combat-fx-core';
@@ -16,13 +16,35 @@ const PLAYER_X = 150;
 const ENEMY_X = VIRTUAL_WIDTH - 170;
 const CENTER_Y = VIRTUAL_HEIGHT / 2 + 24; // sit the ships below the top HUD plates
 
+// Floating damage numbers — they pop over the struck ship and climb as they fade, sharing
+// the world layer with the future weapon effects (lasers/explosions) rather than the HUD.
+const FLOATER_MS = 800;
+const FLOATER_RISE = 36; // virtual px a number climbs over its life
+const FLOATER_FONT = 30; // virtual px
+const FLOATER_SPAWN_Y = CENTER_Y - 42; // just above the ship sprites
+// Damage you deal reads white (legible over any ship/organ tint — the position over the
+// enemy already signals the side); damage you take reads red/danger. The heavy near-black
+// outline keeps both crisp over a red hit-flash or a green organ alike.
+const DMG_ENEMY_COLOR = 0xffffff;
+const DMG_SHIP_COLOR = 0xff4757;
+
+const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3);
+
+/** The loaded VT323 family (matches the HUD readouts), with a monospace fallback. */
+function resolveNumberFont(): string {
+  if (typeof document === 'undefined') return 'monospace';
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--font-vt323').trim();
+  return v.length > 0 ? `${v}, monospace` : 'monospace';
+}
+
 /**
  * Battle viewport (World Art Direction): the infested lane backdrop, the player's
  * Gunship composited from its installed modules, and the Bloom grunt / Anchormaw boss
  * with its visible organs — all pixel-art sprites on nearest-neighbor textures, the
- * design's exact render path. Numbers/intents/organ reticles live in the DOM HUD; this
- * layer is the world behind the glass. `sync` runs once per combat event, never per
- * frame; the ticker only animates flashes, idle bob, and breathing.
+ * design's exact render path. Intents/organ reticles/HP readouts live in the DOM HUD;
+ * this layer is the world behind the glass, plus the floating damage numbers that pop
+ * over the struck ship. `sync` runs once per combat event, never per frame; the ticker
+ * animates flashes, idle bob, breathing, viewport shake, and the floaters.
  */
 export interface SpaceRenderer {
   sync(view: CombatView): void;
@@ -83,8 +105,46 @@ export function createSpaceRenderer(app: Application): SpaceRenderer {
   enemyShip.position.set(ENEMY_X, CENTER_Y);
   scene.addChild(enemyShip);
 
+  // Floating damage numbers sit on top of the ships and inside `scene`, so they ride the
+  // viewport shake with the rest of the world.
+  const floaterLayer = new Container();
+  scene.addChild(floaterLayer);
+  const numberFont = resolveNumberFont();
+
+  interface Floater {
+    text: Text;
+    ageMs: number;
+    baseY: number;
+  }
+  const floaters: Floater[] = [];
+  let spawnCount = 0;
+
+  const spawnFloater = (x: number, color: number, amount: number): void => {
+    // Stagger rapid hits sideways so stacked numbers stay legible. Deterministic — no RNG
+    // (it would consume the sim's stream), just a 3-step cycle off the spawn counter.
+    const jitter = ((spawnCount % 3) - 1) * 10;
+    spawnCount += 1;
+    const text = new Text({
+      text: `-${amount}`,
+      style: {
+        fontFamily: numberFont,
+        fontSize: FLOATER_FONT,
+        fill: color,
+        stroke: { color: 0x05060d, width: 6 },
+        align: 'center',
+      },
+    });
+    text.anchor.set(0.5);
+    // Render the glyph at the on-screen size (stage zoom) so it stays crisp, not upscaled.
+    text.resolution = Math.max(1, Math.ceil(app.stage.scale.x));
+    text.position.set(x + jitter, FLOATER_SPAWN_Y);
+    floaterLayer.addChild(text);
+    floaters.push({ text, ageMs: 0, baseY: FLOATER_SPAWN_Y });
+  };
+
   let prevHullHp: number | null = null;
   let prevEnemyHp: number | null = null;
+  let prevParts: number[] | null = null;
   let playerFlashMs = 0;
   let enemyFlashMs = 0;
   let shakeMs = 0;
@@ -145,13 +205,40 @@ export function createSpaceRenderer(app: Application): SpaceRenderer {
     } else {
       enemyShip.tint = 0xffffff;
     }
+
+    // Damage numbers climb and fade (rise suppressed under reduced motion; they still show).
+    for (let i = floaters.length - 1; i >= 0; i--) {
+      const f = floaters[i];
+      f.ageMs += ticker.deltaMS;
+      const t = f.ageMs / FLOATER_MS;
+      if (t >= 1) {
+        f.text.destroy();
+        floaters.splice(i, 1);
+        continue;
+      }
+      f.text.y = f.baseY - (reducedMotion ? 0 : FLOATER_RISE * easeOutCubic(t));
+      f.text.alpha = t < 0.12 ? t / 0.12 : t > 0.7 ? Math.max(0, 1 - (t - 0.7) / 0.3) : 1;
+      // A quick punch-in (1.5 → 1 over the first 15%) gives the number its impact.
+      f.text.scale.set(reducedMotion || t > 0.15 ? 1 : 1.5 - (0.5 * t) / 0.15);
+    }
   };
   app.ticker.add(tick);
 
   return {
     sync(view: CombatView): void {
       const hullDrop = prevHullHp !== null ? Math.max(0, prevHullHp - view.hullHp) : 0;
-      const enemyDrop = prevEnemyHp !== null ? Math.max(0, prevEnemyHp - view.enemyHp) : 0;
+      const coreDrop = prevEnemyHp !== null ? Math.max(0, prevEnemyHp - view.enemyHp) : 0;
+      // Organ hits don't move the core HP, so diff each part too and fold it into the
+      // enemy-side total — the whole creature is one sprite, so one number over it reads.
+      let partsDrop = 0;
+      if (prevParts !== null) {
+        for (let i = 0; i < view.enemyParts.length; i++) {
+          const prev = prevParts[i];
+          if (prev !== undefined) partsDrop += Math.max(0, prev - view.enemyParts[i].hp);
+        }
+      }
+      const enemyDrop = coreDrop + partsDrop;
+
       if (hullDrop > 0) playerFlashMs = FLASH_MS;
       if (enemyDrop > 0) enemyFlashMs = FLASH_MS;
       // Either side taking damage kicks the camera; scale to the bigger hit this event.
@@ -165,8 +252,12 @@ export function createSpaceRenderer(app: Application): SpaceRenderer {
           shakeMs = SHAKE_MS;
         }
       }
+      if (enemyDrop > 0) spawnFloater(ENEMY_X, DMG_ENEMY_COLOR, enemyDrop);
+      if (hullDrop > 0) spawnFloater(PLAYER_X, DMG_SHIP_COLOR, hullDrop);
+
       prevHullHp = view.hullHp;
       prevEnemyHp = view.enemyHp;
+      prevParts = view.enemyParts.map((p) => p.hp);
 
       isBoss = view.boss;
       bossPhase = view.bossPhase ?? -1;

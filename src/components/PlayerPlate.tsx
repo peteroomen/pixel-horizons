@@ -4,14 +4,14 @@ import type { CombatView } from '@/game/main';
 import Plate from '@/components/foundry/Plate';
 import StatBar from '@/components/foundry/StatBar';
 import InfoChip from '@/components/foundry/InfoChip';
-import { DamageFloaters, HitFlash, PopPip, useDamageFloaters } from '@/components/combat-fx';
+import { HitFlash, PopPip, useHitFlash } from '@/components/combat-fx';
 
 interface PlayerPlateProps {
   view: CombatView;
 }
 
 export default function PlayerPlate({ view }: PlayerPlateProps) {
-  const hull = useDamageFloaters(view.hullHp);
+  const hullHitKey = useHitFlash(view.hullHp);
   return (
     <Plate
       chamfer="chamfer-6 sm:chamfer-10"
@@ -24,14 +24,13 @@ export default function PlayerPlate({ view }: PlayerPlateProps) {
           <span className="font-label text-[8px] sm:text-fd-label text-fd-muted uppercase">
             Hull
           </span>
-          <span className="relative font-readout text-[18px] sm:text-fd-numeral text-fd-ink">
+          <span className="font-readout text-[18px] sm:text-fd-numeral text-fd-ink">
             {view.hullHp}/{view.hullMaxHp}
-            <DamageFloaters floaters={hull.floaters} onDone={hull.remove} tone="ship" />
           </span>
         </div>
 
         {/* Hull bar */}
-        <HitFlash hitKey={hull.hitKey}>
+        <HitFlash hitKey={hullHitKey}>
           <StatBar value={view.hullHp} max={view.hullMaxHp} fillClassName="bg-fd-orange" />
         </HitFlash>
 
