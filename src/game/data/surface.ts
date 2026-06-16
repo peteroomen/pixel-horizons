@@ -222,4 +222,4 @@ export const VENT_PUSH_VX = 90;
 /** Sandstorm Vent: horizontal half-width of the push band, in px. */
 export const VENT_PUSH_HALF_WIDTH = TILE_SIZE;
 /** Sandstorm Vent: vertical reach of the push column above the vent, in px. */
-export const VENT_PUSH_HEIGHT = 6 * TILE_SIZE;
+export const VENT_PUSH_HEIGHT = 3 * TILE_SIZE;

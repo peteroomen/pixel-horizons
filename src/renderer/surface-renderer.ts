@@ -9,6 +9,7 @@ import {
   POD_WARNING_MS,
   POD_WIDTH,
   TILE_SIZE,
+  VENT_PUSH_HEIGHT,
 } from '@/game/data/surface';
 import { attackHitbox } from '@/game/surface/clone';
 import { ventsActive } from '@/game/surface/hazards';
@@ -304,17 +305,41 @@ export function createSurfaceRenderer(app: Application): SurfaceRenderer {
         slashGfx.rect(hb.x, hb.y, hb.w, hb.h).fill({ color: COLOR_SLASH, alpha: 0.7 });
       }
 
-      // Sandstorm Vent dust columns (telegraphed: only while active)
+      // Sandstorm Vent: a floor grate that puffs a widening dust plume while
+      // active (telegraphed). The plume matches the push zone height so the
+      // hazard reads as a vent, not a stray marker.
       sandstormGfx.clear();
-      if (ventsActive(state.ventPhaseMs)) {
-        for (const vent of map.vents) {
-          sandstormGfx
-            .rect(vent.x + 2, vent.y - 5 * TILE_SIZE, TILE_SIZE - 4, 5 * TILE_SIZE)
-            .fill({ color: COLOR_VENT_DUST, alpha: 0.25 });
+      for (const vent of map.vents) {
+        // Floor grate with slats, flush to the bottom of the vent tile
+        const gy = vent.y + TILE_SIZE - 4;
+        sandstormGfx.rect(vent.x + 1, gy, TILE_SIZE - 2, 4).fill(COLOR_VENT);
+        for (let sx = vent.x + 3; sx < vent.x + TILE_SIZE - 2; sx += 4) {
+          sandstormGfx.rect(sx, gy + 1, 1, 2).fill(0x0d0d18);
         }
       }
-      for (const vent of map.vents) {
-        sandstormGfx.rect(vent.x + 3, vent.y + 8, TILE_SIZE - 6, 8).fill(COLOR_VENT);
+      if (ventsActive(state.ventPhaseMs)) {
+        for (const vent of map.vents) {
+          const cx = vent.x + TILE_SIZE / 2;
+          const baseY = vent.y + TILE_SIZE - 4;
+          // Plume: trapezoid widening upward over the push zone
+          sandstormGfx
+            .poly([
+              cx - 4,
+              baseY,
+              cx + 4,
+              baseY,
+              cx + 9,
+              baseY - VENT_PUSH_HEIGHT,
+              cx - 9,
+              baseY - VENT_PUSH_HEIGHT,
+            ])
+            .fill({ color: COLOR_VENT_DUST, alpha: 0.22 });
+          // A few rising puffs for life
+          for (let p = 0; p < 3; p++) {
+            const py = baseY - ((state.ventPhaseMs / 12 + p * 26) % VENT_PUSH_HEIGHT);
+            sandstormGfx.rect(cx - 2, py, 4, 3).fill({ color: COLOR_VENT_DUST, alpha: 0.5 });
+          }
+        }
       }
 
       // Enemies — redrawn each frame (small counts)
