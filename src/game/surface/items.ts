@@ -1,6 +1,11 @@
 import { getModule } from '@/game/data';
 import type { ModuleInstance, PlanetItemEffect } from '@/game/data';
-import { BACKPACK_CAPACITY, POD_WINDOW_PER_ENGINE_MS } from '@/game/data/surface';
+import {
+  BACKPACK_CAPACITY,
+  CLONE_BASE_HP,
+  CLONE_BASE_MELEE,
+  POD_WINDOW_PER_ENGINE_MS,
+} from '@/game/data/surface';
 
 /**
  * Loadout projection (GDD §6.3): installed ship modules project items onto the
@@ -24,6 +29,12 @@ export interface CloneCapabilities {
   jumpVelocityMultiplier: number;
   moveSpeedMultiplier: number;
   dash: DashConfig | null;
+  /** Printed-clone HP (GDD §6.3) — from the Clone Bay matrix, default CLONE_BASE_HP. */
+  maxHp: number;
+  /** Damage per melee swing (GDD §6.3) — base + Enforcer bonus. */
+  meleeDamage: number;
+  /** Slow self-heal: ms of grounded time per 1 HP regenerated, or null (no regen). */
+  regenMsPerHp: number | null;
 }
 
 export const BASELINE_CAPABILITIES: CloneCapabilities = {
@@ -31,6 +42,9 @@ export const BASELINE_CAPABILITIES: CloneCapabilities = {
   jumpVelocityMultiplier: 1,
   moveSpeedMultiplier: 1,
   dash: null,
+  maxHp: CLONE_BASE_HP,
+  meleeDamage: CLONE_BASE_MELEE,
+  regenMsPerHp: null,
 };
 
 export interface ProjectedItem {
@@ -111,6 +125,9 @@ export function projectLoadout(
   let backpackCapacity = BACKPACK_CAPACITY;
   let scanner = false;
   let shieldBubble: { cooldownMs: number } | null = null;
+  let maxHp = CLONE_BASE_HP;
+  let meleeDamage = CLONE_BASE_MELEE;
+  let regenMsPerHp: number | null = null;
 
   for (const effect of activeEffects) {
     switch (effect.kind) {
@@ -141,12 +158,30 @@ export function projectLoadout(
       case 'shield-bubble':
         shieldBubble ??= { cooldownMs: effect.cooldownMs };
         break;
+      case 'clone-hp':
+        // The Clone Bay matrix defines the chassis HP outright (only one per loadout).
+        maxHp = effect.amount;
+        break;
+      case 'melee-damage':
+        meleeDamage += effect.bonus;
+        break;
+      case 'clone-regen':
+        regenMsPerHp = effect.msPerHp;
+        break;
     }
   }
 
   return {
     items,
-    capabilities: { maxAirJumps, jumpVelocityMultiplier, moveSpeedMultiplier, dash },
+    capabilities: {
+      maxAirJumps,
+      jumpVelocityMultiplier,
+      moveSpeedMultiplier,
+      dash,
+      maxHp,
+      meleeDamage,
+      regenMsPerHp,
+    },
     yieldMultiplier: miningMultiplier * (1 + bonusPercent / 100),
     backpackCapacity,
     podWindowBonusMs: engineCount * POD_WINDOW_PER_ENGINE_MS,

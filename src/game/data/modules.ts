@@ -199,7 +199,11 @@ export const MODULE_DEFS: readonly ModuleDef[] = [
     tiers: {
       mk1: {
         cards: ['card-telemetry-sync'],
-        planetItem: { name: 'Baseline Clone', description: 'Baseline clone (3 HP).' },
+        planetItem: {
+          name: 'Baseline Clone',
+          description: 'Baseline clone (3 HP).',
+          effects: [{ kind: 'clone-hp', amount: 3 }],
+        },
       },
     },
   },
@@ -213,7 +217,10 @@ export const MODULE_DEFS: readonly ModuleDef[] = [
         planetItem: {
           name: 'Scavenger Clone',
           description: '+15% mining yield, 2 HP.',
-          effects: [{ kind: 'yield-bonus', percent: 15 }],
+          effects: [
+            { kind: 'yield-bonus', percent: 15 },
+            { kind: 'clone-hp', amount: 2 },
+          ],
         },
       },
     },
@@ -227,8 +234,12 @@ export const MODULE_DEFS: readonly ModuleDef[] = [
         cards: ['card-combat-sim'],
         planetItem: {
           name: 'Enforcer Clone',
-          description: '+1 melee damage, -10% speed.',
-          effects: [{ kind: 'move-speed', multiplier: 0.9 }],
+          description: '+1 melee damage, -10% speed, 2 HP.',
+          effects: [
+            { kind: 'move-speed', multiplier: 0.9 },
+            { kind: 'melee-damage', bonus: 1 },
+            { kind: 'clone-hp', amount: 2 },
+          ],
         },
       },
     },
@@ -242,7 +253,11 @@ export const MODULE_DEFS: readonly ModuleDef[] = [
         cards: ['card-repair-clone'],
         planetItem: {
           name: 'Repair Clone',
-          description: 'Carries field-patch kit (slow self-heal).',
+          description: 'Carries field-patch kit (slow self-heal, 3 HP).',
+          effects: [
+            { kind: 'clone-hp', amount: 3 },
+            { kind: 'clone-regen', msPerHp: 6000 },
+          ],
         },
       },
     },
@@ -257,6 +272,7 @@ export const MODULE_DEFS: readonly ModuleDef[] = [
         planetItem: {
           name: 'Assault Clone',
           description: '+ranged attack, 2 HP.',
+          effects: [{ kind: 'clone-hp', amount: 2 }],
         },
       },
     },

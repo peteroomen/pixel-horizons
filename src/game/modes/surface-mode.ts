@@ -5,7 +5,13 @@ import { createSurfaceRenderer } from '@/renderer/surface-renderer';
 import type { SurfaceRenderer } from '@/renderer/surface-renderer';
 import type { InputState } from '../surface/clone';
 import type { SurfaceLoadout } from '../surface/items';
-import { abandonSurface, createSurface, launchPod, updateSurface } from '../surface/surface';
+import {
+  abandonSurface,
+  createSurface,
+  launchPod,
+  reprintClone,
+  updateSurface,
+} from '../surface/surface';
 import type { SurfaceState } from '../surface/surface';
 import { buildSurfaceView, surfaceViewEquals } from '../surface-view';
 import type { SurfaceView } from '../surface-view';
@@ -36,7 +42,9 @@ export interface SurfaceMode {
   launchPod(): void;
   /** Recall the clone to orbit — the always-available soft-lock escape valve. */
   abandon(): void;
-  /** Read-only access for the orchestrator (banking deposits on exit). */
+  /** Re-print the clone after death (economy is gated by the orchestrator). */
+  reprint(): void;
+  /** Read-only access for the orchestrator (banking deposits, re-print economy). */
   state(): SurfaceState;
   destroy(): void;
 }
@@ -109,6 +117,10 @@ export function startSurfaceMode(
     },
     abandon(): void {
       abandonSurface(surfaceState);
+      emit();
+    },
+    reprint(): void {
+      reprintClone(surfaceState);
       emit();
     },
     state(): SurfaceState {

@@ -4,11 +4,13 @@ import { TILE_SIZE } from '@/game/data/surface';
 import {
   TILE_BREAKABLE,
   TILE_CORE_CRYSTAL,
+  TILE_CRUMBLING,
   TILE_DEPOSIT_BIOMINERAL,
   TILE_DEPOSIT_HIDDEN,
   TILE_EMPTY,
   TILE_SCRAP_CACHE,
   TILE_SOLID,
+  TILE_SPIKE_BRAMBLE,
   breakTile,
   isSolid,
   parseLevel,
@@ -174,5 +176,33 @@ describe('hidden deposits and core crystals (3.3)', () => {
     expect(breakTile(map, 3, 1)).toBe(TILE_DEPOSIT_HIDDEN);
     expect(breakTile(map, 3, 2)).toBe(TILE_CORE_CRYSTAL);
     expect(tileAt(map, 3, 1)).toBe(TILE_EMPTY);
+  });
+});
+
+describe('hazard + enemy tokens (3.4)', () => {
+  it('parses spike bramble as a non-solid, non-breakable hazard tile', () => {
+    const map = parseLevel(['#####', '#P^.#', '#####']);
+    expect(tileAt(map, 2, 1)).toBe(TILE_SPIKE_BRAMBLE);
+    expect(isSolid(TILE_SPIKE_BRAMBLE)).toBe(false);
+    expect(breakTile(map, 2, 1)).toBeNull(); // can't be mined
+  });
+
+  it('parses crumbling sandstone as a solid, non-breakable tile', () => {
+    const map = parseLevel(['#####', '#P~.#', '#####']);
+    expect(tileAt(map, 2, 1)).toBe(TILE_CRUMBLING);
+    expect(isSolid(TILE_CRUMBLING)).toBe(true);
+    expect(breakTile(map, 2, 1)).toBeNull(); // melee doesn't mine it
+  });
+
+  it('records enemy spawns (H/G/C) and vents (V) as positions, leaving empty tiles', () => {
+    const map = parseLevel(['########', '#PHGCV.#', '########']);
+    expect(map.enemySpawns.map((s) => s.type)).toEqual(['hopper', 'grubber', 'dropper']);
+    // H at col2 → x = 2 * TILE_SIZE
+    expect(map.enemySpawns[0].x).toBe(2 * TILE_SIZE);
+    expect(map.vents).toHaveLength(1);
+    expect(map.vents[0].x).toBe(5 * TILE_SIZE);
+    // All marker tiles parse to empty.
+    expect(tileAt(map, 2, 1)).toBe(TILE_EMPTY);
+    expect(tileAt(map, 5, 1)).toBe(TILE_EMPTY);
   });
 });

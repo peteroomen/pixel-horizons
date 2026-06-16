@@ -101,9 +101,15 @@ export type PlanetItemEffect =
   | { kind: 'yield-bonus'; percent: number }
   | { kind: 'deposit-scanner' }
   | { kind: 'backpack-capacity'; bonus: number }
-  /** Projected and shown in the HUD, but mechanically inert until clone damage exists (3.4). */
+  /** Shield Bubble (GDD §6.10): absorbs one hit then recharges over cooldownMs. */
   | { kind: 'shield-bubble'; cooldownMs: number }
-  | { kind: 'move-speed'; multiplier: number };
+  | { kind: 'move-speed'; multiplier: number }
+  /** Printed-clone base HP from the Clone Bay matrix (GDD §6.3). Highest wins. */
+  | { kind: 'clone-hp'; amount: number }
+  /** Extra melee damage per swing (Enforcer Matrix, GDD §6.3). Summed. */
+  | { kind: 'melee-damage'; bonus: number }
+  /** Slow self-heal (Repair Matrix): regenerate 1 HP per this many ms grounded. */
+  | { kind: 'clone-regen'; msPerHp: number };
 
 export interface PlanetItem {
   name: string;
