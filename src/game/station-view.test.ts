@@ -20,7 +20,7 @@ describe('buildMerchantView', () => {
   it('every offer carries its slot and a card preview', () => {
     const view = buildMerchantView(shopRun());
     for (const offer of view.offers) {
-      expect(['weapon', 'utility', 'engine', 'clone-bay']).toContain(offer.slot);
+      expect(['weapon', 'utility', 'engine', 'shield', 'clone-bay']).toContain(offer.slot);
       expect(offer.cards.length).toBeGreaterThan(0);
       expect(offer.cards[0]).toHaveProperty('name');
       expect(offer.cards[0]).toHaveProperty('apCost');

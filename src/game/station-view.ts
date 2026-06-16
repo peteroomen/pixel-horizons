@@ -7,7 +7,6 @@ import {
   canRepairHull,
   canSellBiominerals,
   canUpgradeModule,
-  hasSlotRoom,
   modulePrice,
   repairCost,
   slotUsage,
@@ -19,13 +18,11 @@ import { STARTING_HULL_HP } from './sim/run-state';
 import { generateShopOffers } from './sim/shop-inventory';
 
 /**
- * Why an affordable-looking offer can't be bought — the full picture, not just a label
- * (playtest fix #3): a slot block names the slot and its used/limit; a scrap block names
- * the price and what you have. Slot wins over Scrap — fix the cap first.
+ * Why an offer can't be bought. Buying is no longer slot-gated (playtest fix): a full
+ * slot is shown via the slot picture but never blocks, so the only block is the scrap
+ * shortfall — the price and what you have.
  */
-export type OfferBlock =
-  | { kind: 'need-slot'; slot: ModuleSlot; used: number; limit: number }
-  | { kind: 'need-scrap'; price: number; have: number };
+export type OfferBlock = { kind: 'need-scrap'; price: number; have: number };
 
 export interface ShopOfferView {
   moduleId: string;
@@ -81,20 +78,14 @@ function ownedModuleIds(run: RunState): Set<string> {
   return ids;
 }
 
-/** Why a not-buyable offer is blocked. Slot wins over Scrap — fix the cap first. */
+/** Why a not-buyable offer is blocked — only ever the scrap shortfall (slots don't gate). */
 function blockReason(
   run: RunState,
-  slots: readonly SlotUsage[],
   moduleId: string,
   owned: boolean,
   canBuy: boolean,
 ): OfferBlock | null {
   if (owned || canBuy) return null;
-  if (!hasSlotRoom(run.hullId, run.modules, moduleId)) {
-    const slot = getModule(moduleId).slot;
-    const usage = slots.find((s) => s.slot === slot);
-    return { kind: 'need-slot', slot, used: usage?.used ?? 0, limit: usage?.limit ?? 0 };
-  }
   const price = modulePrice(moduleId);
   if (run.resources.scrap < price) {
     return { kind: 'need-scrap', price, have: run.resources.scrap };
@@ -119,7 +110,7 @@ export function buildMerchantView(run: RunState): MerchantView {
         slot: def.slot,
         canBuy,
         owned: isOwned,
-        blockReason: blockReason(run, slots, o.moduleId, isOwned, canBuy),
+        blockReason: blockReason(run, o.moduleId, isOwned, canBuy),
         cards: describeModuleCards(o.moduleId),
       };
     }),

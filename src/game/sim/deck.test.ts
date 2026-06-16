@@ -23,6 +23,8 @@ describe('generateDeck', () => {
       'card-desync-hull': 1,
       'card-burn': 4,
       'card-afterburner': 2,
+      'card-reinforce': 2,
+      'card-emergency-barrier': 1,
       'card-telemetry-sync': 1,
     });
   });
@@ -46,6 +48,8 @@ describe('generateDeck', () => {
       'card-deep-scan': 1,
       'card-burn': 1,
       'card-cargo-thrust': 1,
+      'card-reinforce': 2,
+      'card-emergency-barrier': 1,
       'card-telemetry-sync': 1,
     });
   });

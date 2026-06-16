@@ -40,7 +40,8 @@ function installedSlotCount(modules: readonly ModuleInstance[], slot: ModuleSlot
 }
 
 function hullSlotLimit(hullId: string, slot: ModuleSlot): number {
-  if (slot === 'clone-bay') return 1;
+  // Implicit single-occupancy slots, not stored on the hull def.
+  if (slot === 'clone-bay' || slot === 'shield') return 1;
   return getHull(hullId).slots[slot];
 }
 
@@ -53,7 +54,7 @@ export function hasSlotRoom(
   return installedSlotCount(modules, slot) < hullSlotLimit(hullId, slot);
 }
 
-const ALL_SLOTS: readonly ModuleSlot[] = ['weapon', 'utility', 'engine', 'clone-bay'];
+const ALL_SLOTS: readonly ModuleSlot[] = ['weapon', 'utility', 'engine', 'shield', 'clone-bay'];
 
 /** Per-slot occupancy for the workbench/shop slot picture — `used` of `limit`. */
 export interface SlotUsage {
@@ -99,9 +100,8 @@ export function canRepairHull(run: RunState): boolean {
 }
 
 export function canBuyModule(run: RunState, moduleId: string): boolean {
-  return (
-    run.resources.scrap >= modulePrice(moduleId) && hasSlotRoom(run.hullId, run.modules, moduleId)
-  );
+  // Buying is never slot-gated — over-cap purchases land in cargo (playtest fix).
+  return run.resources.scrap >= modulePrice(moduleId);
 }
 
 export function canSellBiominerals(run: RunState, count: number): boolean {
@@ -119,12 +119,13 @@ export function canUpgradeModule(run: RunState, moduleIndex: number): boolean {
   );
 }
 
-export function canCraftModule(run: RunState, moduleId: string): boolean {
+export function canCraftModule(run: RunState): boolean {
+  // Crafting is never slot-gated and its cost is module-independent — the crafted
+  // module lands in cargo (playtest fix).
   return (
     run.resources.blueprints >= CRAFT_BLUEPRINT_COST &&
     run.resources.biominerals >= CRAFT_BIOMINERAL_COST &&
-    run.resources.scrap >= CRAFT_SCRAP_COST &&
-    hasSlotRoom(run.hullId, run.modules, moduleId)
+    run.resources.scrap >= CRAFT_SCRAP_COST
   );
 }
 
@@ -137,8 +138,9 @@ export function canInstallModule(run: RunState, cargoIndex: number): boolean {
 export function canUninstallModule(run: RunState, moduleIndex: number): boolean {
   const mod = run.modules[moduleIndex];
   if (mod === undefined) return false;
-  // Clone-bay cannot be uninstalled
-  return getModule(mod.id).slot !== 'clone-bay';
+  // Clone-bay and shield are fixed single-occupancy slots — not uninstallable.
+  const slot = getModule(mod.id).slot;
+  return slot !== 'clone-bay' && slot !== 'shield';
 }
 
 export function canUpgradeReactor(run: RunState): boolean {
@@ -158,9 +160,9 @@ export function repairHull(run: RunState): TransactionResult {
 export function buyModule(run: RunState, moduleId: string): TransactionResult {
   const price = modulePrice(moduleId);
   if (run.resources.scrap < price) return fail('cannot-afford');
-  if (!hasSlotRoom(run.hullId, run.modules, moduleId)) return fail('slot-full');
   run.resources.scrap -= price;
-  run.modules.push({ id: moduleId, tier: 1 });
+  // Always to cargo — install is a separate, explicit step at the workbench.
+  run.cargo.push({ id: moduleId, tier: 1 });
   return OK;
 }
 
@@ -197,11 +199,11 @@ export function craftModule(run: RunState, moduleId: string): TransactionResult 
   ) {
     return fail('cannot-afford');
   }
-  if (!hasSlotRoom(run.hullId, run.modules, moduleId)) return fail('slot-full');
   run.resources.blueprints -= CRAFT_BLUEPRINT_COST;
   run.resources.biominerals -= CRAFT_BIOMINERAL_COST;
   run.resources.scrap -= CRAFT_SCRAP_COST;
-  run.modules.push({ id: moduleId, tier: 1 });
+  // Always to cargo — install is a separate, explicit step at the workbench.
+  run.cargo.push({ id: moduleId, tier: 1 });
   return OK;
 }
 
@@ -217,7 +219,8 @@ export function installModule(run: RunState, cargoIndex: number): TransactionRes
 export function uninstallModule(run: RunState, moduleIndex: number): TransactionResult {
   const mod = run.modules[moduleIndex];
   if (mod === undefined) return fail('invalid-index');
-  if (getModule(mod.id).slot === 'clone-bay') return fail('not-installed');
+  const slot = getModule(mod.id).slot;
+  if (slot === 'clone-bay' || slot === 'shield') return fail('not-installed');
   run.modules.splice(moduleIndex, 1);
   run.cargo.push(mod);
   return OK;

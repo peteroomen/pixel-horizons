@@ -41,14 +41,16 @@ function makeRun(overrides: Partial<ReturnType<typeof createRunState>> = {}) {
 
 describe('slotUsage', () => {
   it('reports used / limit per slot for the starting Scout loadout', () => {
-    // Scout: weapon 1, utility 2, engine 2 + the implicit clone-bay; starting modules are
-    // light-laser (weapon), phase-shifter (utility), 2× thruster (engine), print matrix.
+    // Scout: weapon 1, utility 2, engine 2 + the implicit shield and clone-bay; starting
+    // modules are light-laser (weapon), phase-shifter (utility), 2× thruster (engine),
+    // shield-generator (shield), print matrix (clone-bay).
     const run = createRunState('test-slots');
     const usage = slotUsage(run.hullId, run.modules);
     expect(usage).toEqual([
       { slot: 'weapon', used: 1, limit: 1 },
       { slot: 'utility', used: 1, limit: 2 },
       { slot: 'engine', used: 2, limit: 2 },
+      { slot: 'shield', used: 1, limit: 1 },
       { slot: 'clone-bay', used: 1, limit: 1 },
     ]);
   });
@@ -113,17 +115,20 @@ describe('repairHull', () => {
 // ── Buy module ──
 
 describe('buyModule', () => {
-  it('deducts Scrap and installs the module at tier 1', () => {
+  it('deducts Scrap and lands the module in cargo at tier 1', () => {
     const run = makeRun({
       resources: { scrap: 100, biominerals: 0, coreCrystals: 0, blueprints: 0 },
     });
-    const before = run.modules.length;
+    const modulesBefore = run.modules.length;
+    const cargoBefore = run.cargo.length;
     const price = modulePrice('mod-phase-shifter');
     const result = buyModule(run, 'mod-phase-shifter');
     expect(result).toEqual({ ok: true });
     expect(run.resources.scrap).toBe(100 - price);
-    expect(run.modules.length).toBe(before + 1);
-    expect(run.modules[run.modules.length - 1]).toEqual({ id: 'mod-phase-shifter', tier: 1 });
+    // Buying never auto-installs — install is a separate step at the workbench.
+    expect(run.modules.length).toBe(modulesBefore);
+    expect(run.cargo.length).toBe(cargoBefore + 1);
+    expect(run.cargo[run.cargo.length - 1]).toEqual({ id: 'mod-phase-shifter', tier: 1 });
   });
 
   it('refuses when cannot afford', () => {
@@ -133,22 +138,22 @@ describe('buyModule', () => {
     expect(buyModule(run, 'mod-phase-shifter')).toEqual({ ok: false, reason: 'cannot-afford' });
   });
 
-  it('refuses when slot is full', () => {
-    // Scout has 1 weapon slot, starts with mod-light-laser
+  it('a full matching slot no longer blocks the buy — it lands in cargo', () => {
+    // Scout has 1 weapon slot, already full with mod-light-laser.
     const run = makeRun({
       resources: { scrap: 200, biominerals: 0, coreCrystals: 0, blueprints: 0 },
     });
-    expect(buyModule(run, 'mod-flak-array')).toEqual({ ok: false, reason: 'slot-full' });
+    expect(buyModule(run, 'mod-flak-array')).toEqual({ ok: true });
+    expect(run.cargo[run.cargo.length - 1]).toEqual({ id: 'mod-flak-array', tier: 1 });
   });
 
-  it('canBuyModule mirrors buyModule guard', () => {
+  it('canBuyModule gates on affordability only, never on slots', () => {
     const run = makeRun({
       resources: { scrap: 200, biominerals: 0, coreCrystals: 0, blueprints: 0 },
     });
-    // Scout has 2 utility slots; starts with mod-phase-shifter in one
     expect(canBuyModule(run, 'mod-cargo-scanner')).toBe(true);
-    // Weapon slot already full
-    expect(canBuyModule(run, 'mod-flak-array')).toBe(false);
+    // Weapon slot already full, but buying is no longer slot-gated.
+    expect(canBuyModule(run, 'mod-flak-array')).toBe(true);
   });
 });
 
@@ -257,7 +262,7 @@ describe('upgradeModule', () => {
 // ── Craft module ──
 
 describe('craftModule', () => {
-  it('deducts blueprint + biominerals + scrap and installs the module', () => {
+  it('deducts blueprint + biominerals + scrap and lands the module in cargo', () => {
     const run = makeRun({
       resources: {
         scrap: CRAFT_SCRAP_COST,
@@ -266,13 +271,15 @@ describe('craftModule', () => {
         blueprints: CRAFT_BLUEPRINT_COST,
       },
     });
-    // Scout: utility slot has 1 free (2 total, 1 used by phase-shifter)
+    const cargoBefore = run.cargo.length;
     const result = craftModule(run, 'mod-cargo-scanner');
     expect(result).toEqual({ ok: true });
     expect(run.resources.blueprints).toBe(0);
     expect(run.resources.biominerals).toBe(0);
     expect(run.resources.scrap).toBe(0);
-    expect(run.modules[run.modules.length - 1]).toEqual({ id: 'mod-cargo-scanner', tier: 1 });
+    // Crafting never auto-installs — the module lands in cargo.
+    expect(run.cargo.length).toBe(cargoBefore + 1);
+    expect(run.cargo[run.cargo.length - 1]).toEqual({ id: 'mod-cargo-scanner', tier: 1 });
   });
 
   it('refuses without blueprints', () => {
@@ -282,15 +289,16 @@ describe('craftModule', () => {
     expect(craftModule(run, 'mod-cargo-scanner')).toEqual({ ok: false, reason: 'cannot-afford' });
   });
 
-  it('refuses when slot full', () => {
+  it('a full matching slot no longer blocks the craft — it lands in cargo', () => {
     const run = makeRun({
       resources: { scrap: 100, biominerals: 100, coreCrystals: 0, blueprints: 5 },
     });
-    // Scout: 1 weapon slot, already full
-    expect(craftModule(run, 'mod-flak-array')).toEqual({ ok: false, reason: 'slot-full' });
+    // Scout: 1 weapon slot, already full.
+    expect(craftModule(run, 'mod-flak-array')).toEqual({ ok: true });
+    expect(run.cargo[run.cargo.length - 1]).toEqual({ id: 'mod-flak-array', tier: 1 });
   });
 
-  it('canCraftModule mirrors the guard', () => {
+  it('canCraftModule is true with enough resources (slots never gate it)', () => {
     const run = makeRun({
       resources: {
         scrap: CRAFT_SCRAP_COST,
@@ -299,8 +307,14 @@ describe('craftModule', () => {
         blueprints: CRAFT_BLUEPRINT_COST,
       },
     });
-    expect(canCraftModule(run, 'mod-cargo-scanner')).toBe(true);
-    expect(canCraftModule(run, 'mod-flak-array')).toBe(false);
+    expect(canCraftModule(run)).toBe(true);
+  });
+
+  it('canCraftModule is false without enough resources', () => {
+    const run = makeRun({
+      resources: { scrap: 0, biominerals: 0, coreCrystals: 0, blueprints: 0 },
+    });
+    expect(canCraftModule(run)).toBe(false);
   });
 });
 
@@ -355,6 +369,12 @@ describe('uninstallModule', () => {
     expect(uninstallModule(run, idx)).toEqual({ ok: false, reason: 'not-installed' });
   });
 
+  it('refuses to uninstall the shield module — the slot is fixed', () => {
+    const run = makeRun();
+    const idx = run.modules.findIndex((m) => m.id === 'mod-shield-generator');
+    expect(uninstallModule(run, idx)).toEqual({ ok: false, reason: 'not-installed' });
+  });
+
   it('refuses with invalid module index', () => {
     const run = makeRun();
     expect(uninstallModule(run, 99)).toEqual({ ok: false, reason: 'invalid-index' });
@@ -366,6 +386,8 @@ describe('uninstallModule', () => {
     expect(canUninstallModule(run, weaponIdx)).toBe(true);
     const cloneIdx = run.modules.findIndex((m) => m.id === 'mod-standard-print-matrix');
     expect(canUninstallModule(run, cloneIdx)).toBe(false);
+    const shieldIdx = run.modules.findIndex((m) => m.id === 'mod-shield-generator');
+    expect(canUninstallModule(run, shieldIdx)).toBe(false);
   });
 });
 
@@ -403,28 +425,28 @@ describe('upgradeReactor', () => {
 // ── Slot limits per hull ──
 
 describe('slot limits per hull (GDD §4.1)', () => {
-  it('Scout: 1 weapon, 2 utility, 2 engine — buying a 2nd weapon refuses', () => {
-    const run = makeRun({
-      resources: { scrap: 200, biominerals: 0, coreCrystals: 0, blueprints: 0 },
-    });
-    expect(canBuyModule(run, 'mod-flak-array')).toBe(false); // weapon full
-    expect(canBuyModule(run, 'mod-cargo-scanner')).toBe(true); // 1 utility free
+  // Buying is never slot-gated, so the cap is enforced at install time, not purchase.
+  it('Scout: 1 weapon, 2 utility, 2 engine — a 2nd weapon cannot be installed', () => {
+    const run = makeRun();
+    run.cargo.push({ id: 'mod-flak-array', tier: 1 }); // 2nd weapon
+    run.cargo.push({ id: 'mod-cargo-scanner', tier: 1 }); // utility, 1 free
+    expect(canInstallModule(run, 0)).toBe(false); // weapon full
+    expect(canInstallModule(run, 1)).toBe(true); // 1 utility free
   });
 
-  it('Gunship: 3 weapon slots, can buy more weapons', () => {
+  it('Gunship: 3 weapon slots all full at start — no 4th weapon installs', () => {
     const run = createRunState('test-economy', 'hull-gunship');
-    run.resources.scrap = 200;
-    // Gunship starts with 3 weapons — all full
-    expect(canBuyModule(run, 'mod-light-laser')).toBe(false);
+    run.cargo.push({ id: 'mod-light-laser', tier: 1 });
+    expect(canInstallModule(run, 0)).toBe(false);
   });
 
   it('installing after uninstalling the same slot type succeeds', () => {
-    const run = makeRun({
-      resources: { scrap: 200, biominerals: 0, coreCrystals: 0, blueprints: 0 },
-    });
-    // Scout: 1 weapon full → uninstall → slot free → buy another
+    const run = makeRun();
+    // Scout: 1 weapon full → uninstall → slot free → install another from cargo
     const weaponIdx = run.modules.findIndex((m) => m.id === 'mod-light-laser');
     expect(uninstallModule(run, weaponIdx)).toEqual({ ok: true });
-    expect(buyModule(run, 'mod-flak-array')).toEqual({ ok: true });
+    run.cargo.push({ id: 'mod-flak-array', tier: 1 });
+    const cargoIdx = run.cargo.findIndex((m) => m.id === 'mod-flak-array');
+    expect(installModule(run, cargoIdx)).toEqual({ ok: true });
   });
 });
