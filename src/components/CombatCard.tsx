@@ -1,5 +1,7 @@
 'use client';
 
+import { motion, useReducedMotion } from 'motion/react';
+
 import type { CardView } from '@/game/main';
 
 type CardState = 'normal' | 'malfunction' | 'infested' | 'discard';
@@ -54,6 +56,10 @@ const STATE_STYLES: Record<
 export default function CombatCard({ card, state, disabled, onClick }: CombatCardProps) {
   const s = STATE_STYLES[state];
   const selectable = !disabled;
+  const reduced = useReducedMotion() ?? false;
+  // Hover-lift + tap-punch sell that a card is grabbable and that playing it *launches*;
+  // reduced motion drops the movement (the press still fires the play).
+  const interactive = selectable && !reduced;
 
   const tags: { label: string; color: string }[] = [];
   if (state === 'discard') {
@@ -74,13 +80,16 @@ export default function CombatCard({ card, state, disabled, onClick }: CombatCar
   }
 
   return (
-    <button
+    <motion.button
       type="button"
       disabled={disabled}
       onClick={onClick}
+      whileHover={interactive ? { y: -8 } : undefined}
+      whileTap={interactive ? { y: -4, scale: 0.96 } : undefined}
+      transition={{ type: 'spring', stiffness: 600, damping: 30 }}
       className={`chamfer chamfer-5 sm:chamfer-8 ${s.frame} p-[2px] w-full h-[142px] sm:h-[210px] ${
-        selectable ? 'cursor-pointer hover:-translate-y-2 active:-translate-y-1' : ''
-      } transition-transform ${!card.affordable && state !== 'discard' ? 'opacity-40' : ''}`}
+        selectable ? 'cursor-pointer' : ''
+      } ${!card.affordable && state !== 'discard' ? 'opacity-40' : ''}`}
     >
       <div className={`chamfer chamfer-5 sm:chamfer-8 ${s.fill} flex h-full flex-col`}>
         {/* Header strip */}
@@ -120,6 +129,6 @@ export default function CombatCard({ card, state, disabled, onClick }: CombatCar
           </div>
         )}
       </div>
-    </button>
+    </motion.button>
   );
 }

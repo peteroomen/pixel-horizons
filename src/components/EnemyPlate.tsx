@@ -1,9 +1,10 @@
 'use client';
 
-import type { CombatView, IntentDetail, IntentView } from '@/game/main';
+import type { CombatView, EnemyPartView, IntentDetail, IntentView } from '@/game/main';
 import Plate from '@/components/foundry/Plate';
 import StatBar from '@/components/foundry/StatBar';
 import InfoChip from '@/components/foundry/InfoChip';
+import { DamageFloaters, HitFlash, useDamageFloaters } from '@/components/combat-fx';
 
 interface EnemyPlateProps {
   view: CombatView;
@@ -17,6 +18,7 @@ const INTENT_KIND_LABELS: Record<IntentView['kind'], string> = {
 };
 
 export default function EnemyPlate({ view, onSelectTarget }: EnemyPlateProps) {
+  const core = useDamageFloaters(view.enemyHp);
   return (
     <Plate
       chamfer="chamfer-6 sm:chamfer-10"
@@ -41,8 +43,9 @@ export default function EnemyPlate({ view, onSelectTarget }: EnemyPlateProps) {
                 ⛨ {view.enemyArmor}
               </span>
             )}
-            <span className="font-readout text-[18px] sm:text-fd-numeral text-fd-ink">
+            <span className="relative font-readout text-[18px] sm:text-fd-numeral text-fd-ink">
               {view.enemyHp}/{view.enemyMaxHp}
+              <DamageFloaters floaters={core.floaters} onDone={core.remove} tone="enemy" />
             </span>
           </span>
         </div>
@@ -64,25 +67,29 @@ export default function EnemyPlate({ view, onSelectTarget }: EnemyPlateProps) {
 
         {/* HP bar — tap to focus the core (GDD §5.4) when organs are present */}
         {view.enemyParts.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => onSelectTarget?.(null)}
-            className={`pointer-events-auto touch-manipulation block w-full rounded-sm border px-1.5 py-1 text-left ${
-              view.targetIsCore
-                ? 'border-fd-orange bg-fd-orange/15'
-                : 'border-transparent active:bg-white/5'
-            }`}
-          >
-            <div className="mb-0.5 flex items-baseline justify-between gap-1">
-              <span className="font-label uppercase text-[7px] sm:text-[9px] text-fd-muted">
-                Core
-              </span>
-              {view.targetIsCore && <FocusTag />}
-            </div>
-            <StatBar value={view.enemyHp} max={view.enemyMaxHp} fillClassName="bg-fd-red" />
-          </button>
+          <HitFlash hitKey={core.hitKey}>
+            <button
+              type="button"
+              onClick={() => onSelectTarget?.(null)}
+              className={`pointer-events-auto touch-manipulation block w-full rounded-sm border px-1.5 py-1 text-left ${
+                view.targetIsCore
+                  ? 'border-fd-orange bg-fd-orange/15'
+                  : 'border-transparent active:bg-white/5'
+              }`}
+            >
+              <div className="mb-0.5 flex items-baseline justify-between gap-1">
+                <span className="font-label uppercase text-[7px] sm:text-[9px] text-fd-muted">
+                  Core
+                </span>
+                {view.targetIsCore && <FocusTag />}
+              </div>
+              <StatBar value={view.enemyHp} max={view.enemyMaxHp} fillClassName="bg-fd-red" />
+            </button>
+          </HitFlash>
         ) : (
-          <StatBar value={view.enemyHp} max={view.enemyMaxHp} fillClassName="bg-fd-red" />
+          <HitFlash hitKey={core.hitKey}>
+            <StatBar value={view.enemyHp} max={view.enemyMaxHp} fillClassName="bg-fd-red" />
+          </HitFlash>
         )}
 
         {/* Targetable organs (GDD §5.4): tap to focus single-target fire */}
@@ -92,48 +99,7 @@ export default function EnemyPlate({ view, onSelectTarget }: EnemyPlateProps) {
               Tap a target to focus fire
             </div>
             {view.enemyParts.map((part, index) => (
-              <div key={part.name}>
-                <button
-                  type="button"
-                  disabled={!part.alive}
-                  onClick={() => onSelectTarget?.(part.selected ? null : index)}
-                  className={`pointer-events-auto touch-manipulation block w-full rounded-sm border px-1.5 py-1 text-left ${
-                    part.alive ? 'active:bg-white/5' : 'opacity-40'
-                  } ${part.selected ? 'border-fd-orange bg-fd-orange/15' : 'border-fd-strip'}`}
-                >
-                  <div className="flex items-baseline justify-between gap-1">
-                    <span className="font-label uppercase text-[8px] sm:text-[9px] text-fd-amber">
-                      {part.name}
-                      <span className="ml-1 text-fd-muted">{part.ability}</span>
-                    </span>
-                    <span className="flex items-baseline gap-1.5">
-                      {part.selected && <FocusTag />}
-                      <span className="font-readout text-[11px] sm:text-[13px] text-fd-ink">
-                        {part.hp}/{part.maxHp}
-                      </span>
-                    </span>
-                  </div>
-                  <StatBar
-                    value={part.hp}
-                    max={part.maxHp}
-                    fillClassName={part.alive ? 'bg-fd-amber' : 'bg-fd-muted'}
-                  />
-                </button>
-                {/* This organ's debuffs (GDD §5.10) — sits below its row, tap to explain */}
-                {part.alive && part.statuses.length > 0 && (
-                  <div className="pointer-events-auto mt-0.5 flex flex-wrap items-center gap-1 pl-1.5">
-                    {part.statuses.map((status) => (
-                      <InfoChip
-                        key={status.id}
-                        label={status.name}
-                        value={status.value}
-                        description={status.description}
-                        tone={status.tone}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
+              <OrganRow key={part.name} part={part} index={index} onSelectTarget={onSelectTarget} />
             ))}
           </div>
         )}
@@ -158,6 +124,66 @@ export default function EnemyPlate({ view, onSelectTarget }: EnemyPlateProps) {
         </div>
       </div>
     </Plate>
+  );
+}
+
+/** One targetable organ row, owning its own hit floater/flash keyed off its HP. */
+function OrganRow({
+  part,
+  index,
+  onSelectTarget,
+}: {
+  part: EnemyPartView;
+  index: number;
+  onSelectTarget?: (target: number | null) => void;
+}) {
+  const fx = useDamageFloaters(part.hp);
+  return (
+    <div>
+      <HitFlash hitKey={fx.hitKey}>
+        <button
+          type="button"
+          disabled={!part.alive}
+          onClick={() => onSelectTarget?.(part.selected ? null : index)}
+          className={`pointer-events-auto touch-manipulation block w-full rounded-sm border px-1.5 py-1 text-left ${
+            part.alive ? 'active:bg-white/5' : 'opacity-40'
+          } ${part.selected ? 'border-fd-orange bg-fd-orange/15' : 'border-fd-strip'}`}
+        >
+          <div className="flex items-baseline justify-between gap-1">
+            <span className="font-label uppercase text-[8px] sm:text-[9px] text-fd-amber">
+              {part.name}
+              <span className="ml-1 text-fd-muted">{part.ability}</span>
+            </span>
+            <span className="relative flex items-baseline gap-1.5">
+              {part.selected && <FocusTag />}
+              <span className="relative font-readout text-[11px] sm:text-[13px] text-fd-ink">
+                {part.hp}/{part.maxHp}
+                <DamageFloaters floaters={fx.floaters} onDone={fx.remove} tone="enemy" />
+              </span>
+            </span>
+          </div>
+          <StatBar
+            value={part.hp}
+            max={part.maxHp}
+            fillClassName={part.alive ? 'bg-fd-amber' : 'bg-fd-muted'}
+          />
+        </button>
+      </HitFlash>
+      {/* This organ's debuffs (GDD §5.10) — sits below its row, tap to explain */}
+      {part.alive && part.statuses.length > 0 && (
+        <div className="pointer-events-auto mt-0.5 flex flex-wrap items-center gap-1 pl-1.5">
+          {part.statuses.map((status) => (
+            <InfoChip
+              key={status.id}
+              label={status.name}
+              value={status.value}
+              description={status.description}
+              tone={status.tone}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
