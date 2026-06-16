@@ -148,7 +148,7 @@ describe('hull catalog', () => {
 
   it('starting modules exist and fit the slot profile', () => {
     for (const hull of HULL_DEFS) {
-      const counts = { weapon: 0, utility: 0, engine: 0, 'clone-bay': 0 };
+      const counts = { weapon: 0, utility: 0, engine: 0, shield: 0, 'clone-bay': 0 };
       for (const moduleId of hull.startingModules) {
         counts[getModule(moduleId).slot] += 1;
       }
@@ -156,6 +156,8 @@ describe('hull catalog', () => {
       expect(counts.utility, hull.id).toBeLessThanOrEqual(hull.slots.utility);
       expect(counts.engine, hull.id).toBeLessThanOrEqual(hull.slots.engine);
       expect(counts['clone-bay'], hull.id).toBe(1);
+      // Every hull boots with exactly 1 shield in its dedicated shield slot.
+      expect(counts.shield, hull.id).toBe(1);
     }
   });
 

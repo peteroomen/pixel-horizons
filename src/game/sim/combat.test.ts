@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { BASELINE_AP, getCard, getEnemy, HAND_SIZE, MALFUNCTION_REPAIR_AP } from '../data';
+import {
+  BASELINE_AP,
+  getCard,
+  getEnemy,
+  getModule,
+  HAND_SIZE,
+  MALFUNCTION_REPAIR_AP,
+} from '../data';
 import type { CombatState } from './combat';
 import {
   applyCombatResult,
@@ -42,6 +49,23 @@ function gunshipRun(seed = 'combat-test'): RunState {
 
 function scoutRun(seed = 'combat-test'): RunState {
   return createRunState(seed, 'hull-scout');
+}
+
+/** A run with a second shield generator → 2 combat layers, for the multi-layer mechanics. */
+function twoShieldRun(seed = 'combat-test'): RunState {
+  const run = gunshipRun(seed);
+  run.modules.push({ id: 'mod-shield-generator', tier: 1 });
+  return run;
+}
+
+/**
+ * Strips shield modules so the loadout takes hits directly — the malfunction/dodge tests
+ * predate the universal shield slot and assume a bare hull. For the Scout this also
+ * restores the original module indices (the matrix returns to index 4).
+ */
+function stripShields(run: RunState): RunState {
+  run.modules = run.modules.filter((m) => getModule(m.id).slot !== 'shield');
+  return run;
 }
 
 /** Fabricates hand instances for scripted tests; module 0 unless a test flips it. */
@@ -161,12 +185,9 @@ describe('createCombat', () => {
 
   it('collects shield layers from module passives', () => {
     const gunship = createCombat(gunshipRun(), LAMPREY);
-    expect(gunship.shields).toEqual([
-      { rechargeTurns: 2, turnsUntilUp: 0 },
-      { rechargeTurns: 2, turnsUntilUp: 0 },
-    ]);
-    const scout = createCombat(scoutRun(), LAMPREY);
-    expect(scout.shields).toEqual([]);
+    expect(gunship.shields).toEqual([{ rechargeTurns: 2, turnsUntilUp: 0 }]);
+    const noShield = createCombat(stripShields(gunshipRun()), LAMPREY);
+    expect(noShield.shields).toEqual([]);
   });
 
   it('telegraphs the first intent of a cycle enemy', () => {
@@ -444,14 +465,14 @@ describe('malfunctions (GDD §5.6)', () => {
     // Scout has no shields; Parasite opens with Burrow (3 dmg, highest-value).
     // Scout module values: laser 2, phase-shifter 3, thruster 3, thruster 3, matrix 1
     // — ties go to the lowest index, so the Phase Shifter (index 1) is hunted first.
-    const state = createCombat(scoutRun(), PARASITE);
+    const state = createCombat(stripShields(scoutRun()), PARASITE);
     endTurn(state);
     expect(state.hullHp).toBe(97);
     expect(malfunctioningModules(state)).toEqual([1]);
   });
 
   it('flags every card instance of the hit module, not just one', () => {
-    const state = createCombat(scoutRun(), PARASITE);
+    const state = createCombat(stripShields(scoutRun()), PARASITE);
     endTurn(state); // Phase Shifter (index 1) hunted first
     const phaseShifterCards = [...state.drawPile, ...state.hand, ...state.discardPile].filter(
       (c) => c.moduleIndex === 1,
@@ -474,11 +495,11 @@ describe('malfunctions (GDD §5.6)', () => {
     endTurn(state);
     expect(state.hullHp).toBe(91);
     expect(malfunctioningModules(state).length).toBe(1);
-    expect(state.shields.map((l) => l.turnsUntilUp)).toEqual([0, 0]);
+    expect(state.shields.map((l) => l.turnsUntilUp)).toEqual([0]);
   });
 
   it('an untargetable or dodged hit malfunctions nothing', () => {
-    const state = createCombat(scoutRun(), PARASITE);
+    const state = createCombat(stripShields(scoutRun()), PARASITE);
     state.hand = hand('card-phase-walk');
     playCard(state, 0);
     endTurn(state);
@@ -487,7 +508,7 @@ describe('malfunctions (GDD §5.6)', () => {
   });
 
   it('flipped cards cost the repair AP regardless of their printed cost', () => {
-    const state = createCombat(scoutRun(), PARASITE);
+    const state = createCombat(stripShields(scoutRun()), PARASITE);
     const afterburner: CombatCard = {
       cardId: 'card-afterburner',
       moduleIndex: 2,
@@ -502,7 +523,7 @@ describe('malfunctions (GDD §5.6)', () => {
   });
 
   it('playing a flipped card clears only that instance and applies no card effects', () => {
-    const state = createCombat(scoutRun(), PARASITE);
+    const state = createCombat(stripShields(scoutRun()), PARASITE);
     flagModule(state, 1); // Phase Shifter — all its instances down
     expect(malfunctioningModules(state)).toEqual([1]);
     state.hand = [{ cardId: 'card-ghost-shift', moduleIndex: 1, malfunctioning: true }];
@@ -517,7 +538,7 @@ describe('malfunctions (GDD §5.6)', () => {
   });
 
   it('a module is operational again only once all its instances are repaired', () => {
-    const state = createCombat(scoutRun(), PARASITE);
+    const state = createCombat(stripShields(scoutRun()), PARASITE);
     flagModule(state, 1); // Phase Shifter contributes 3 cards
     const flagged = [state.drawPile, state.hand]
       .flat()
@@ -539,14 +560,14 @@ describe('malfunctions (GDD §5.6)', () => {
   });
 
   it('an already-flipped module cannot flip twice — the hunt moves on', () => {
-    const state = createCombat(scoutRun(), PARASITE);
+    const state = createCombat(stripShields(scoutRun()), PARASITE);
     flagModule(state, 1);
     endTurn(state); // Burrow: next-best operational module is the first Thruster
     expect(malfunctioningModules(state)).toEqual([1, 2]);
   });
 
   it('with every module down, a module hit is plain hull damage', () => {
-    const state = createCombat(scoutRun(), PARASITE);
+    const state = createCombat(stripShields(scoutRun()), PARASITE);
     for (const index of [0, 1, 2, 3, 4]) {
       flagModule(state, index);
     }
@@ -556,7 +577,7 @@ describe('malfunctions (GDD §5.6)', () => {
   });
 
   it('repair-all-modules (Repair Clone) clears every malfunction at once', () => {
-    const state = createCombat(scoutRun(), PARASITE);
+    const state = createCombat(stripShields(scoutRun()), PARASITE);
     for (const index of [1, 2, 3]) {
       flagModule(state, index);
     }
@@ -644,14 +665,14 @@ describe('hull innate abilities (GDD §4.1)', () => {
 
 describe('shields and the enemy phase', () => {
   it('layers absorb one hit each — a two-hit attack spends two layers', () => {
-    const state = createCombat(gunshipRun(), LAMPREY);
+    const state = createCombat(twoShieldRun(), LAMPREY);
     endTurn(state); // Feeding Frenzy: 4 dmg × 2 hits
     expect(state.hullHp).toBe(100);
     expect(state.shields.map((l) => l.turnsUntilUp)).toEqual([2, 2]);
   });
 
   it('piercing attacks bypass active layers entirely', () => {
-    const state = createCombat(gunshipRun(), LAMPREY);
+    const state = createCombat(twoShieldRun(), LAMPREY);
     state.intentIndex = 2; // Rend: 9 dmg, piercing
     endTurn(state);
     expect(state.hullHp).toBe(91);
@@ -659,7 +680,7 @@ describe('shields and the enemy phase', () => {
   });
 
   it('spent layers recharge after rechargeTurns full enemy phases', () => {
-    const state = createCombat(gunshipRun(), LAMPREY);
+    const state = createCombat(twoShieldRun(), LAMPREY);
     endTurn(state); // T1 Frenzy: both layers spent, no tick the phase they were spent
     expect(state.shields.map((l) => l.turnsUntilUp)).toEqual([2, 2]);
     endTurn(state); // T2 Lash 7: layers down → hull damage; tick
@@ -673,7 +694,7 @@ describe('shields and the enemy phase', () => {
   });
 
   it('restore-shield-layer brings a recharging layer back up', () => {
-    const state = createCombat(gunshipRun(), LAMPREY);
+    const state = createCombat(twoShieldRun(), LAMPREY);
     endTurn(state);
     state.hand = hand('card-reinforce');
     playCard(state, 0);
@@ -681,7 +702,7 @@ describe('shields and the enemy phase', () => {
   });
 
   it('temp layers absorb before regular layers and never recharge', () => {
-    const state = createCombat(gunshipRun(), LAMPREY);
+    const state = createCombat(twoShieldRun(), LAMPREY);
     state.hand = hand('card-emergency-barrier');
     playCard(state, 0);
     endTurn(state); // Frenzy: hit 1 → temp layer, hit 2 → one regular layer
@@ -691,7 +712,7 @@ describe('shields and the enemy phase', () => {
   });
 
   it('dodge rolls the combat stream per incoming hit, then expires', () => {
-    const state = createCombat(scoutRun('dodge-seed'), LAMPREY);
+    const state = createCombat(stripShields(scoutRun('dodge-seed')), LAMPREY);
     state.hand = hand('card-ghost-shift');
     playCard(state, 0);
     expect(state.modifiers.dodgeChance).toBe(0.5);
@@ -706,7 +727,7 @@ describe('shields and the enemy phase', () => {
   });
 
   it('untargetable blanks the enemy phase, then ticks away', () => {
-    const state = createCombat(scoutRun(), LAMPREY);
+    const state = createCombat(stripShields(scoutRun()), LAMPREY);
     state.hand = hand('card-phase-walk');
     playCard(state, 0);
     endTurn(state);
@@ -1145,7 +1166,7 @@ describe('Infestations (GDD §5.6)', () => {
     expect(state.tempShieldLayers).toBe(0);
     expect(state.shields.every((layer) => layer.turnsUntilUp === 0)).toBe(true);
 
-    const scout = createCombat(scoutRun(), SPORECASTER); // no shield module
+    const scout = createCombat(stripShields(scoutRun()), SPORECASTER); // no shield module
     scout.drawPile.unshift(sporeCard());
     scout.hand = hand('card-telemetry-sync');
     expect(() => playCard(scout, 0)).not.toThrow();
