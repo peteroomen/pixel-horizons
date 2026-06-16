@@ -80,7 +80,7 @@ export interface CardDef {
   discardCost?: number;
 }
 
-export type ModuleSlot = 'weapon' | 'utility' | 'engine' | 'clone-bay';
+export type ModuleSlot = 'weapon' | 'utility' | 'engine' | 'clone-bay' | 'shield';
 
 export type ModulePassive = {
   kind: 'shield-layers';
@@ -310,7 +310,7 @@ export interface InnateAbility {
 export interface HullDef {
   id: HullId;
   name: string;
-  /** Every hull additionally has exactly 1 clone-bay slot (GDD §4.1). */
+  /** Every hull additionally has exactly 1 clone-bay slot AND 1 shield slot (GDD §4.1). */
   slots: { weapon: number; utility: number; engine: number };
   startingModules: ModuleId[];
   innateAbility: InnateAbility;

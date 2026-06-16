@@ -22,11 +22,8 @@ interface StationScreenProps {
   onOpenWorkbench: () => void;
 }
 
-/** Full block-reason copy (4.8): the slot picture or the scrap shortfall, not just a label. */
+/** Block-reason copy: buying is no longer slot-gated, so the only block is the scrap shortfall. */
 function blockReasonText(block: OfferBlock): string {
-  if (block.kind === 'need-slot') {
-    return `${SLOT_LABELS[block.slot]} ${block.used}/${block.limit} full`;
-  }
   return `Need ${block.price} scrap · have ${block.have}`;
 }
 
@@ -94,11 +91,7 @@ function OfferRow({
               Buy
             </FoundryButton>
             {offer.blockReason !== null && (
-              <span
-                className={`font-label text-[7px] uppercase sm:text-[9px] ${
-                  offer.blockReason.kind === 'need-slot' ? 'text-fd-orange' : 'text-fd-amber'
-                }`}
-              >
+              <span className="font-label text-[7px] uppercase text-fd-amber sm:text-[9px]">
                 {blockReasonText(offer.blockReason)}
               </span>
             )}

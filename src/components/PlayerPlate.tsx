@@ -4,12 +4,14 @@ import type { CombatView } from '@/game/main';
 import Plate from '@/components/foundry/Plate';
 import StatBar from '@/components/foundry/StatBar';
 import InfoChip from '@/components/foundry/InfoChip';
+import { HitFlash, PopPip, useHitFlash } from '@/components/combat-fx';
 
 interface PlayerPlateProps {
   view: CombatView;
 }
 
 export default function PlayerPlate({ view }: PlayerPlateProps) {
+  const hullHitKey = useHitFlash(view.hullHp);
   return (
     <Plate
       chamfer="chamfer-6 sm:chamfer-10"
@@ -28,7 +30,9 @@ export default function PlayerPlate({ view }: PlayerPlateProps) {
         </div>
 
         {/* Hull bar */}
-        <StatBar value={view.hullHp} max={view.hullMaxHp} fillClassName="bg-fd-orange" />
+        <HitFlash hitKey={hullHitKey}>
+          <StatBar value={view.hullHp} max={view.hullMaxHp} fillClassName="bg-fd-orange" />
+        </HitFlash>
 
         {/* Shields row */}
         <div className="flex items-center gap-1">
@@ -40,19 +44,26 @@ export default function PlayerPlate({ view }: PlayerPlateProps) {
             <span className="font-readout text-fd-muted">none</span>
           )}
           {view.shields.map((layer, i) => (
-            <span
+            <PopPip
               key={i}
-              className={`inline-flex items-center justify-center size-3 ${
-                layer.up ? 'bg-fd-cyan' : 'bg-fd-strip'
-              }`}
+              on={layer.up}
+              className="inline-flex items-center justify-center size-3"
+              litClassName="bg-fd-cyan"
+              offClassName="bg-fd-strip"
             >
               {!layer.up && (
                 <span className="font-readout text-[10px] text-fd-muted">{layer.turnsUntilUp}</span>
               )}
-            </span>
+            </PopPip>
           ))}
           {Array.from({ length: view.tempShieldLayers }, (_, i) => (
-            <span key={`temp-${i}`} className="inline-block size-3 bg-fd-amber" />
+            <PopPip
+              key={`temp-${i}`}
+              on
+              className="inline-block size-3"
+              litClassName="bg-fd-amber"
+              offClassName="bg-fd-amber"
+            />
           ))}
         </div>
 
@@ -62,9 +73,12 @@ export default function PlayerPlate({ view }: PlayerPlateProps) {
             AP
           </span>
           {Array.from({ length: Math.max(view.apPerTurn, view.ap) }, (_, i) => (
-            <span
+            <PopPip
               key={i}
-              className={`inline-block size-3 ${i < view.ap ? 'bg-fd-orange' : 'bg-fd-strip'}`}
+              on={i < view.ap}
+              className="inline-block size-3"
+              litClassName="bg-fd-orange"
+              offClassName="bg-fd-strip"
             />
           ))}
         </div>

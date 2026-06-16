@@ -15,6 +15,13 @@ function gunshipCombat(seed = 'view-test') {
   return createCombat(createRunState(seed, 'hull-gunship'), LAMPREY);
 }
 
+/** Gunship with a second shield generator → 2 combat layers, for multi-layer view checks. */
+function twoShieldCombat(seed = 'view-test') {
+  const run = createRunState(seed, 'hull-gunship');
+  run.modules.push({ id: 'mod-shield-generator', tier: 1 });
+  return createCombat(run, LAMPREY);
+}
+
 /** Fabricates hand instances for scripted tests; module 0 unless a test flips it. */
 function hand(...cardIds: string[]): CombatCard[] {
   return cardIds.map((cardId) => ({ cardId, moduleIndex: 0, malfunctioning: false }));
@@ -41,10 +48,7 @@ describe('buildCombatView', () => {
     expect(view.hullMaxHp).toBe(STARTING_HULL_HP);
     expect(view.enemyName).toBe('Lamprey');
     expect(view.enemyMaxHp).toBe(getEnemy(LAMPREY).maxHp);
-    expect(view.shields).toEqual([
-      { up: true, turnsUntilUp: 0 },
-      { up: true, turnsUntilUp: 0 },
-    ]);
+    expect(view.shields).toEqual([{ up: true, turnsUntilUp: 0 }]);
     expect(view.hand.length).toBe(state.hand.length);
     expect(view.drawCount).toBe(state.drawPile.length);
     expect(view.discardCount).toBe(0);
@@ -198,7 +202,7 @@ describe('buildCombatView', () => {
   });
 
   it('reflects shield recharge after a layer absorbs a hit', () => {
-    const state = gunshipCombat();
+    const state = twoShieldCombat();
     endTurn(state); // Feeding Frenzy: 2 hits, both eaten by the two layers
     const view = buildCombatView(state);
     expect(view.shields.filter((layer) => !layer.up).length).toBe(2);

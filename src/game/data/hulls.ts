@@ -14,6 +14,7 @@ export const HULL_DEFS: readonly HullDef[] = [
       'mod-phase-shifter',
       'mod-thruster',
       'mod-thruster',
+      'mod-shield-generator',
       'mod-standard-print-matrix',
     ],
     innateAbility: {
@@ -54,6 +55,7 @@ export const HULL_DEFS: readonly HullDef[] = [
       'mod-mining-laser',
       'mod-cargo-scanner',
       'mod-hauler-engine',
+      'mod-shield-generator',
       'mod-standard-print-matrix',
     ],
     innateAbility: {
