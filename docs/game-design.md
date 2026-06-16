@@ -133,6 +133,7 @@ Combat occurs while traveling between nodes — inside Bloom-infested hyperspace
 - **Engine cards grant travel progress**, reducing the remaining distance. Faster traversal = fewer encounter triggers.
 - **Arrival ends everything:** if you reach the destination mid-combat, you drop into realspace and the encounter ends immediately (no rewards from the unfinished fight). This is the "escape" mechanic — you don't flee a fight, you finish the journey.
 - **Anchor-type enemies** (see 5.7) halt travel progress until defeated or paid off, making them the counter to pure engine builds.
+  > ⚠️ **Opinionated decision under review (2026-06-16, roadmap 4.10):** the "paid off" (Scrap toll) escape is being **removed** — playtest feedback found it unwanted; anchors will have to be *killed*. This is a reversible call — we may bring the toll back. Open question if it sticks: what re-justifies the anchor as the counter to engine-heavy builds if it's a pure must-kill wall?
 
 Open design space: exact encounter spacing, whether unused travel progress carries between encounters in the same lane. To be tuned in playtesting — but the structure above is the commitment.
 
@@ -199,7 +200,7 @@ Single-ship encounters against Bloom organisms. Each has a distinct quirk demand
 | **Lamprey** | Raider | Low HP, high damage. Race to kill before it shreds your modules. |
 | **Carapace** | Bulwark | Regenerating organic armor. Needs sustained damage or piercing cards. |
 | **Sporecaster** | Scrambler | Injects Infestation cards into your deck mid-fight. |
-| **Anchormaw** | Blockade | Latches onto the lane — travel progress halted until it's killed or paid a toll (Scrap). The counter to engine-heavy builds. |
+| **Anchormaw** | Blockade | Latches onto the lane — travel progress halted until it's killed ~~or paid a toll (Scrap)~~. The counter to engine-heavy builds. ⚠️ **Toll removal under review (2026-06-16, roadmap 4.10)** — the Scrap pay-off is being dropped per playtest; reversible. |
 | **Parasite** | Hunter | Targets your highest-value module specifically. Protect it or fight without your best cards. |
 
 ### 5.8 Module Catalog (Examples)
