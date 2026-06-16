@@ -1,4 +1,4 @@
-import { Application, Container, Graphics } from 'pixi.js';
+import { Application, Container, Graphics, Sprite, Texture, Ticker } from 'pixi.js';
 
 import {
   CORPSE_BEACON_RANGE,
@@ -12,9 +12,11 @@ import {
   VENT_PUSH_HEIGHT,
 } from '@/game/data/surface';
 import { attackHitbox } from '@/game/surface/clone';
+import type { CloneState } from '@/game/surface/clone';
+import type { WorldItem } from '@/game/surface/drops';
+import type { EnemyState } from '@/game/surface/enemies';
 import { ventsActive } from '@/game/surface/hazards';
 import {
-  TILE_BREAKABLE,
   TILE_CORE_CRYSTAL,
   TILE_CRUMBLING,
   TILE_DEPOSIT_BIOMINERAL,
@@ -27,128 +29,169 @@ import {
 } from '@/game/surface/tilemap';
 import type { SurfaceState } from '@/game/surface/surface';
 import { VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from './pixel-scale';
+import {
+  bedrockTile,
+  biomineralTile,
+  brambleTile,
+  type ClonePose,
+  cloneSprite,
+  coreTile,
+  corpseSprite,
+  crumbleTile,
+  fxDustSprite,
+  fxShatterSprite,
+  hiddenTile,
+  type ItemKind,
+  itemSprite,
+  moteField,
+  rockFillTile,
+  rockSurfaceTile,
+  scannedTile,
+  scrapCacheTile,
+  hopperSprite,
+  grubberSprite,
+  dropperSprite,
+  podCampSprite,
+  podLaunchSprite,
+  surfaceBackdrop,
+} from './surface-sprites';
+import { nearestTexture } from './textures';
 
-/** Rocky biome tile colors. */
-const COLOR_SOLID = 0x6b5a4a;
-const COLOR_BREAKABLE = 0xa07a3a;
-const COLOR_DEPOSIT = 0x3a8a6a;
-const COLOR_DEPOSIT_FLECK = 0x6fd0a8;
-const COLOR_CACHE = 0x8a8a92;
-const COLOR_CACHE_SEAM = 0x55555e;
-const COLOR_SCANNER_RING = 0xffd24a;
-const COLOR_CRYSTAL = 0xd070f0;
-const COLOR_CRYSTAL_FACET = 0xf0b8ff;
-const COLOR_SKY = 0x1a1a2e;
-const COLOR_CLONE = 0xc8d8e8;
-const COLOR_VISOR = 0x4fc3f7;
-const COLOR_SLASH = 0xffffff;
-const COLOR_POD_HULL = 0xb0b8c0;
-const COLOR_POD_HULL_WARN = 0xe94560;
-const COLOR_POD_WINDOW = 0x4fc3f7;
-const COLOR_POD_BASE = 0x55555e;
-// 3.4 threats + feedback
-const COLOR_BRAMBLE = 0x7a5a3a;
-const COLOR_BRAMBLE_SPIKE = 0xd0b070;
-const COLOR_CRUMBLE = 0xc2a060;
-const COLOR_CRUMBLE_CRACK = 0x6b4a1a;
-const COLOR_VENT = 0x5a4a6a;
-const COLOR_VENT_DUST = 0xc9b8e8;
-const COLOR_HOPPER = 0x6fd06f;
-const COLOR_GRUBBER = 0x9a8a6a;
-const COLOR_DROPPER = 0xb060d0;
-const COLOR_ENEMY_EYE = 0x1a1a2e;
-const COLOR_WORLD_ITEM = 0xc8c8d0;
-const COLOR_CORPSE = 0x6fff9f;
-const COLOR_SHIELD = 0x4fc3f7;
-const COLOR_HIT_FLASH = 0xe94560;
+/** FOUNDRY accents used by the live (non-sprite) signal layers. */
+const ACCENT_CYAN = 0x6ad1e3;
+const ACCENT_RED = 0xff4757;
+const ACCENT_GREEN = 0x8ac926;
+const ACCENT_AMBER = 0xffb454;
+const VENT_DUST = 0xfdcbb0; // tan plume (Resurrect 64 light sand)
 
-/** Backdrop rock sizes/positions — deterministic math, no RNG consumed. */
-const BACKDROP_ROCKS = Array.from({ length: 24 }, (_, i) => ({
-  x: (i * 137 + 31) % (VIRTUAL_WIDTH * 3),
-  y: 20 + ((i * 97 + 13) % (VIRTUAL_HEIGHT - 80)),
-  w: 4 + (i % 4) * 2,
-  h: 3 + (i % 3),
-}));
+/** Mining shatter / landing puff lifetimes (cosmetic, ms). */
+const SHATTER_MS = 260;
+const DUST_MS = 220;
+
+const tex = (canvas: HTMLCanvasElement): Texture => nearestTexture(canvas);
 
 export interface SurfaceRenderer {
   sync(state: SurfaceState): void;
   destroy(): void;
 }
 
+/** A short-lived world-space effect sprite that fades and is culled by the FX ticker. */
+interface Effect {
+  sprite: Sprite;
+  ageMs: number;
+  lifeMs: number;
+}
+
+/** Pick the clone pose sprite from sim state (no sim coupling — pure derivation). */
+function poseFor(clone: CloneState): ClonePose {
+  if (clone.attackElapsedMs >= 0) return 'melee';
+  if (!clone.grounded) return clone.body.vy < 0 ? 'jump' : 'air';
+  return clone.body.vx !== 0 ? 'run' : 'idle';
+}
+
+/** Dominant resource decides a dropped item's tint (the design's "tint = source"). */
+function itemKindFor(item: WorldItem): ItemKind {
+  if (item.resources.coreCrystals > 0) return 'core';
+  if (item.resources.biominerals > 0) return 'biomineral';
+  return 'scrap';
+}
+
 export function createSurfaceRenderer(app: Application): SurfaceRenderer {
+  // ── Static textures, built once (client-side) and shared across all sprites ──
+  const TILE_TEX = {
+    fill: tex(rockFillTile()),
+    surface: tex(rockSurfaceTile()),
+    bedrock: tex(bedrockTile()),
+    biomineral: tex(biomineralTile()),
+    scrap: tex(scrapCacheTile()),
+    scanned: tex(scannedTile()),
+    hidden: tex(hiddenTile()),
+    core: tex(coreTile()),
+    bramble: tex(brambleTile()),
+    crumble: tex(crumbleTile()),
+  };
+  const POSE_TEX: Record<ClonePose, Texture> = {
+    idle: tex(cloneSprite('idle')),
+    run: tex(cloneSprite('run')),
+    jump: tex(cloneSprite('jump')),
+    air: tex(cloneSprite('air')),
+    melee: tex(cloneSprite('melee')),
+  };
+  const POD_CAMP_TEX = tex(podCampSprite());
+  const POD_LAUNCH_TEX = tex(podLaunchSprite());
+  const ENEMY_TEX: Record<EnemyState['type'], Texture> = {
+    hopper: tex(hopperSprite()),
+    grubber: tex(grubberSprite()),
+    dropper: tex(dropperSprite()),
+  };
+  const ITEM_TEX: Record<ItemKind, Texture> = {
+    biomineral: tex(itemSprite('biomineral')),
+    scrap: tex(itemSprite('scrap')),
+    core: tex(itemSprite('core')),
+  };
+  const CORPSE_TEX = tex(corpseSprite());
+  const SHATTER_TEX = tex(fxShatterSprite());
+  const DUST_TEX = tex(fxDustSprite());
+
+  // ── Layer 0: cave-mouth backdrop (screen-fixed) + drifting spore motes ──────
+  const bg = new Container();
+  app.stage.addChildAt(bg, 0);
+  const backdrop = new Sprite(tex(surfaceBackdrop(VIRTUAL_WIDTH, VIRTUAL_HEIGHT)));
+  bg.addChild(backdrop);
+  const motes = moteField(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, 44);
+  const moteGfx = new Graphics();
+  bg.addChild(moteGfx);
+
+  // ── Layer 1: world (camera-offset) ─────────────────────────────────────────
   const world = new Container();
   app.stage.addChild(world);
 
-  // ── Sky backdrop ─────────────────────────────────────────────────────────
-  const sky = new Graphics().rect(0, 0, VIRTUAL_WIDTH * 5, VIRTUAL_HEIGHT * 5).fill(COLOR_SKY);
-  world.addChild(sky);
-
-  // Backdrop silhouette rocks (static, drawn once)
-  const bgRocks = new Graphics();
-  for (const r of BACKDROP_ROCKS) {
-    bgRocks.rect(r.x, r.y, r.w, r.h).fill(0x2a2a40);
-  }
-  world.addChild(bgRocks);
-
-  // ── Tile layer ────────────────────────────────────────────────────────────
-  const tileGfx = new Graphics();
-  world.addChild(tileGfx);
+  const tileLayer = new Container();
+  world.addChild(tileLayer);
   let lastTileVersion = -1;
 
-  // ── Drop pod ──────────────────────────────────────────────────────────────
-  // Two hull variants (normal / warning tint) so the urgency flash is a
-  // visibility toggle, not a per-frame Graphics rebuild.
-  const buildPodGfx = (hullColor: number): Graphics =>
-    new Graphics()
-      // landing skids
-      .rect(0, POD_HEIGHT - 4, POD_WIDTH, 4)
-      .fill(COLOR_POD_BASE)
-      // capsule hull
-      .rect(2, 4, POD_WIDTH - 4, POD_HEIGHT - 8)
-      .fill(hullColor)
-      // nose cap
-      .rect(6, 0, POD_WIDTH - 12, 4)
-      .fill(hullColor)
-      // viewport window
-      .rect(8, 12, POD_WIDTH - 16, 10)
-      .fill(COLOR_POD_WINDOW);
-  const podGfx = buildPodGfx(COLOR_POD_HULL);
-  const podWarnGfx = buildPodGfx(COLOR_POD_HULL_WARN);
-  world.addChild(podGfx);
-  world.addChild(podWarnGfx);
+  const sandstormGfx = new Graphics();
+  world.addChild(sandstormGfx);
 
-  // ── Clone sprite ──────────────────────────────────────────────────────────
-  const cloneBody = new Graphics()
-    .rect(0, 0, 12, 20)
-    .fill(COLOR_CLONE)
-    .rect(1, 2, 10, 6)
-    .fill(COLOR_VISOR);
-  world.addChild(cloneBody);
+  const podSprite = new Sprite(POD_CAMP_TEX);
+  podSprite.anchor.set(0.5, 1);
+  world.addChild(podSprite);
 
-  // ── Dash afterimage ghost ─────────────────────────────────────────────────
+  const corpse = new Sprite(CORPSE_TEX);
+  corpse.anchor.set(0.5, 1);
+  corpse.visible = false;
+  world.addChild(corpse);
+
+  const enemyLayer = new Container();
+  world.addChild(enemyLayer);
+  const enemySprites: Sprite[] = [];
+
+  const itemLayer = new Container();
+  world.addChild(itemLayer);
+  const itemSprites: Sprite[] = [];
+
   const ghostGfx = new Graphics();
   world.addChild(ghostGfx);
 
-  // ── Attack slash flash ────────────────────────────────────────────────────
-  const slashGfx = new Graphics();
-  world.addChild(slashGfx);
-
-  // ── Dynamic world entities (enemies, drops, corpse, shield) ─────────────────
-  // Redrawn each sync — small counts, simpler than diffed sprite pools.
-  const sandstormGfx = new Graphics();
-  world.addChild(sandstormGfx);
-  const enemyGfx = new Graphics();
-  world.addChild(enemyGfx);
-  const itemGfx = new Graphics();
-  world.addChild(itemGfx);
-  const corpseGfx = new Graphics();
-  world.addChild(corpseGfx);
   const shieldGfx = new Graphics();
   world.addChild(shieldGfx);
 
-  // ── Screen-space overlays (not camera-offset): hit flash, death fade, beacon.
+  const cloneSpr = new Sprite(POSE_TEX.idle);
+  cloneSpr.anchor.set(0, 0);
+  world.addChild(cloneSpr);
+
+  const slashGfx = new Graphics();
+  world.addChild(slashGfx);
+
+  const fxLayer = new Container();
+  world.addChild(fxLayer);
+  const effects: Effect[] = [];
+
+  // ── Layer 2: screen-space overlays (ambient gloom, flash, fade, beacon) ─────
   const overlay = new Container();
   app.stage.addChild(overlay);
+  const ambientGfx = new Graphics();
+  overlay.addChild(ambientGfx);
   const flashGfx = new Graphics();
   overlay.addChild(flashGfx);
   const fadeGfx = new Graphics();
@@ -156,172 +199,152 @@ export function createSurfaceRenderer(app: Application): SurfaceRenderer {
   const beaconGfx = new Graphics();
   overlay.addChild(beaconGfx);
 
+  // Spawn a one-shot world-space effect at (x, y).
+  const spawnEffect = (texture: Texture, x: number, y: number, lifeMs: number): void => {
+    const s = new Sprite(texture);
+    s.anchor.set(0.5, 0.5);
+    s.x = x;
+    s.y = y;
+    fxLayer.addChild(s);
+    effects.push({ sprite: s, ageMs: 0, lifeMs });
+  };
+
+  // Cosmetic animation clock (renderer-local — the space-renderer precedent). Drives
+  // mote drift + effect fade. Game state never updates here.
+  let motePhase = 0;
+  const animate = (ticker: Ticker): void => {
+    motePhase += ticker.deltaMS;
+    moteGfx.clear();
+    for (let i = 0; i < motes.length; i++) {
+      const m = motes[i];
+      const drift = (motePhase * 0.006 + i * 13) % (VIRTUAL_HEIGHT + 8);
+      const y = (m.y + drift) % (VIRTUAL_HEIGHT + 8);
+      const x = m.x + Math.sin((motePhase * 0.0008 + i) * Math.PI) * 3;
+      moteGfx.rect(x, y - 4, 1, 1).fill({ color: m.green ? 0x1ebc73 : 0xcddf6c, alpha: 0.5 });
+    }
+    for (let i = effects.length - 1; i >= 0; i--) {
+      const fx = effects[i];
+      fx.ageMs += ticker.deltaMS;
+      const t = fx.ageMs / fx.lifeMs;
+      if (t >= 1) {
+        fx.sprite.destroy();
+        effects.splice(i, 1);
+      } else {
+        fx.sprite.alpha = 1 - t;
+      }
+    }
+  };
+  app.ticker.add(animate);
+
+  // Land-detection + tile-break (mining) edges, for FX spawning.
+  let wasGrounded = false;
+  let prevVy = 0;
+
   return {
     sync(state: SurfaceState): void {
       const { map, clone } = state;
 
-      // Rebuild tile layer only when version changes (a breakable was broken)
+      // ── Tile layer — rebuilt only on version change (a breakable was mined) ──
       if (map.version !== lastTileVersion) {
+        // A version bump means a tile just broke → mining shatter at the hitbox.
+        if (lastTileVersion !== -1) {
+          const hb = attackHitbox(clone);
+          if (hb !== null) {
+            spawnEffect(SHATTER_TEX, hb.x + hb.w / 2, hb.y + hb.h / 2, SHATTER_MS);
+          }
+        }
         lastTileVersion = map.version;
-        tileGfx.clear();
+        tileLayer.removeChildren();
         for (let ty = 0; ty < map.height; ty++) {
           for (let tx = 0; tx < map.width; tx++) {
-            const tile = tileAt(map, tx, ty);
-            if (tile === TILE_EMPTY) continue;
-
-            const px = tx * TILE_SIZE;
-            const py = ty * TILE_SIZE;
-
-            if (tile === TILE_SOLID) {
-              tileGfx.rect(px, py, TILE_SIZE, TILE_SIZE).fill(COLOR_SOLID);
-            } else if (tile === TILE_BREAKABLE) {
-              tileGfx.rect(px, py, TILE_SIZE, TILE_SIZE).fill(COLOR_BREAKABLE);
-              // Crack mark — two diagonal lines
-              tileGfx
-                .moveTo(px + 4, py + 3)
-                .lineTo(px + 8, py + 13)
-                .stroke({ color: 0x6b4a1a, width: 1 });
-              tileGfx
-                .moveTo(px + 8, py + 3)
-                .lineTo(px + 5, py + 10)
-                .stroke({ color: 0x6b4a1a, width: 1 });
-            } else if (tile === TILE_DEPOSIT_BIOMINERAL) {
-              // Crystal flecks read as "minable" against the plain rock ochre
-              tileGfx
-                .rect(px, py, TILE_SIZE, TILE_SIZE)
-                .fill(COLOR_DEPOSIT)
-                .rect(px + 3, py + 4, 3, 3)
-                .fill(COLOR_DEPOSIT_FLECK)
-                .rect(px + 9, py + 8, 3, 3)
-                .fill(COLOR_DEPOSIT_FLECK)
-                .rect(px + 5, py + 11, 2, 2)
-                .fill(COLOR_DEPOSIT_FLECK);
-            } else if (tile === TILE_SCRAP_CACHE) {
-              // Metallic block with a seam line
-              tileGfx
-                .rect(px, py, TILE_SIZE, TILE_SIZE)
-                .fill(COLOR_CACHE)
-                .rect(px + 2, py + 7, TILE_SIZE - 4, 2)
-                .fill(COLOR_CACHE_SEAM);
-            } else if (tile === TILE_DEPOSIT_HIDDEN) {
-              if (state.loadout.scanner) {
-                // Revealed: rich vein with a scanner ring marker
-                tileGfx
-                  .rect(px, py, TILE_SIZE, TILE_SIZE)
-                  .fill(COLOR_DEPOSIT)
-                  .rect(px + 4, py + 4, 4, 4)
-                  .fill(COLOR_DEPOSIT_FLECK)
-                  .rect(px + 9, py + 9, 3, 3)
-                  .fill(COLOR_DEPOSIT_FLECK);
-                tileGfx
-                  .rect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2)
-                  .stroke({ color: COLOR_SCANNER_RING, width: 1 });
-              } else {
-                // Unscanned: indistinguishable from plain breakable rock
-                tileGfx.rect(px, py, TILE_SIZE, TILE_SIZE).fill(COLOR_BREAKABLE);
-                tileGfx
-                  .moveTo(px + 4, py + 3)
-                  .lineTo(px + 8, py + 13)
-                  .stroke({ color: 0x6b4a1a, width: 1 });
-                tileGfx
-                  .moveTo(px + 8, py + 3)
-                  .lineTo(px + 5, py + 10)
-                  .stroke({ color: 0x6b4a1a, width: 1 });
-              }
-            } else if (tile === TILE_CORE_CRYSTAL) {
-              // Faceted crystal — visibly rarer than anything else on the level
-              tileGfx
-                .rect(px, py, TILE_SIZE, TILE_SIZE)
-                .fill(COLOR_CRYSTAL)
-                .rect(px + 3, py + 3, 4, 6)
-                .fill(COLOR_CRYSTAL_FACET)
-                .rect(px + 9, py + 7, 4, 5)
-                .fill(COLOR_CRYSTAL_FACET);
-            } else if (tile === TILE_SPIKE_BRAMBLE) {
-              // Non-solid hazard: a low spiky bed sitting on the tile floor
-              tileGfx.rect(px, py + 10, TILE_SIZE, 6).fill(COLOR_BRAMBLE);
-              tileGfx
-                .moveTo(px + 2, py + 10)
-                .lineTo(px + 5, py + 2)
-                .lineTo(px + 8, py + 10)
-                .lineTo(px + 11, py + 3)
-                .lineTo(px + 14, py + 10)
-                .fill(COLOR_BRAMBLE_SPIKE);
-            } else if (tile === TILE_CRUMBLING) {
-              // Sandstone block with a crack — looks load-bearing but isn't
-              tileGfx.rect(px, py, TILE_SIZE, TILE_SIZE).fill(COLOR_CRUMBLE);
-              tileGfx
-                .moveTo(px + 5, py)
-                .lineTo(px + 8, py + 8)
-                .lineTo(px + 5, py + TILE_SIZE)
-                .stroke({ color: COLOR_CRUMBLE_CRACK, width: 1 });
+            const t = tileAt(map, tx, ty);
+            if (t === TILE_EMPTY) continue;
+            const exposed = tileAt(map, tx, ty - 1) === TILE_EMPTY;
+            let texture: Texture;
+            if (t === TILE_SOLID) texture = TILE_TEX.bedrock;
+            else if (t === TILE_DEPOSIT_BIOMINERAL) texture = TILE_TEX.biomineral;
+            else if (t === TILE_SCRAP_CACHE) texture = TILE_TEX.scrap;
+            else if (t === TILE_CORE_CRYSTAL) texture = TILE_TEX.core;
+            else if (t === TILE_SPIKE_BRAMBLE) texture = TILE_TEX.bramble;
+            else if (t === TILE_CRUMBLING) texture = TILE_TEX.crumble;
+            else if (t === TILE_DEPOSIT_HIDDEN) {
+              // Scanner reveals the cyan vein; otherwise it reads as plain rock.
+              texture = state.loadout.scanner
+                ? TILE_TEX.scanned
+                : exposed
+                  ? TILE_TEX.surface
+                  : TILE_TEX.hidden;
+            } else {
+              // TILE_BREAKABLE: sunlit crust if its top is exposed to air.
+              texture = exposed ? TILE_TEX.surface : TILE_TEX.fill;
             }
+            const s = new Sprite(texture);
+            s.x = tx * TILE_SIZE;
+            s.y = ty * TILE_SIZE;
+            tileLayer.addChild(s);
           }
         }
       }
 
-      // Pod position + urgency flash (derived from sim time — deterministic)
+      // ── Drop pod: open base-camp normally, orange burn on launch ──
       const { pod } = state;
-      if (pod === null || pod.launched) {
-        podGfx.visible = false;
-        podWarnGfx.visible = false;
+      if (pod === null) {
+        podSprite.visible = false;
       } else {
-        const flashWarn =
-          pod.remainingMs <= POD_WARNING_MS && Math.floor(pod.remainingMs / 250) % 2 === 0;
-        podGfx.visible = !flashWarn;
-        podWarnGfx.visible = flashWarn;
-        podGfx.x = pod.x;
-        podGfx.y = pod.y;
-        podWarnGfx.x = pod.x;
-        podWarnGfx.y = pod.y;
+        podSprite.visible = true;
+        podSprite.texture = pod.launched ? POD_LAUNCH_TEX : POD_CAMP_TEX;
+        podSprite.x = pod.x + POD_WIDTH / 2;
+        podSprite.y = pod.y + POD_HEIGHT;
+        // Amber urgency pulse in the final window (the HUD countdown is the main clock).
+        const warn =
+          !pod.launched &&
+          pod.remainingMs <= POD_WARNING_MS &&
+          Math.floor(pod.remainingMs / 250) % 2 === 0;
+        podSprite.tint = warn ? ACCENT_AMBER : 0xffffff;
       }
 
-      // Clone position + flip for facing direction
-      cloneBody.x = clone.body.x;
-      cloneBody.y = clone.body.y;
-      // Scale -1 on X mirrors the sprite; adjust pivot to keep position correct
-      if (clone.facing === -1) {
-        cloneBody.scale.x = -1;
-        cloneBody.x = clone.body.x + clone.body.w;
-      } else {
-        cloneBody.scale.x = 1;
-      }
-      // i-frame blink (~10 Hz) and a fade-out during the death sequence.
+      // ── Clone: pose + facing flip + i-frame blink + death fade ──
+      cloneSpr.texture = POSE_TEX[poseFor(clone)];
+      cloneSpr.scale.x = clone.facing;
+      cloneSpr.x = clone.facing === 1 ? clone.body.x : clone.body.x + clone.body.w;
+      cloneSpr.y = clone.body.y;
       const blink = clone.iframesMs > 0 && Math.floor(clone.iframesMs / 50) % 2 === 0 ? 0.35 : 1;
-      cloneBody.alpha = clone.dead ? Math.max(0, clone.deathFadeMs / DEATH_FADE_MS) : blink;
+      cloneSpr.alpha = clone.dead ? Math.max(0, clone.deathFadeMs / DEATH_FADE_MS) : blink;
 
-      // Dash afterimage — fades over DASH_GHOST_MS of sim time
+      // ── Dash afterimage ──
       ghostGfx.clear();
       if (clone.dashGhostMs > 0) {
         ghostGfx
           .rect(clone.dashFromX, clone.dashFromY, clone.body.w, clone.body.h)
-          .fill({ color: COLOR_VISOR, alpha: 0.4 * (clone.dashGhostMs / DASH_GHOST_MS) });
+          .fill({ color: ACCENT_CYAN, alpha: 0.4 * (clone.dashGhostMs / DASH_GHOST_MS) });
       }
 
-      // Attack slash flash
+      // ── Melee slash — a cyan signal over the active hitbox ──
       const hb = attackHitbox(clone);
       slashGfx.clear();
       if (hb !== null) {
-        slashGfx.rect(hb.x, hb.y, hb.w, hb.h).fill({ color: COLOR_SLASH, alpha: 0.7 });
+        slashGfx.rect(hb.x, hb.y + 2, hb.w, hb.h - 4).fill({ color: ACCENT_CYAN, alpha: 0.5 });
+        slashGfx.rect(hb.x + hb.w - 2, hb.y, 2, hb.h).fill({ color: 0xffffff, alpha: 0.8 });
       }
 
-      // Sandstorm Vent: a floor grate that puffs a widening dust plume while
-      // active (telegraphed). The plume matches the push zone height so the
-      // hazard reads as a vent, not a stray marker.
+      // ── Sandstorm vents: grate + amber chevrons + telegraphed tan plume ──
       sandstormGfx.clear();
       for (const vent of map.vents) {
-        // Floor grate with slats, flush to the bottom of the vent tile
         const gy = vent.y + TILE_SIZE - 4;
-        sandstormGfx.rect(vent.x + 1, gy, TILE_SIZE - 2, 4).fill(COLOR_VENT);
-        for (let sx = vent.x + 3; sx < vent.x + TILE_SIZE - 2; sx += 4) {
-          sandstormGfx.rect(sx, gy + 1, 1, 2).fill(0x0d0d18);
+        sandstormGfx.rect(vent.x + 2, gy, TILE_SIZE - 4, 4).fill(0x374e4a);
+        sandstormGfx.rect(vent.x + 2, gy, TILE_SIZE - 4, 1).fill(0x547e64);
+        for (let sx = vent.x + 3; sx < vent.x + TILE_SIZE - 2; sx += 2) {
+          sandstormGfx.rect(sx, gy + 1, 1, 3).fill(0x2e222f);
+        }
+        // amber warning chevrons on the lip
+        for (let cx = vent.x + 3; cx < vent.x + TILE_SIZE - 2; cx += 4) {
+          sandstormGfx.rect(cx, gy - 1, 2, 1).fill(ACCENT_AMBER);
         }
       }
       if (ventsActive(state.ventPhaseMs)) {
         for (const vent of map.vents) {
           const cx = vent.x + TILE_SIZE / 2;
           const baseY = vent.y + TILE_SIZE - 4;
-          // Plume: trapezoid widening upward over the push zone
           sandstormGfx
             .poly([
               cx - 4,
@@ -333,81 +356,122 @@ export function createSurfaceRenderer(app: Application): SurfaceRenderer {
               cx - 9,
               baseY - VENT_PUSH_HEIGHT,
             ])
-            .fill({ color: COLOR_VENT_DUST, alpha: 0.22 });
-          // A few rising puffs for life
+            .fill({ color: VENT_DUST, alpha: 0.18 });
           for (let p = 0; p < 3; p++) {
             const py = baseY - ((state.ventPhaseMs / 12 + p * 26) % VENT_PUSH_HEIGHT);
-            sandstormGfx.rect(cx - 2, py, 4, 3).fill({ color: COLOR_VENT_DUST, alpha: 0.5 });
+            sandstormGfx.rect(cx - 2, py, 4, 3).fill({ color: VENT_DUST, alpha: 0.5 });
           }
         }
       }
 
-      // Enemies — redrawn each frame (small counts)
-      enemyGfx.clear();
-      for (const enemy of state.enemies) {
-        if (!enemy.alive) continue;
-        const color =
-          enemy.type === 'hopper'
-            ? COLOR_HOPPER
-            : enemy.type === 'grubber'
-              ? COLOR_GRUBBER
-              : COLOR_DROPPER;
+      // ── Enemies (sprite pool, keyed by index) ──
+      for (let i = 0; i < state.enemies.length; i++) {
+        let s = enemySprites[i];
+        if (s === undefined) {
+          s = new Sprite(Texture.EMPTY);
+          enemyLayer.addChild(s);
+          enemySprites[i] = s;
+        }
+        const enemy = state.enemies[i];
+        if (!enemy.alive) {
+          s.visible = false;
+          continue;
+        }
+        s.visible = true;
+        s.texture = ENEMY_TEX[enemy.type];
         const { x, y, w, h } = enemy.body;
-        enemyGfx.rect(x, y, w, h).fill(color);
-        // Eye toward facing — a little life cue
-        const eyeX = enemy.facing === 1 ? x + w - 4 : x + 2;
-        enemyGfx.rect(eyeX, y + 3, 2, 2).fill(COLOR_ENEMY_EYE);
+        if (enemy.type === 'dropper') {
+          s.anchor.set(0.5, 0);
+          s.x = x + w / 2;
+          s.y = y;
+        } else {
+          s.anchor.set(0.5, 1);
+          s.x = x + w / 2;
+          s.y = y + h;
+        }
+        s.scale.x = enemy.facing;
       }
 
-      // World items (floor-bounced drops)
-      itemGfx.clear();
-      for (const item of state.worldItems) {
-        itemGfx.rect(item.x + 5, item.y + 9, 6, 5).fill(COLOR_WORLD_ITEM);
+      // ── World items (sprite pool, tinted by source) ──
+      for (let i = 0; i < state.worldItems.length; i++) {
+        let s = itemSprites[i];
+        if (s === undefined) {
+          s = new Sprite(Texture.EMPTY);
+          s.anchor.set(0.5, 0.5);
+          itemLayer.addChild(s);
+          itemSprites[i] = s;
+        }
+        const item = state.worldItems[i];
+        s.visible = true;
+        s.texture = ITEM_TEX[itemKindFor(item)];
+        s.x = item.x + 8;
+        s.y = item.y + 8;
+      }
+      for (let i = state.worldItems.length; i < itemSprites.length; i++) {
+        itemSprites[i].visible = false;
       }
 
-      // Corpse marker (neon-green beacon block)
-      corpseGfx.clear();
+      // ── Corpse husk + beacon ──
       if (state.corpse !== null) {
-        corpseGfx
-          .rect(state.corpse.x + 1, state.corpse.y + 8, 10, 10)
-          .fill({ color: COLOR_CORPSE, alpha: 0.85 });
+        corpse.visible = true;
+        corpse.x = state.corpse.x + 0.5;
+        corpse.y = state.corpse.y + TILE_SIZE;
+      } else {
+        corpse.visible = false;
       }
 
-      // Shield Bubble ring around the clone (bright = ready, dim = recharging)
+      // ── Shield bubble ring (bright = ready, dim = recharging) ──
       shieldGfx.clear();
       if (clone.shield !== null && !clone.dead) {
         const cx = clone.body.x + clone.body.w / 2;
         const cy = clone.body.y + clone.body.h / 2;
         shieldGfx
           .circle(cx, cy, clone.body.h / 2 + 3)
-          .stroke({ color: COLOR_SHIELD, width: 1, alpha: clone.shield.ready ? 0.8 : 0.2 });
+          .stroke({ color: ACCENT_CYAN, width: 1, alpha: clone.shield.ready ? 0.8 : 0.2 });
       }
 
-      // Camera: follow clone center, integer-rounded, clamped to level bounds,
-      // plus a short hit-shake jitter (deterministic from the shake clock).
+      // ── Landing puff on the grounded false→true edge (only from a real fall) ──
+      if (clone.grounded && !wasGrounded && prevVy > 120) {
+        spawnEffect(
+          DUST_TEX,
+          clone.body.x + clone.body.w / 2,
+          clone.body.y + clone.body.h,
+          DUST_MS,
+        );
+      }
+      wasGrounded = clone.grounded;
+      prevVy = clone.body.vy;
+
+      // ── Camera follow + hit-shake (deterministic) ──
       const levelW = map.width * TILE_SIZE;
       const levelH = map.height * TILE_SIZE;
       const cloneCenterX = clone.body.x + clone.body.w / 2;
       const cloneCenterY = clone.body.y + clone.body.h / 2;
-
       const camX = Math.round(
         Math.max(0, Math.min(cloneCenterX - VIRTUAL_WIDTH / 2, levelW - VIRTUAL_WIDTH)),
       );
       const camY = Math.round(
         Math.max(0, Math.min(cloneCenterY - VIRTUAL_HEIGHT / 2, levelH - VIRTUAL_HEIGHT)),
       );
-
       const shake = clone.shakeMs > 0 ? (Math.floor(clone.shakeMs / 33) % 2 === 0 ? 2 : -2) : 0;
       world.x = -camX + shake;
       world.y = -camY;
 
       // ── Screen-space overlays ──
+      // Ambient descent gloom — cooler/darker the deeper the clone is.
+      ambientGfx.clear();
+      const depthT = levelH > VIRTUAL_HEIGHT ? camY / (levelH - VIRTUAL_HEIGHT) : 0;
+      if (depthT > 0.02) {
+        ambientGfx
+          .rect(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT)
+          .fill({ color: 0x0b0d18, alpha: 0.28 * Math.min(1, depthT) });
+      }
       // Red hit flash
       flashGfx.clear();
       if (clone.hitFlashMs > 0) {
         flashGfx
           .rect(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT)
-          .fill({ color: COLOR_HIT_FLASH, alpha: 0.35 * (clone.hitFlashMs / HIT_FLASH_MS) });
+          .fill({ color: ACCENT_RED, alpha: 0.35 * (clone.hitFlashMs / HIT_FLASH_MS) });
       }
       // Death fade-to-black
       fadeGfx.clear();
@@ -415,21 +479,25 @@ export function createSurfaceRenderer(app: Application): SurfaceRenderer {
         const t = 1 - clone.deathFadeMs / DEATH_FADE_MS;
         fadeGfx.rect(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT).fill({ color: 0x000000, alpha: 0.7 * t });
       }
-      // Off-screen corpse beacon: an edge marker pointing toward a distant corpse
+      // Off-screen corpse beacon — a green edge marker toward a distant corpse.
       beaconGfx.clear();
       if (state.corpse !== null) {
         const dx = state.corpse.x - cloneCenterX;
         const dy = state.corpse.y - cloneCenterY;
         if (Math.hypot(dx, dy) > CORPSE_BEACON_RANGE) {
-          const ex = Math.max(4, Math.min(VIRTUAL_WIDTH - 8, VIRTUAL_WIDTH / 2 + dx));
-          const ey = Math.max(4, Math.min(VIRTUAL_HEIGHT - 8, VIRTUAL_HEIGHT / 2 + dy));
-          beaconGfx.rect(ex, ey, 4, 4).fill(COLOR_CORPSE);
+          const ex = Math.max(6, Math.min(VIRTUAL_WIDTH - 10, VIRTUAL_WIDTH / 2 + dx));
+          const ey = Math.max(6, Math.min(VIRTUAL_HEIGHT - 10, VIRTUAL_HEIGHT / 2 + dy));
+          beaconGfx.rect(ex, ey, 5, 5).fill(ACCENT_GREEN);
         }
       }
     },
     destroy(): void {
+      app.ticker.remove(animate);
+      for (const fx of effects) fx.sprite.destroy();
+      effects.length = 0;
       overlay.destroy({ children: true });
       world.destroy({ children: true });
+      bg.destroy({ children: true });
     },
   };
 }
