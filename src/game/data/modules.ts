@@ -119,11 +119,11 @@ export const MODULE_DEFS: readonly ModuleDef[] = [
   {
     id: 'mod-shield-generator',
     name: 'Shield Generator',
-    slot: 'utility',
+    slot: 'shield',
     tiers: {
       mk1: {
         cards: ['card-reinforce', 'card-reinforce', 'card-emergency-barrier'],
-        passive: { kind: 'shield-layers', layers: 2, rechargeTurns: 2 },
+        passive: { kind: 'shield-layers', layers: 1, rechargeTurns: 2 },
         planetItem: {
           name: 'Shield Bubble',
           description: 'Absorbs 1 hit, 30s cooldown.',
