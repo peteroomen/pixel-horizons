@@ -91,24 +91,39 @@ export function PopPip({
 }) {
   const reduced = useReducedMotion() ?? false;
   const controls = useAnimationControls();
+  const flash = useAnimationControls();
   const prev = useRef(on);
 
   useEffect(() => {
     if (on === prev.current) return;
     if (!reduced) {
-      // Lit → a quick scale pop; dropped → a red recoil flash.
-      controls.start(
-        on
-          ? { scale: [1.7, 1] }
-          : { backgroundColor: ['#ff4757', 'rgba(0,0,0,0)'], scale: [1.4, 1] },
-        { duration: 0.32, ease: 'easeOut' },
-      );
+      // Lit → a quick scale pop; dropped → a scale recoil + a one-shot red flash overlay.
+      controls.start(on ? { scale: [1.7, 1] } : { scale: [1.4, 1] }, {
+        duration: 0.32,
+        ease: 'easeOut',
+      });
+      if (!on) {
+        flash.start({ opacity: [1, 0] }, { duration: 0.32, ease: 'easeOut' });
+      }
     }
     prev.current = on;
-  }, [on, controls, reduced]);
+  }, [on, controls, flash, reduced]);
 
   return (
-    <motion.span animate={controls} className={`${className} ${on ? litClassName : offClassName}`}>
+    <motion.span
+      animate={controls}
+      className={`relative ${className} ${on ? litClassName : offClassName}`}
+    >
+      {/* The red drop-flash is a separate overlay, NOT the pip's own backgroundColor: animating
+          the pip background leaves a stuck inline value that hides the lit/off colour even after
+          the shield recharges (the vanishing-shield-square bug). */}
+      <motion.span
+        aria-hidden
+        animate={flash}
+        initial={{ opacity: 0 }}
+        className="pointer-events-none absolute inset-0"
+        style={{ backgroundColor: '#ff4757' }}
+      />
       {children}
     </motion.span>
   );
