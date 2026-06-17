@@ -23,6 +23,15 @@ export { mix } from './sprite-primitives';
 
 export type ShipModuleKind = 'cannon' | 'shield' | 'engine' | 'armor';
 
+/** Maps an installed module's name to the overlay category bolted onto the composited hull. */
+export const shipModuleKind = (name: string): ShipModuleKind => {
+  const n = name.toLowerCase();
+  if (/flak|cannon|missile|laser|railgun|gun/.test(n)) return 'cannon';
+  if (n.includes('shield')) return 'shield';
+  if (/thruster|engine|hauler|drive/.test(n)) return 'engine';
+  return 'armor'; // matrices, scanners, phase shifter → a generic plate
+};
+
 const cannonOverlay = (): HTMLCanvasElement =>
   make(
     16,

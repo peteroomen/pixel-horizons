@@ -1,0 +1,60 @@
+import { describe, expect, it } from 'vitest';
+
+import { RESURRECT_64, planetRamps, rampToFloats, snapToPalette } from './palette';
+
+describe('Resurrect 64 palette', () => {
+  it('has 64 unique colours, all 6-digit hex', () => {
+    expect(RESURRECT_64).toHaveLength(64);
+    expect(new Set(RESURRECT_64).size).toBe(64);
+    for (const hex of RESURRECT_64) expect(hex).toMatch(/^#[0-9a-f]{6}$/);
+  });
+});
+
+describe('snapToPalette', () => {
+  it('returns an exact palette colour when given one', () => {
+    expect(snapToPalette([0x4d, 0x9b, 0xe6])).toBe('#4d9be6');
+  });
+
+  it('snaps a near colour to the closest palette entry', () => {
+    // a hair off #4d9be6 → still snaps to it, not a different blue
+    expect(snapToPalette([0x50, 0x99, 0xe2])).toBe('#4d9be6');
+  });
+
+  it('always returns a member of the palette', () => {
+    expect(RESURRECT_64).toContain(snapToPalette([123, 200, 17]));
+  });
+});
+
+describe('planetRamps', () => {
+  it('is deterministic — same seed gives identical ramps', () => {
+    expect(planetRamps(42)).toEqual(planetRamps(42));
+  });
+
+  it('produces 6-step ramps, every step a palette colour', () => {
+    const { ocean, land } = planetRamps(7);
+    expect(ocean).toHaveLength(6);
+    expect(land).toHaveLength(6);
+    for (const hex of [...ocean, ...land]) expect(RESURRECT_64).toContain(hex);
+  });
+
+  it('spreads across more than one combination over many seeds', () => {
+    const combos = new Set(Array.from({ length: 40 }, (_, i) => JSON.stringify(planetRamps(i))));
+    expect(combos.size).toBeGreaterThan(1);
+  });
+});
+
+describe('rampToFloats', () => {
+  it('flattens 6 hexes to 18 normalised channels in [0,1]', () => {
+    const floats = rampToFloats(planetRamps(3).ocean);
+    expect(floats).toHaveLength(18);
+    for (const c of floats) expect(c).toBeGreaterThanOrEqual(0);
+    for (const c of floats) expect(c).toBeLessThanOrEqual(1);
+  });
+
+  it('maps #ffffff → 1,1,1 and #000000-ish darkest correctly', () => {
+    // RESURRECT_64[9] is #ffffff
+    expect(
+      rampToFloats(['#ffffff', '#ffffff', '#ffffff', '#ffffff', '#ffffff', '#ffffff']),
+    ).toEqual(Array(18).fill(1));
+  });
+});

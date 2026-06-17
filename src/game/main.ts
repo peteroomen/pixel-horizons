@@ -12,8 +12,12 @@ import { buildMapView } from './map-view';
 import type { MapView } from './map-view';
 import { startCombatMode } from './modes/combat-mode';
 import type { CombatMode } from './modes/combat-mode';
+import { startOrbitMode } from './modes/orbit-mode';
+import type { OrbitMode } from './modes/orbit-mode';
 import { startSurfaceMode } from './modes/surface-mode';
 import type { SurfaceAction, SurfaceMode } from './modes/surface-mode';
+import { PLANET_TYPES } from './data/planets';
+import { planetForNode } from './sim/planet';
 import { createSaveStore } from './save';
 import {
   buyModule,
@@ -99,6 +103,7 @@ export type GamePhase =
   | 'title'
   | 'map'
   | 'lane'
+  | 'orbit'
   | 'surface'
   | 'shop'
   | 'engineer'
@@ -106,6 +111,12 @@ export type GamePhase =
   | 'boss-reward'
   | 'run-over'
   | 'sector-complete';
+
+/** What the orbit screen shows about the planet the run just reached (6.1). */
+export interface OrbitView {
+  name: string;
+  type: string;
+}
 
 export interface GameCallbacks {
   onCombatUpdate(view: CombatView): void;
@@ -117,6 +128,8 @@ export interface GameCallbacks {
    * mining, deposit, launch) — never per frame.
    */
   onSurfaceUpdate?(view: SurfaceView): void;
+  /** Fired on orbit phase entry — the orbit screen reads the planet's name/type from it (6.1). */
+  onOrbitUpdate?(view: OrbitView): void;
   /** Fired on map entry and at run end states (the end screens read run totals from it). */
   onMapUpdate?(view: MapView): void;
   /** Fired once per economy transaction — workbench/station screens read this. */
@@ -149,6 +162,8 @@ export interface GameHandle {
   continueTravel(): void;
   /** Map phase: travel to a node one lane-hop away. */
   selectNode(nodeId: string): void;
+  /** Orbit phase: drop the clone to the planet surface (6.1). */
+  dropToSurface(): void;
   /** Surface phase: launch the pod early — no-op unless the clone is on the pod. */
   launchPod(): void;
   /** Surface phase: recall the clone to orbit (backpack lost, deposits safe). */
@@ -278,6 +293,15 @@ function resolveDevSurface(): boolean {
 }
 
 /**
+ * Dev/test knob: `?mode=orbit` skips the run loop and drops straight into the orbit screen
+ * for a representative planet (6.1) — checking the generated planet + DROP without traversing
+ * a lane first. DROP then proceeds into the normal surface flow.
+ */
+function resolveDevOrbit(): boolean {
+  return new URLSearchParams(window.location.search).get('mode') === 'orbit';
+}
+
+/**
  * Dev/test knob: `?pod=20` sets the base launch window in seconds — manual
  * testing shouldn't take 5 real minutes. Engine bonuses still apply on top.
  * Invalid values fall back to POD_WINDOW_MS.
@@ -325,6 +349,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const enemyPool = resolveEnemyPool();
   const podWindowMs = resolvePodWindowMs();
   const devSurface = resolveDevSurface();
+  const devOrbit = resolveDevOrbit();
   const moduleOverride = resolveModuleOverride();
   const reactorOverride = resolveReactorOverride();
 
@@ -376,6 +401,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   let phase: GamePhase = 'map';
   let combatMode: CombatMode | null = null;
   let surfaceMode: SurfaceMode | null = null;
+  let orbitMode: OrbitMode | null = null;
   /** Node the active lane travels toward. */
   let laneDestination: string | null = null;
   /** Run loaded from storage, held until the title screen resolves. */
@@ -397,6 +423,8 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     combatMode = null;
     surfaceMode?.destroy();
     surfaceMode = null;
+    orbitMode?.destroy();
+    orbitMode = null;
   };
 
   /** Node arrival is the save point (ADR 003) — including the run's first node. */
@@ -425,6 +453,16 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       { onUpdate: (view) => callbacks.onSurfaceUpdate?.(enrichSurfaceView(view)) },
     );
     setPhase('surface');
+  };
+
+  // Planet arrival shows the generated planet in orbit before the drop (6.1). The descriptor
+  // is derived from the run seed + node id (sim/planet), so the orbit and surface always agree.
+  const enterOrbit = (nodeId: string): void => {
+    const descriptor = planetForNode(run.seed, nodeId);
+    const shipModules = run.modules.map((m) => getModule(m.id).name);
+    orbitMode = startOrbitMode(app, descriptor, shipModules);
+    callbacks.onOrbitUpdate?.({ name: PLANET_TYPES[descriptor.type].name, type: descriptor.type });
+    setPhase('orbit');
   };
 
   const startLane = (params: LaneParams): void => {
@@ -515,7 +553,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       run.resources.scrap += node.cacheScrap ?? 0;
     }
     if (node.type === 'planet') {
-      enterSurface();
+      enterOrbit(node.id);
       return;
     }
     if (node.type === 'shop') {
@@ -540,6 +578,8 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   // ── Boot ────────────────────────────────────────────────────────────────
   if (devSurface) {
     enterSurface();
+  } else if (devOrbit) {
+    enterOrbit('dev-orbit');
   } else {
     const saved = store.load();
     if (saved !== null && saved.position.nodeId !== null) {
@@ -583,6 +623,12 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       if (edge === undefined) return;
       laneDestination = nodeId;
       startLane(edge.lane);
+    },
+    dropToSurface(): void {
+      if (phase !== 'orbit') return;
+      orbitMode?.destroy();
+      orbitMode = null;
+      enterSurface();
     },
     launchPod(): void {
       surfaceMode?.launchPod();

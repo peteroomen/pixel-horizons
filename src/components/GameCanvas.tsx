@@ -9,6 +9,7 @@ import type {
   GameHandle,
   GamePhase,
   MapView,
+  OrbitView,
   ShipView,
   StationView,
   SurfaceView,
@@ -20,6 +21,7 @@ interface GameCanvasProps {
   onScaleChange?: (zoom: number) => void;
   onPhaseChange?: (phase: GamePhase) => void;
   onSurfaceUpdate?: (view: SurfaceView) => void;
+  onOrbitUpdate?: (view: OrbitView) => void;
   onMapUpdate?: (view: MapView) => void;
   onShipUpdate?: (view: ShipView) => void;
   onStationUpdate?: (view: StationView) => void;
@@ -38,6 +40,7 @@ export default function GameCanvas({
   onScaleChange,
   onPhaseChange,
   onSurfaceUpdate,
+  onOrbitUpdate,
   onMapUpdate,
   onShipUpdate,
   onStationUpdate,
@@ -50,6 +53,7 @@ export default function GameCanvas({
     onScaleChange,
     onPhaseChange,
     onSurfaceUpdate,
+    onOrbitUpdate,
     onMapUpdate,
     onShipUpdate,
     onStationUpdate,
@@ -63,6 +67,7 @@ export default function GameCanvas({
       onScaleChange,
       onPhaseChange,
       onSurfaceUpdate,
+      onOrbitUpdate,
       onMapUpdate,
       onShipUpdate,
       onStationUpdate,
@@ -74,6 +79,7 @@ export default function GameCanvas({
     onScaleChange,
     onPhaseChange,
     onSurfaceUpdate,
+    onOrbitUpdate,
     onMapUpdate,
     onShipUpdate,
     onStationUpdate,
@@ -93,6 +99,7 @@ export default function GameCanvas({
         onScaleChange: (zoom) => callbacksRef.current.onScaleChange?.(zoom),
         onPhaseChange: (phase) => callbacksRef.current.onPhaseChange?.(phase),
         onSurfaceUpdate: (view) => callbacksRef.current.onSurfaceUpdate?.(view),
+        onOrbitUpdate: (view) => callbacksRef.current.onOrbitUpdate?.(view),
         onMapUpdate: (view) => callbacksRef.current.onMapUpdate?.(view),
         onShipUpdate: (view) => callbacksRef.current.onShipUpdate?.(view),
         onStationUpdate: (view) => callbacksRef.current.onStationUpdate?.(view),

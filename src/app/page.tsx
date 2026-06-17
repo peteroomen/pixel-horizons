@@ -20,6 +20,7 @@ import type {
   GameHandle,
   GamePhase,
   MapView,
+  OrbitView,
   ShipView,
   StationView,
   SurfaceView,
@@ -77,6 +78,7 @@ export default function Home() {
   const [innateArmed, setInnateArmed] = useState(false);
   const [phase, setPhase] = useState<GamePhase | null>(null);
   const [surfaceView, setSurfaceView] = useState<SurfaceView | null>(null);
+  const [orbitView, setOrbitView] = useState<OrbitView | null>(null);
   const [mapView, setMapView] = useState<MapView | null>(null);
   const [shipView, setShipView] = useState<ShipView | null>(null);
   const [stationView, setStationView] = useState<StationView | null>(null);
@@ -122,6 +124,10 @@ export default function Home() {
 
   const onSurfaceUpdate = useCallback((next: SurfaceView) => {
     setSurfaceView(next);
+  }, []);
+
+  const onOrbitUpdate = useCallback((next: OrbitView) => {
+    setOrbitView(next);
   }, []);
 
   const onMapUpdate = useCallback((next: MapView) => {
@@ -177,6 +183,7 @@ export default function Home() {
         onReady={onReady}
         onPhaseChange={onPhaseChange}
         onSurfaceUpdate={onSurfaceUpdate}
+        onOrbitUpdate={onOrbitUpdate}
         onMapUpdate={onMapUpdate}
         onShipUpdate={onShipUpdate}
         onStationUpdate={onStationUpdate}
@@ -186,7 +193,7 @@ export default function Home() {
       {/* World framing (World Art Direction §6): the canvas runs full-bleed under the
           FOUNDRY plates; a vignette sinks it into the void and a 1px scanline lives on
           the world only. Both are pointer-events-none and paint under every overlay. */}
-      {(phase === 'lane' || phase === 'surface') && (
+      {(phase === 'lane' || phase === 'orbit' || phase === 'surface') && (
         <>
           <div
             aria-hidden
@@ -242,6 +249,23 @@ export default function Home() {
             />
           )}
         </>
+      )}
+
+      {/* Orbit (6.1): the runtime-generated planet, then drop the clone to the surface */}
+      {phase === 'orbit' && (
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-between py-8 sm:py-12">
+          <div className="flex flex-col items-center gap-1">
+            <span className="retro text-[8px] text-white/50 sm:text-[10px]">IN ORBIT</span>
+            {orbitView !== null && (
+              <span className="retro text-lg text-fd-orange sm:text-2xl">
+                {orbitView.name.toUpperCase()}
+              </span>
+            )}
+          </div>
+          <FoundryButton variant="primary" onClick={() => handleRef.current?.dropToSurface()}>
+            Drop to Surface
+          </FoundryButton>
+        </div>
       )}
 
       {/* Surface: HUD + touch controls + launch/abandon + launch result */}

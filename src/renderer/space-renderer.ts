@@ -3,7 +3,14 @@ import { Application, Container, Graphics, Sprite, Text, Ticker } from 'pixi.js'
 import type { CombatView } from '@/game/combat-view';
 import { MAX_SHAKE, shakeAmplitude } from '@/components/combat-fx-core';
 import { VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from './pixel-scale';
-import { anchormawBoss, bloomGrunt, compositeShip, laneBackdrop, muzzleFlash } from './sprites';
+import {
+  anchormawBoss,
+  bloomGrunt,
+  compositeShip,
+  laneBackdrop,
+  muzzleFlash,
+  shipModuleKind,
+} from './sprites';
 import type { ShipModuleKind } from './sprites';
 import { nearestTexture } from './textures';
 
@@ -51,18 +58,9 @@ export interface SpaceRenderer {
   destroy(): void;
 }
 
-/** Maps an installed module's name to the overlay category bolted onto the hull. */
-function moduleKind(name: string): ShipModuleKind {
-  const n = name.toLowerCase();
-  if (/flak|cannon|missile|laser|railgun|gun/.test(n)) return 'cannon';
-  if (n.includes('shield')) return 'shield';
-  if (/thruster|engine|hauler|drive/.test(n)) return 'engine';
-  return 'armor'; // matrices, scanners, phase shifter → a generic plate
-}
-
 function shipKindsKey(view: CombatView): string {
   const kinds = new Set<ShipModuleKind>();
-  for (const m of view.modules) kinds.add(moduleKind(m.name));
+  for (const m of view.modules) kinds.add(shipModuleKind(m.name));
   return (['cannon', 'shield', 'engine', 'armor'] as ShipModuleKind[])
     .filter((k) => kinds.has(k))
     .join(',');
