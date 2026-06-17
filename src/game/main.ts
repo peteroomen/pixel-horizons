@@ -459,7 +459,8 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   // is derived from the run seed + node id (sim/planet), so the orbit and surface always agree.
   const enterOrbit = (nodeId: string): void => {
     const descriptor = planetForNode(run.seed, nodeId);
-    orbitMode = startOrbitMode(app, descriptor);
+    const shipModules = run.modules.map((m) => getModule(m.id).name);
+    orbitMode = startOrbitMode(app, descriptor, shipModules);
     callbacks.onOrbitUpdate?.({ name: PLANET_TYPES[descriptor.type].name, type: descriptor.type });
     setPhase('orbit');
   };

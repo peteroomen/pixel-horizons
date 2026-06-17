@@ -126,17 +126,15 @@ function seedOffset(seed: number): [number, number] {
   return [fract(seed * 0.1031) * 100, fract(seed * 0.1357) * 100];
 }
 
-/**
- * Render `descriptor` to a fresh nearest-sampled `RenderTexture` of `size`×`size` virtual
- * pixels. The caller owns the texture (destroy it with the sprite that holds it). `pixels`
- * is the planet's internal resolution — fewer = chunkier.
- */
-export function renderPlanetTexture(
-  app: Application,
-  descriptor: PlanetDescriptor,
-  size = 128,
-  pixels = Math.round(size * 0.75),
-): Texture {
+interface PlanetMeshBuild {
+  mesh: Mesh<Geometry, Shader>;
+  geometry: Geometry;
+  shader: Shader;
+  uniforms: { uniforms: { uTime: number } };
+}
+
+/** Build the planet mesh + shader (caller owns disposal). Shared by the static + animated paths. */
+function buildPlanetMesh(descriptor: PlanetDescriptor, pixels: number): PlanetMeshBuild {
   const { ocean, land } = planetRamps(descriptor.seed);
 
   const geometry = new Geometry({
@@ -158,6 +156,26 @@ export function renderPlanetTexture(
   });
 
   const mesh = new Mesh({ geometry, shader });
+  return {
+    mesh,
+    geometry,
+    shader,
+    uniforms: shader.resources.planetUniforms as PlanetMeshBuild['uniforms'],
+  };
+}
+
+/**
+ * Render `descriptor` to a fresh nearest-sampled `RenderTexture` of `size`×`size` virtual
+ * pixels — a static snapshot. The caller owns the texture (destroy it with the sprite that
+ * holds it). `pixels` is the planet's internal resolution — fewer = chunkier.
+ */
+export function renderPlanetTexture(
+  app: Application,
+  descriptor: PlanetDescriptor,
+  size = 128,
+  pixels = Math.round(size * 0.75),
+): Texture {
+  const { mesh, geometry, shader } = buildPlanetMesh(descriptor, pixels);
   const texture = RenderTexture.create({ width: size, height: size });
   texture.source.scaleMode = 'nearest';
   app.renderer.render({ container: mesh, target: texture });
@@ -167,4 +185,44 @@ export function renderPlanetTexture(
   shader.destroy();
 
   return texture;
+}
+
+/** A planet whose render-texture re-bakes each `update` so the planet spins (for orbit). */
+export interface AnimatedPlanet {
+  texture: Texture;
+  /** Advance rotation by `dtSeconds` and re-bake. */
+  update(dtSeconds: number): void;
+  destroy(): void;
+}
+
+/**
+ * Like {@link renderPlanetTexture} but keeps the mesh alive so `update(dt)` advances the
+ * planet's longitude (`uTime`) and re-bakes — a live, rotating planet behind a `Sprite`.
+ * Re-baking one small texture per frame is cheap; use the static bake for many-planet views.
+ */
+export function createAnimatedPlanet(
+  app: Application,
+  descriptor: PlanetDescriptor,
+  size = 128,
+  pixels = Math.round(size * 0.75),
+): AnimatedPlanet {
+  const { mesh, geometry, shader, uniforms } = buildPlanetMesh(descriptor, pixels);
+  const texture = RenderTexture.create({ width: size, height: size });
+  texture.source.scaleMode = 'nearest';
+  const bake = (): void => app.renderer.render({ container: mesh, target: texture });
+  bake();
+
+  return {
+    texture,
+    update(dtSeconds: number): void {
+      uniforms.uniforms.uTime += dtSeconds;
+      bake();
+    },
+    destroy(): void {
+      mesh.destroy();
+      geometry.destroy();
+      shader.destroy();
+      texture.destroy(true);
+    },
+  };
 }
