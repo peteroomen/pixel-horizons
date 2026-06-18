@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&family=VT323&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; background: #26272b; }
+    * { box-sizing: border-box; }
+    canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+  </style>
+</helmet>
+
+<div style="min-height: 100vh; min-width: fit-content; background: #26272b; padding: 56px 40px 90px; display: flex; flex-direction: column; align-items: center; gap: 46px; font-family: 'Space Mono', monospace;">
+
+  <!-- ============ HEADER ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 36px 44px; display: flex; flex-direction: column; gap: 18px;" data-screen-label="Header">
+    <div style="display: flex; align-items: baseline; gap: 20px;">
+      <div style="font-family: 'Press Start 2P', monospace; font-size: 19px; color: #1b1c20;">TRANSITIONS &amp; SHIPS</div>
+      <div style="font-size: 14px; color: #6a6d76;">Pixel Horizons · the seams between states, and the vessel you fly through them</div>
+    </div>
+    <div style="font-size: 14px; color: #44464e; line-height: 1.75; max-width: 1060px;">Third companion to the combat, world &amp; overworld docs. Those nailed the <em>rooms</em>; this pass is the <strong>doorways between them</strong> — and a tune-up of the thing that walks through: the ship. Same thesis, inherited whole: <strong>two palettes, one law.</strong> The world is Resurrect 64 — muted, ramped, shaded; the only fully-saturated pixels are FOUNDRY's five accents, and on a transition they earn their keep at the <strong>instant of action</strong> — the drop-flash, the thruster burn, the impact spark. <strong>Muted-and-ramped = lore you look at; flat-and-pure = a beat you feel.</strong> Every panel below is live <code style="background:#e7e5df;padding:1px 5px;">&lt;canvas&gt;</code>, 16px grid, integer-scaled, nearest-neighbor — the transitions <em>play on a loop</em>, with a frame-by-frame storyboard + timing under each, exactly as they'd port into Pixi.</div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:2px;">
+      <span style="font-family:'Silkscreen';font-size:10px;background:#16181d;color:#9aa0ad;padding:5px 9px;">LANE DROP · 1.5–3s</span>
+      <span style="font-family:'Silkscreen';font-size:10px;background:#16181d;color:#9aa0ad;padding:5px 9px;">POD DEPLOY · 2–4s</span>
+      <span style="font-family:'Silkscreen';font-size:10px;background:#16181d;color:#9aa0ad;padding:5px 9px;">HULL 64×32</span>
+      <span style="font-family:'Silkscreen';font-size:10px;background:#16181d;color:#9aa0ad;padding:5px 9px;">MODULE 8×8 / 12×8</span>
+      <span style="font-family:'Silkscreen';font-size:10px;background:#16181d;color:#6ad1e3;padding:5px 9px;">HORIZON COLLECTIVE</span>
+      <span style="font-family:'Silkscreen';font-size:10px;background:#16181d;color:#cddf6c;padding:5px 9px;">THE BLOOM</span>
+    </div>
+  </div>
+
+  <!-- ============ FX BEAT LAW STRIP ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 30px 44px; display: flex; flex-direction: column; gap: 20px;" data-screen-label="Transition FX law">
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 13px; color: #1b1c20;">THE TRANSITION FX LAW — FIVE ACCENTS, FIVE BEATS</div>
+    <div style="font-size: 13px; color: #44464e; line-height: 1.7; max-width: 1060px;">A transition is where the world is in motion, so the bridge rule does its loudest work: the muted Resurrect-64 scene carries the <em>place</em>, and a pure FOUNDRY accent fires only on the <strong>beat you're meant to feel</strong> — the instant of drop, ignition, contact. Reuse exactly these accents and nothing new; the player already reads them from combat.</div>
+    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px;">
+      <div style="background:#0b0d18; padding:14px; display:flex; flex-direction:column; gap:8px;"><div style="height:8px; background:#ff9e2c;"></div><div style="font-family:'Silkscreen'; font-size:10px; color:#ff9e2c;">ORANGE · IGNITION</div><div style="font-family:'VT323'; font-size:16px; color:#9aa0ad; line-height:1.2;">pod thruster burn, descent retro-fire, surface dust kick.</div></div>
+      <div style="background:#0b0d18; padding:14px; display:flex; flex-direction:column; gap:8px;"><div style="height:8px; background:#6ad1e3;"></div><div style="font-family:'Silkscreen'; font-size:10px; color:#6ad1e3;">CYAN · DROP-OUT</div><div style="font-family:'VT323'; font-size:16px; color:#9aa0ad; line-height:1.2;">the realspace flash, ship engine wash, atmosphere skin.</div></div>
+      <div style="background:#0b0d18; padding:14px; display:flex; flex-direction:column; gap:8px;"><div style="height:8px; background:#ffb454;"></div><div style="font-family:'Silkscreen'; font-size:10px; color:#ffb454;">AMBER · RE-ENTRY</div><div style="font-family:'VT323'; font-size:16px; color:#9aa0ad; line-height:1.2;">the pod's heat trail, hazard chevrons, the atmosphere burn.</div></div>
+      <div style="background:#0b0d18; padding:14px; display:flex; flex-direction:column; gap:8px;"><div style="height:8px; background:#ff4757;"></div><div style="font-family:'Silkscreen'; font-size:10px; color:#ff4757;">RED · IMPACT</div><div style="font-family:'VT323'; font-size:16px; color:#9aa0ad; line-height:1.2;">touchdown shake flash — one frame, the moment of contact.</div></div>
+      <div style="background:#0b0d18; padding:14px; display:flex; flex-direction:column; gap:8px;"><div style="height:8px; background:#8ac926;"></div><div style="font-family:'Silkscreen'; font-size:10px; color:#8ac926;">GREEN · THE BLOOM</div><div style="font-family:'VT323'; font-size:16px; color:#9aa0ad; line-height:1.2;">spore-glow on the lane walls you tear out of — it lives here.</div></div>
+    </div>
+  </div>
+
+  <!-- ============ 1 · LANE DROP ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 32px 44px; display: flex; flex-direction: column; gap: 24px;" data-screen-label="Lane Drop transition">
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 13px; color: #1b1c20;">1 · LANE DROP — HYPERSPACE → ORBIT (ARRIVAL)</div>
+    <div style="font-size: 13px; color: #44464e; line-height: 1.7; max-width: 1060px;">You're swimming down the infested lane; you reach a planet node and <strong>punch out into realspace orbit</strong>. The fiction: the Bloom-grown tunnel is rushing past, it decelerates, a cyan drop-flash, and the walls collapse <em>behind</em> you as the planet swings into view ahead. Plays on every planet arrival — <strong>1.5–3s</strong>, must survive 375px. Below: the live loop, then the keyframe breakdown with timing.</div>
+
+    <div style="background: #0b0d18; padding: 22px; display: flex; flex-direction: column; gap: 18px;">
+      <div style="display:flex; align-items:baseline; gap:16px;">
+        <div style="font-family:'Silkscreen'; font-size:11px; color:#6ad1e3;">LIVE — LOOPING</div>
+        <div style="font-family:'VT323'; font-size:17px; color:#9aa0ad;">full-bleed, plates float over it · ~2.4s + a beat of orbit hold</div>
+      </div>
+      <div style="display:flex; justify-content:center;"><canvas id="cv-lanedrop" style="width: 1160px; height: 464px;"></canvas></div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:14px;">
+      <div style="font-family:'Silkscreen'; font-size:11px; color:#1b1c20;">KEYFRAME STORYBOARD</div>
+      <div style="display:grid; grid-template-columns: repeat(5, 1fr); gap:16px;">
+        <div style="display:flex; flex-direction:column; gap:8px;"><canvas id="cv-ld-k1" style="width:100%; height:138px; background:#0b0d18;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#cddf6c;">0.0–1.2s · TRAVEL</div><div style="font-family:'VT323'; font-size:15px; color:#6a6d76; line-height:1.15;">coral tunnel rushing, speed-lines, node ahead.</div></div>
+        <div style="display:flex; flex-direction:column; gap:8px;"><canvas id="cv-ld-k2" style="width:100%; height:138px; background:#0b0d18;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#9aa0ad;">1.2–1.7s · DECEL</div><div style="font-family:'VT323'; font-size:15px; color:#6a6d76; line-height:1.15;">streaks shorten, ship eases back, tunnel slows.</div></div>
+        <div style="display:flex; flex-direction:column; gap:8px;"><canvas id="cv-ld-k3" style="width:100%; height:138px; background:#0b0d18;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#6ad1e3;">1.7–1.9s · DROP-FLASH</div><div style="font-family:'VT323'; font-size:15px; color:#6a6d76; line-height:1.15;">cyan bloom fills frame — the punch-out beat.</div></div>
+        <div style="display:flex; flex-direction:column; gap:8px;"><canvas id="cv-ld-k4" style="width:100%; height:138px; background:#0b0d18;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#9aa0ad;">1.9–2.3s · COLLAPSE</div><div style="font-family:'VT323'; font-size:15px; color:#6a6d76; line-height:1.15;">tunnel rushes away behind; planet swings in.</div></div>
+        <div style="display:flex; flex-direction:column; gap:8px;"><canvas id="cv-ld-k5" style="width:100%; height:138px; background:#0b0d18;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#30e1b9;">2.3s+ · ORBIT</div><div style="font-family:'VT323'; font-size:15px; color:#6a6d76; line-height:1.15;">calm realspace, ship floats, planet fills lower frame.</div></div>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns: repeat(3,1fr); gap:24px; font-size:12px; color:#6a6d76; line-height:1.65;">
+      <div><strong style="color:#44464e;">Camera.</strong> Static frame; the <em>world</em> moves. Tunnel scrolls toward camera (z-rush faked by speed-lines lengthening + coral walls scaling out), then settles. Ship never leaves screen-center — only a 2px recoil ease on decel. Ends framed with the planet occupying the lower third.</div>
+      <div><strong style="color:#44464e;">Build cost.</strong> Tunnel walls = the §5 lane coral, two scaling sprite-strips (near/far) — <em>existing art</em>. Speed-lines + spore motes = particles. Drop-flash = one full-screen <span style="color:#6ad1e3;">cyan</span> quad fading on a 0.2s curve (shader/CSS tween). Planet = one Deep-Fold sprite slid up on an ease-out. No new frames to hand-draw.</div>
+      <div><strong style="color:#44464e;">Feel / mobile.</strong> The deceleration is the satisfying part — ease-out on the scroll speed sells "arrived." At 375px it's identical: the flash and planet read even when tiny; speed-lines just thin to 1px. Total ≤2.4s keeps re-entries snappy on repeat.</div>
+    </div>
+  </div>
+
+  <!-- ============ 2 · LANE LAUNCH ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 32px 44px; display: flex; flex-direction: column; gap: 24px;" data-screen-label="Lane Launch transition">
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 13px; color: #1b1c20;">2 · LANE LAUNCH — ORBIT → HYPERSPACE</div>
+    <div style="font-size: 13px; color: #44464e; line-height: 1.7; max-width: 1060px;">The counterpart to the Lane Drop: you finish at a node and <strong>punch back into the lane</strong>. The fiction runs in reverse — ship hangs in calm orbit, the drive <em>spools up</em> (engine wash swells, the planet drifts away beneath you), a cyan jump-flash, and the infested tunnel <strong>blooms inward and rushes past</strong> as you accelerate into the Bloom's throat. Plays on every departure — same <strong>1.5–3s</strong> budget, mirrors the arrival so the pair feels like one breath in / one breath out.</div>
+
+    <div style="background: #0b0d18; padding: 22px; display: flex; flex-direction: column; gap: 18px;">
+      <div style="display:flex; align-items:baseline; gap:16px;">
+        <div style="font-family:'Silkscreen'; font-size:11px; color:#6ad1e3;">LIVE — LOOPING</div>
+        <div style="font-family:'VT323'; font-size:17px; color:#9aa0ad;">orbit hold → spool-up → jump-flash → the lane swallows you</div>
+      </div>
+      <div style="display:flex; justify-content:center;"><canvas id="cv-lanelaunch" style="width: 1160px; height: 464px;"></canvas></div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:14px;">
+      <div style="font-family:'Silkscreen'; font-size:11px; color:#1b1c20;">KEYFRAME STORYBOARD</div>
+      <div style="display:grid; grid-template-columns: repeat(5, 1fr); gap:16px;">
+        <div style="display:flex; flex-direction:column; gap:8px;"><canvas id="cv-ll-k1" style="width:100%; height:138px; background:#0b0d18;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#30e1b9;">0.0–0.9s · ORBIT</div><div style="font-family:'VT323'; font-size:15px; color:#6a6d76; line-height:1.15;">calm realspace, ship floats over the planet.</div></div>
+        <div style="display:flex; flex-direction:column; gap:8px;"><canvas id="cv-ll-k2" style="width:100%; height:138px; background:#0b0d18;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#ff9e2c;">0.9–1.5s · SPOOL-UP</div><div style="font-family:'VT323'; font-size:15px; color:#6a6d76; line-height:1.15;">engine wash swells, planet drifts away.</div></div>
+        <div style="display:flex; flex-direction:column; gap:8px;"><canvas id="cv-ll-k3" style="width:100%; height:138px; background:#0b0d18;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#6ad1e3;">1.5–1.7s · JUMP-FLASH</div><div style="font-family:'VT323'; font-size:15px; color:#6a6d76; line-height:1.15;">cyan bloom — the punch-in beat.</div></div>
+        <div style="display:flex; flex-direction:column; gap:8px;"><canvas id="cv-ll-k4" style="width:100%; height:138px; background:#0b0d18;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#9aa0ad;">1.7–2.5s · ACCELERATE</div><div style="font-family:'VT323'; font-size:15px; color:#6a6d76; line-height:1.15;">coral funnel blooms inward, streaks build.</div></div>
+        <div style="display:flex; flex-direction:column; gap:8px;"><canvas id="cv-ll-k5" style="width:100%; height:138px; background:#0b0d18;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#cddf6c;">2.5s+ · CRUISE</div><div style="font-family:'VT323'; font-size:15px; color:#6a6d76; line-height:1.15;">full lane travel — hands off to the map.</div></div>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns: repeat(3,1fr); gap:24px; font-size:12px; color:#6a6d76; line-height:1.65;">
+      <div><strong style="color:#44464e;">It's the Drop, reversed.</strong> Exact same assets and curve, run backwards: speed eases <em>up</em> instead of down, the funnel grows from nothing instead of collapsing, the planet slides out the bottom instead of in. Build one timeline, play it forward for launch and reversed for arrival — half the work.</div>
+      <div><strong style="color:#44464e;">The new beat is the spool-up.</strong> Before the flash, the <span style="color:#ff9e2c;">orange</span> + <span style="color:#30e1b9;">cyan</span> engine wash swells behind the ship for ~0.6s — the wind-up that makes the jump feel earned. That glow is a scaling additive quad, not new art.</div>
+      <div><strong style="color:#44464e;">Feel / mobile.</strong> The acceleration <em>into</em> the tunnel is the satisfying inverse of the arrival's deceleration. Identical at 375px: the planet exits down-frame, the funnel forms center, the flash carries the cut. ≤2.5s so departures never drag on repeat.</div>
+    </div>
+  </div>
+
+  <!-- ============ 3 · DROP POD DEPLOY ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 32px 44px; display: flex; flex-direction: column; gap: 24px;" data-screen-label="Drop Pod Deploy transition">
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 13px; color: #1b1c20;">3 · DROP POD DEPLOY — ORBIT → SURFACE</div>
+    <div style="font-size: 13px; color: #44464e; line-height: 1.7; max-width: 1060px;">From orbit you fire the clone down in a pod. <strong>One continuous fall, two framings:</strong> Scene A holds on the ship as the pod detaches and shrinks toward the planet; at atmosphere-contact the camera <em>rides the pod down</em> and the view becomes the side-scroll surface for Scene B — streak in, retro-burn, impact, door opens, go-time. The cut is hidden inside the heat-glow. <strong>2–4s total</strong>; the return trip is a plain fade (not shown).</div>
+
+    <div style="background: #0b0d18; padding: 22px; display: flex; flex-direction: column; gap: 18px;">
+      <div style="display:flex; align-items:baseline; gap:16px;">
+        <div style="font-family:'Silkscreen'; font-size:11px; color:#ff9e2c;">LIVE — LOOPING</div>
+        <div style="font-family:'VT323'; font-size:17px; color:#9aa0ad;">A → B in one move · the atmosphere-glow masks the scene swap</div>
+      </div>
+      <div style="display:flex; justify-content:center;"><canvas id="cv-poddrop" style="width: 1160px; height: 464px;"></canvas></div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:14px;">
+      <div style="font-family:'Silkscreen'; font-size:11px; color:#1b1c20;">KEYFRAME STORYBOARD — A: ORBITAL &nbsp;·&nbsp; B: SURFACE</div>
+      <div style="display:grid; grid-template-columns: repeat(6, 1fr); gap:14px;">
+        <div style="display:flex; flex-direction:column; gap:8px;"><canvas id="cv-pd-k1" style="width:100%; height:150px; background:#0b0d18;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#8ff8e2;">A · 0.0–0.7s</div><div style="font-family:'VT323'; font-size:14px; color:#6a6d76; line-height:1.1;">ship in orbit, planet below, pod docked.</div></div>
+        <div style="display:flex; flex-direction:column; gap:8px;"><canvas id="cv-pd-k2" style="width:100%; height:150px; background:#0b0d18;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#ff9e2c;">A · 0.7–1.3s</div><div style="font-family:'VT323'; font-size:14px; color:#6a6d76; line-height:1.1;">pod detaches, retro-puff, falls away.</div></div>
+        <div style="display:flex; flex-direction:column; gap:8px;"><canvas id="cv-pd-k3" style="width:100%; height:150px; background:#0b0d18;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#ffb454;">A→B · 1.3–2.0s</div><div style="font-family:'VT323'; font-size:14px; color:#6a6d76; line-height:1.1;">atmosphere contact — amber heat trail, the cut.</div></div>
+        <div style="display:flex; flex-direction:column; gap:8px;"><canvas id="cv-pd-k4" style="width:100%; height:150px; background:#0b0d18;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#ff9e2c;">B · 2.0–2.6s</div><div style="font-family:'VT323'; font-size:14px; color:#6a6d76; line-height:1.1;">streaks in from above, retro-fires to slow.</div></div>
+        <div style="display:flex; flex-direction:column; gap:8px;"><canvas id="cv-pd-k5" style="width:100%; height:150px; background:#0b0d18;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#ff4757;">B · 2.6–2.8s</div><div style="font-family:'VT323'; font-size:14px; color:#6a6d76; line-height:1.1;">IMPACT — dust ring, screen-shake flash.</div></div>
+        <div style="display:flex; flex-direction:column; gap:8px;"><canvas id="cv-pd-k6" style="width:100%; height:150px; background:#0b0d18;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#30e1b9;">B · 2.8–3.6s</div><div style="font-family:'VT323'; font-size:14px; color:#6a6d76; line-height:1.1;">ramp drops, clone steps out — go-time.</div></div>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns: repeat(3,1fr); gap:24px; font-size:12px; color:#6a6d76; line-height:1.65;">
+      <div><strong style="color:#44464e;">One move, not two scenes.</strong> Treat it as a single camera that hands off: A is locked to the ship, the pod is a sprite shrinking on a path toward the planet; when its heat-glow peaks it fills frame and B fades up underneath at full scale. The player never sees a hard cut — the <span style="color:#ffb454;">amber burn</span> is the wipe.</div>
+      <div><strong style="color:#44464e;">Build cost.</strong> Pod = one 12×16 sprite (the §2 overworld pod, reused) at 3 scales. Heat trail + dust = particles. Impact = 1-frame <span style="color:#ff4757;">red</span> flash + 3px camera shake (code, not art). Door-open = 2 pod frames you already have. Planet = the same orbital sprite from Lane Drop. Everything composites or recolors.</div>
+      <div><strong style="color:#44464e;">Minimal version / return.</strong> If budget's tight, skip the camera ride: hold Scene A to atmosphere, hard-flash to B mid-streak — still reads. The <strong>return trip</strong> (pod → orbit at run's end) is just a reverse-fade with the launch-burn from the overworld pod — no bespoke animation needed.</div>
+    </div>
+  </div>
+
+  <!-- ============ 3 · SHIP REFINEMENT ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 32px 44px; display: flex; flex-direction: column; gap: 24px;" data-screen-label="Ship refinement">
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 13px; color: #1b1c20;">4 · SHIP REFINEMENT — HULL FIRST, MODULES AS DETAIL</div>
+    <div style="font-size: 13px; color: #44464e; line-height: 1.7; max-width: 1060px;">The current Gunship reads as a <strong>cluster of boxes</strong> — modules nearly as big as the hull. The fix keeps the compositing system (what you install is what you see) but rebalances the ratio: a <strong>dominant 64×32 hull silhouette</strong> that reads first, with modules shrunk to <strong>8×8 / 12×8 detail parts</strong> that bolt onto small mount points. The hull is the ship; the modules are what it's carrying.</div>
+
+    <div style="background: #0b0d18; padding: 28px; display:flex; flex-direction:column; gap:24px;">
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:34px;">
+        <div style="display:flex; flex-direction:column; gap:12px; align-items:center; border:2px solid #3a2c2c; padding:20px;">
+          <canvas id="cv-ship-before" style="width:352px; height:224px;"></canvas>
+          <div style="font-family:'Silkscreen'; font-size:11px; color:#cf657f;">BEFORE · modules overwhelm</div>
+          <div style="font-family:'VT323'; font-size:16px; color:#9aa0ad; text-align:center; line-height:1.2; max-width:320px;">Big blocks bolted on — silhouette is a pile of crates. You can't tell the hull from the cargo.</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:12px; align-items:center; border:2px solid #2c3a30; padding:20px;">
+          <canvas id="cv-ship-after" style="width:352px; height:224px;"></canvas>
+          <div style="font-family:'Silkscreen'; font-size:11px; color:#8ff8e2;">AFTER · hull reads first</div>
+          <div style="font-family:'VT323'; font-size:16px; color:#9aa0ad; text-align:center; line-height:1.2; max-width:320px;">One clear vessel; small distinct components perched on mounts. Same 5 modules — a quarter the visual weight.</div>
+        </div>
+      </div>
+
+      <div style="border-top:2px solid #1a1c22; padding-top:22px; display:flex; flex-direction:column; gap:16px;">
+        <div style="font-family:'Silkscreen'; font-size:10px; color:#9aa0ad;">MODULE GRAMMAR — DISTINCT BY TYPE, ~8×8 / 12×8</div>
+        <div style="display:flex; gap:30px; flex-wrap:wrap;">
+          <div style="display:flex; flex-direction:column; gap:8px; align-items:center; width:104px;"><canvas id="cv-m-weapon" style="width:96px; height:64px; background:#11131c;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#ff9e2c;">WEAPON</div><div style="font-family:'VT323'; font-size:13px; color:#6a6d76; text-align:center; line-height:1.1;">barrel / turret — points forward</div></div>
+          <div style="display:flex; flex-direction:column; gap:8px; align-items:center; width:104px;"><canvas id="cv-m-engine" style="width:96px; height:64px; background:#11131c;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#30e1b9;">ENGINE</div><div style="font-family:'VT323'; font-size:13px; color:#6a6d76; text-align:center; line-height:1.1;">thruster bell — cyan when lit</div></div>
+          <div style="display:flex; flex-direction:column; gap:8px; align-items:center; width:104px;"><canvas id="cv-m-util" style="width:96px; height:64px; background:#11131c;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#8fd3ff;">UTILITY</div><div style="font-family:'VT323'; font-size:13px; color:#6a6d76; text-align:center; line-height:1.1;">dish / scanner antenna</div></div>
+          <div style="display:flex; flex-direction:column; gap:8px; align-items:center; width:104px;"><canvas id="cv-m-empty" style="width:96px; height:64px; background:#11131c;"></canvas><div style="font-family:'Silkscreen'; font-size:9px; color:#9aa0ad;">EMPTY SLOT</div><div style="font-family:'VT323'; font-size:13px; color:#6a6d76; text-align:center; line-height:1.1;">open mounting bracket</div></div>
+        </div>
+        <div style="font-size:12px; color:#6a6d76; line-height:1.65;"><strong>Mount logic:</strong> the hull carries fixed mount points — weapon mounts ride the dorsal spine &amp; one belly hardpoint, the engine mount sits in the rear bell housing, utility on the forward deck. An empty slot shows the bare bracket, so a half-built ship still reads as intentional, not broken. The muzzle / engine wash stay the only pure-accent pixels — <span style="color:#ff9e2c;">orange</span> when a weapon fires, <span style="color:#30e1b9;">cyan</span> when the drive's lit.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 4 · HULL VARIETY ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 32px 44px; display: flex; flex-direction: column; gap: 24px;" data-screen-label="Hull variety">
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 13px; color: #1b1c20;">5 · HULL VARIETY — GUNSHIP · SCOUT · FREIGHTER</div>
+    <div style="font-size: 13px; color: #44464e; line-height: 1.7; max-width: 1060px;">Three hulls that read <strong>instantly apart at thumbnail size</strong> — by silhouette alone, before any module reads. Gunship: heavy, blunt, bristling. Scout: narrow, swept, all engine. Freighter: wide, boxy, hauling. Each shown bare, then with its default loadout, then all three lined up at one scale so the silhouette contrast is the proof.</div>
+
+    <div style="background: #0b0d18; padding: 28px; display:flex; flex-direction:column; gap:26px;">
+      <div style="display:grid; grid-template-columns: repeat(3,1fr); gap:24px;">
+        <!-- gunship -->
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <div style="font-family:'Silkscreen'; font-size:11px; color:#ff9e2c;">GUNSHIP <span style="color:#6a6d76;">· 3W / 1E / 1U</span></div>
+          <div style="display:flex; gap:18px; align-items:center;">
+            <div style="display:flex; flex-direction:column; gap:6px; align-items:center;"><canvas id="cv-hull-gun-bare" style="width:192px; height:96px;"></canvas><div style="font-family:'Silkscreen'; font-size:8px; color:#6a6d76;">BARE HULL</div></div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:6px; align-items:center;"><canvas id="cv-hull-gun-built" style="width:240px; height:120px;"></canvas><div style="font-family:'Silkscreen'; font-size:8px; color:#8ff8e2;">DEFAULT LOADOUT</div></div>
+          <div style="font-family:'VT323'; font-size:15px; color:#9aa0ad; line-height:1.2;">Heavy, weapon-bristling, slow. Blunt nose, armored hump, twin dorsal turrets. Reads "brawler."</div>
+        </div>
+        <!-- scout -->
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <div style="font-family:'Silkscreen'; font-size:11px; color:#ff9e2c;">SCOUT <span style="color:#6a6d76;">· 1W / 2E / 2U</span></div>
+          <div style="display:flex; gap:18px; align-items:center;">
+            <div style="display:flex; flex-direction:column; gap:6px; align-items:center;"><canvas id="cv-hull-scout-bare" style="width:192px; height:96px;"></canvas><div style="font-family:'Silkscreen'; font-size:8px; color:#6a6d76;">BARE HULL</div></div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:6px; align-items:center;"><canvas id="cv-hull-scout-built" style="width:240px; height:120px;"></canvas><div style="font-family:'Silkscreen'; font-size:8px; color:#8ff8e2;">DEFAULT LOADOUT</div></div>
+          <div style="font-family:'VT323'; font-size:15px; color:#9aa0ad; line-height:1.2;">Sleek, fast, evasive. Dart nose, swept wings, a big rear engine cluster. Looks fast standing still.</div>
+        </div>
+        <!-- freighter -->
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <div style="font-family:'Silkscreen'; font-size:11px; color:#ff9e2c;">FREIGHTER <span style="color:#6a6d76;">· 1W / 2E / 1U</span></div>
+          <div style="display:flex; gap:18px; align-items:center;">
+            <div style="display:flex; flex-direction:column; gap:6px; align-items:center;"><canvas id="cv-hull-frt-bare" style="width:192px; height:96px;"></canvas><div style="font-family:'Silkscreen'; font-size:8px; color:#6a6d76;">BARE HULL</div></div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:6px; align-items:center;"><canvas id="cv-hull-frt-built" style="width:240px; height:120px;"></canvas><div style="font-family:'Silkscreen'; font-size:8px; color:#8ff8e2;">DEFAULT LOADOUT</div></div>
+          <div style="font-family:'VT323'; font-size:15px; color:#9aa0ad; line-height:1.2;">Wide, boxy, industrial. Stacked cargo containers, stubby everything. Built to take a beating.</div>
+        </div>
+      </div>
+
+      <div style="border-top:2px solid #1a1c22; padding-top:24px; display:flex; flex-direction:column; gap:12px; align-items:center;">
+        <div style="font-family:'Silkscreen'; font-size:10px; color:#9aa0ad;">SILHOUETTE TEST — ALL THREE, ONE SCALE, BARE</div>
+        <canvas id="cv-hull-compare" style="width:912px; height:160px;"></canvas>
+        <div style="font-family:'VT323'; font-size:16px; color:#6a6d76; text-align:center; line-height:1.25; max-width:760px;">Dropped to pure black silhouettes they're still three different ships — that's the bar. Mass-forward / engine-forward / volume-forward, left to right.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 5 · NEW BLOOM SHIPS ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 32px 44px; display: flex; flex-direction: column; gap: 24px;" data-screen-label="New Bloom ships">
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 13px; color: #1b1c20;">6 · NEW BLOOM SHIPS — CRUISER &amp; SWARM</div>
+    <div style="font-size: 13px; color: #44464e; line-height: 1.7; max-width: 1060px;">The existing Bloom (Mawling, Anchormaw) are blobby masses — samey. Two new silhouettes that break that, both still wet-organic (drawn with the sponge), both using the Bloom ramp with a <strong>distinct accent</strong> so they don't read as the same creature twice: a structured <strong>Cruiser</strong> and a distributed <strong>Swarm</strong>.</div>
+
+    <div style="background: #0b0d18; padding: 28px; display:grid; grid-template-columns: 1fr 1fr; gap:40px; align-items:center;">
+      <div style="display:flex; flex-direction:column; gap:14px; align-items:center;">
+        <canvas id="cv-bloom-cruiser" style="width:420px; height:252px;"></canvas>
+        <div style="font-family:'Silkscreen'; font-size:12px; color:#a884f3;">BLOOM CRUISER <span style="color:#6a6d76;">· structured</span></div>
+        <div style="font-family:'VT323'; font-size:16px; color:#9aa0ad; line-height:1.25; text-align:center; max-width:400px;">A coral skeleton grown into a warship's shape — an exposed calcified rib-spine carries sacs of flesh slung between the bones. Big, deliberate, architectural. The rib-white structure is the new read; rose-magenta flesh, a violet wet rim. Threatening because it looks <em>engineered by instinct.</em></div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:14px; align-items:center;">
+        <canvas id="cv-bloom-swarm" style="width:420px; height:252px;"></canvas>
+        <div style="font-family:'Silkscreen'; font-size:12px; color:#cddf6c;">BLOOM SWARM <span style="color:#6a6d76;">· distributed</span></div>
+        <div style="font-family:'VT323'; font-size:16px; color:#9aa0ad; line-height:1.25; text-align:center; max-width:400px;">Not one body — a loose shoal of a dozen spore-pods that move as one, bound by faint mycelial threads. Each pod a sick-green mote with a single eye; the cloud has a silhouette but no center. Threatening because there's <em>nothing single to kill</em> — hit it and it re-forms around the gap.</div>
+      </div>
+    </div>
+    <div style="font-size: 12px; color: #6a6d76; line-height: 1.7;"><strong>Why they read apart at small scale:</strong> the Cruiser is dense and vertical with a hard pale rib-structure (rare straight-ish lines on a Bloom thing — co-opted growth); the Swarm is sparse, wide and gapped, all negative space. One is architecture, one is a cloud — opposite silhouette logic, same wet grammar &amp; ramp. Build: Cruiser = blob body + a stamped rib-overlay; Swarm = one pod sub-sprite scattered on a noise field with per-pod sine drift — both cheap, both reuse the shared organ/eye stamps.</div>
+  </div>
+
+  <!-- ============ 6 · HULL PICKER UI ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 32px 44px; display: flex; flex-direction: column; gap: 24px;" data-screen-label="Hull picker UI">
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 13px; color: #1b1c20;">7 · HULL PICKER — RUN-START SELECT <span style="font-family:'Space Mono'; font-size:11px; color:#9aa0ad;">(concept sketch)</span></div>
+    <div style="font-size: 13px; color: #44464e; line-height: 1.7; max-width: 1060px;">Rough layout only — pure FOUNDRY plates, the same chamfer/steel/Silkscreen language as combat. Three hull cards side by side; the selected one wears the orange armed-frame, the others sit quiet. Each card: sprite, name, slot counts, innate ability, one line. One primary <strong>LAUNCH</strong>.</div>
+
+    <div style="background:#0b0d18; padding:36px; display:flex; flex-direction:column; gap:24px; align-items:center;">
+      <div style="font-family:'Silkscreen'; font-size:13px; color:#e8e6e0; align-self:flex-start;">SELECT HULL</div>
+      <div style="display:flex; gap:22px; align-items:stretch; justify-content:center;">
+
+        <!-- gunship card (selected) -->
+        <div style="width:286px; background:#ff9e2c; padding:2px; clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);">
+          <div style="background:#2a2010; height:100%; clip-path: polygon(11px 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%, 0 11px); display:flex; flex-direction:column;">
+            <div style="background:#3a2c14; padding:11px 14px; display:flex; align-items:center; justify-content:space-between;"><div style="font-family:'Silkscreen'; font-size:13px; color:#ff9e2c;">GUNSHIP</div><div style="font-family:'Silkscreen'; font-size:9px; color:#ffb454; background:#5a3d12; padding:4px 7px;">SELECTED</div></div>
+            <div style="padding:18px 14px; display:flex; justify-content:center; background:#11131c;"><canvas id="cv-pick-gun" style="width:224px; height:112px;"></canvas></div>
+            <div style="padding:14px; display:flex; flex-direction:column; gap:11px;">
+              <div style="display:flex; gap:7px;">
+                <div style="display:flex; align-items:center; gap:5px;"><span style="font-family:'Silkscreen'; font-size:9px; color:#9aa0ad;">W</span><span style="display:flex; gap:3px;"><i style="width:9px;height:9px;background:#ff9e2c;display:block;"></i><i style="width:9px;height:9px;background:#ff9e2c;display:block;"></i><i style="width:9px;height:9px;background:#ff9e2c;display:block;"></i></span></div>
+                <div style="display:flex; align-items:center; gap:5px;"><span style="font-family:'Silkscreen'; font-size:9px; color:#9aa0ad;">E</span><span style="display:flex; gap:3px;"><i style="width:9px;height:9px;background:#30e1b9;display:block;"></i></span></div>
+                <div style="display:flex; align-items:center; gap:5px;"><span style="font-family:'Silkscreen'; font-size:9px; color:#9aa0ad;">U</span><span style="display:flex; gap:3px;"><i style="width:9px;height:9px;background:#8fd3ff;display:block;"></i></span></div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:3px;"><div style="font-family:'Silkscreen'; font-size:10px; color:#ff9e2c;">⛨ BROADSIDE</div><div style="font-family:'VT323'; font-size:17px; color:#c9cdd6; line-height:1.15;">First attack each turn hits twice.</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- scout card -->
+        <div style="width:286px; background:#3a3e48; padding:2px; clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);">
+          <div style="background:#16181d; height:100%; clip-path: polygon(11px 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%, 0 11px); display:flex; flex-direction:column;">
+            <div style="background:#23262d; padding:11px 14px;"><div style="font-family:'Silkscreen'; font-size:13px; color:#e8e6e0;">SCOUT</div></div>
+            <div style="padding:18px 14px; display:flex; justify-content:center; background:#11131c;"><canvas id="cv-pick-scout" style="width:224px; height:112px;"></canvas></div>
+            <div style="padding:14px; display:flex; flex-direction:column; gap:11px;">
+              <div style="display:flex; gap:7px;">
+                <div style="display:flex; align-items:center; gap:5px;"><span style="font-family:'Silkscreen'; font-size:9px; color:#9aa0ad;">W</span><span style="display:flex; gap:3px;"><i style="width:9px;height:9px;background:#ff9e2c;display:block;"></i></span></div>
+                <div style="display:flex; align-items:center; gap:5px;"><span style="font-family:'Silkscreen'; font-size:9px; color:#9aa0ad;">E</span><span style="display:flex; gap:3px;"><i style="width:9px;height:9px;background:#30e1b9;display:block;"></i><i style="width:9px;height:9px;background:#30e1b9;display:block;"></i></span></div>
+                <div style="display:flex; align-items:center; gap:5px;"><span style="font-family:'Silkscreen'; font-size:9px; color:#9aa0ad;">U</span><span style="display:flex; gap:3px;"><i style="width:9px;height:9px;background:#8fd3ff;display:block;"></i><i style="width:9px;height:9px;background:#8fd3ff;display:block;"></i></span></div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:3px;"><div style="font-family:'Silkscreen'; font-size:10px; color:#6ad1e3;">⛨ SLIPSTREAM</div><div style="font-family:'VT323'; font-size:17px; color:#c9cdd6; line-height:1.15;">Start each combat with 2 shields.</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- freighter card -->
+        <div style="width:286px; background:#3a3e48; padding:2px; clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);">
+          <div style="background:#16181d; height:100%; clip-path: polygon(11px 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%, 0 11px); display:flex; flex-direction:column;">
+            <div style="background:#23262d; padding:11px 14px;"><div style="font-family:'Silkscreen'; font-size:13px; color:#e8e6e0;">FREIGHTER</div></div>
+            <div style="padding:18px 14px; display:flex; justify-content:center; background:#11131c;"><canvas id="cv-pick-frt" style="width:224px; height:112px;"></canvas></div>
+            <div style="padding:14px; display:flex; flex-direction:column; gap:11px;">
+              <div style="display:flex; gap:7px;">
+                <div style="display:flex; align-items:center; gap:5px;"><span style="font-family:'Silkscreen'; font-size:9px; color:#9aa0ad;">W</span><span style="display:flex; gap:3px;"><i style="width:9px;height:9px;background:#ff9e2c;display:block;"></i></span></div>
+                <div style="display:flex; align-items:center; gap:5px;"><span style="font-family:'Silkscreen'; font-size:9px; color:#9aa0ad;">E</span><span style="display:flex; gap:3px;"><i style="width:9px;height:9px;background:#30e1b9;display:block;"></i><i style="width:9px;height:9px;background:#30e1b9;display:block;"></i></span></div>
+                <div style="display:flex; align-items:center; gap:5px;"><span style="font-family:'Silkscreen'; font-size:9px; color:#9aa0ad;">U</span><span style="display:flex; gap:3px;"><i style="width:9px;height:9px;background:#8fd3ff;display:block;"></i></span></div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:3px;"><div style="font-family:'Silkscreen'; font-size:10px; color:#ffb454;">⛨ REINFORCED HOLD</div><div style="font-family:'VT323'; font-size:17px; color:#c9cdd6; line-height:1.15;">+40 max hull. Carry an extra relic.</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:16px; align-items:center; margin-top:4px;">
+        <div style="font-family:'VT323'; font-size:18px; color:#6a6d76;">3 hulls · more unlock with runs</div>
+        <div style="background:#ff9e2c; color:#14151a; font-family:'Silkscreen'; font-size:14px; padding:16px 40px; clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);">LAUNCH ▸</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MOBILE 375 ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 32px 44px; display: flex; flex-direction: column; gap: 24px;" data-screen-label="Mobile transitions">
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 13px; color: #1b1c20;">8 · MOBILE — 375px · BOTH TRANSITIONS HOLD</div>
+    <div style="font-size: 13px; color: #44464e; line-height: 1.7; max-width: 1060px;">Transitions are full-bleed canvas, so they letterbox to portrait with zero layout work — the beats are centered and survive the crop. Live, at true 375px width.</div>
+    <div style="display:flex; gap:44px; align-items:flex-start; flex-wrap:wrap;">
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <div style="width:375px; height:280px; background:#0b0d18; position:relative; overflow:hidden;">
+          <canvas id="cv-m-lanedrop" style="width:375px; height:280px;"></canvas>
+          <div style="position:absolute; inset:0; pointer-events:none; background: radial-gradient(120% 90% at 50% 45%, rgba(11,13,24,0) 55%, rgba(11,13,24,0.5) 84%, rgba(11,13,24,0.92) 100%);"></div>
+          <div style="position:absolute; left:10px; top:10px; background:#3a3e48; padding:2px; clip-path: polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);"><div style="background:#16181d; padding:7px 9px; clip-path: polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);"><div style="font-family:'VT323'; font-size:15px; color:#8ff8e2;">ARRIVING</div></div></div>
+        </div>
+        <div style="font-family:'Silkscreen'; font-size:10px; color:#6ad1e3;">LANE DROP · 375px</div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <div style="width:375px; height:280px; background:#0b0d18; position:relative; overflow:hidden;">
+          <canvas id="cv-m-poddrop" style="width:375px; height:280px;"></canvas>
+          <div style="position:absolute; inset:0; pointer-events:none; background: radial-gradient(120% 90% at 50% 45%, rgba(11,13,24,0) 55%, rgba(11,13,24,0.5) 84%, rgba(11,13,24,0.92) 100%);"></div>
+          <div style="position:absolute; left:10px; top:10px; background:#3a3e48; padding:2px; clip-path: polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);"><div style="background:#16181d; padding:7px 9px; clip-path: polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);"><div style="font-family:'VT323'; font-size:15px; color:#ff9e2c;">DEPLOYING</div></div></div>
+        </div>
+        <div style="font-family:'Silkscreen'; font-size:10px; color:#ff9e2c;">DROP POD · 375px</div>
+      </div>
+      <div style="flex:1; min-width:300px; display:flex; flex-direction:column; gap:13px; font-size:13px; color:#44464e; line-height:1.7;">
+        <div><strong>Crop, don't redesign.</strong> The camera framing is built so the ship + planet (Lane Drop) and the pod's fall-line (Pod Deploy) stay in the vertical center band — the portrait crop only loses empty void at the sides.</div>
+        <div><strong>Beats read at any size.</strong> The cyan drop-flash and amber heat-trail are full-frame washes, so they're unmissable on a phone. Speed-lines and motes thin to 1px but keep their direction.</div>
+        <div><strong>Plates float as ever.</strong> A small status plate (ARRIVING / DEPLOYING) is the only HUD during a transition — everything else fades out for the beat, fades back on the new screen.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ NEXT ============ -->
+  <div style="width: 1504px; flex-shrink: 0; background: #f4f3ef; border-radius: 10px; padding: 28px 44px; display: flex; flex-direction: column; gap: 12px;" data-screen-label="Next steps">
+    <div style="font-family: 'Press Start 2P', monospace; font-size: 12px; color: #1b1c20;">NEXT STEPS</div>
+    <div style="font-size: 13px; color: #44464e; line-height: 1.8;">These are <em>direction</em> — live to prove the timing and silhouettes read, not final frames. Where next: ① lock the refined Gunship hull + all module overlays as one production atlas, then derive Scout/Freighter from the same module set. ② Build the Lane Drop &amp; Pod Deploy as real Pixi timelines off these keyframes (the phase breakpoints above are the spec). ③ Pick the Bloom direction to push first — Cruiser or Swarm — and I'll spec its organ stamps. ④ Wire the hull picker into the FOUNDRY plate components. Tell me which.</div>
+  </div>
+
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  componentDidMount() { this._tries = 0; this._anims = []; this._boot(); }
+
+  _boot() {
+    const ready = document.getElementById('cv-lanedrop') && document.fonts;
+    if (!ready && this._tries < 40) { this._tries++; return requestAnimationFrame(() => this._boot()); }
+    try { this._buildToolkit(); this._draw(); this._loop(); } catch (e) { console.error('draw error', e); }
+  }
+
+  _loop() {
+    const tick = (now) => {
+      const t = now / 1000;
+      for (const a of this._anims) { try { a.fn(t); } catch (e) {} }
+      this._raf = requestAnimationFrame(tick);
+    };
+    this._raf = requestAnimationFrame(tick);
+  }
+
+  _buildToolkit() {
+    const R = (g, x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x|0, y|0, w|0, h|0); };
+    const hx = (c) => { c = c.replace('#',''); return [parseInt(c.slice(0,2),16), parseInt(c.slice(2,4),16), parseInt(c.slice(4,6),16)]; };
+    const mix = (a, b, t) => { const A = hx(a), B = hx(b); return `rgb(${Math.round(A[0]+(B[0]-A[0])*t)},${Math.round(A[1]+(B[1]-A[1])*t)},${Math.round(A[2]+(B[2]-A[2])*t)})`; };
+    const rng = (s) => () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+    const blob = (g, cx, cy, rx, ry, c, seed, wob) => {
+      const r = rng(seed); g.fillStyle = c;
+      for (let y = Math.floor(cy - ry - wob); y <= Math.ceil(cy + ry + wob); y++) {
+        const t = (y - cy) / ry; if (Math.abs(t) > 1) continue;
+        const half = rx * Math.sqrt(1 - t * t);
+        const wl = (r() - 0.5) * 2 * wob, wr = (r() - 0.5) * 2 * wob;
+        const x0 = Math.round(cx - half + wl), x1 = Math.round(cx + half + wr);
+        g.fillRect(x0, y, Math.max(1, x1 - x0), 1);
+      }
+    };
+    const dither = (g, x, y, w, h, c, seed, dens) => {
+      const r = rng(seed); g.fillStyle = c;
+      for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
+        if (r() < dens) { const px = x + xx, py = y + yy; const a = g.getImageData(px, py, 1, 1).data; if (a[3] > 0) g.fillRect(px, py, 1, 1); }
+      }
+    };
+    const outline = (g, w, h, col) => {
+      const img = g.getImageData(0, 0, w, h), d = img.data, op = (i) => d[i*4+3] > 0, add = [];
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const i = y*w+x; if (op(i)) continue;
+        let near = false;
+        if (x>0 && op(i-1)) near = true; else if (x<w-1 && op(i+1)) near = true;
+        else if (y>0 && op(i-w)) near = true; else if (y<h-1 && op(i+w)) near = true;
+        if (near) add.push([x, y]);
+      }
+      g.fillStyle = col; for (const [x, y] of add) g.fillRect(x, y, 1, 1);
+    };
+    const make = (w, h, fn, oc) => {
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const g = c.getContext('2d'); g.imageSmoothingEnabled = false; fn(g);
+      if (oc) outline(g, w, h, oc); return c;
+    };
+    const disp = (id, w, h) => {
+      const c = document.getElementById(id); if (!c) return null;
+      c.width = w; c.height = h; const g = c.getContext('2d'); g.imageSmoothingEnabled = false; return g;
+    };
+    this.T = { R, hx, mix, rng, blob, dither, outline, make, disp, E: '#2e222f' };
+
+    const R64 = ['2e222f','3e3546','625565','966c6c','ab947a','694f62','7f708a','9babb2','c7dcd0','ffffff','6e2727','b33831','ea4f36','f57d4a','ae2334','e83b3b','fb6b1d','f79617','f9c22b','7a3045','9e4539','cd683d','e6904e','fbb954','4c3e24','676633','a2a947','d5e04b','fbff86','165a4c','239063','1ebc73','91db69','cddf6c','313638','374e4a','547e64','92a984','b2ba90','0b5e65','0b8a8f','0eaf9b','30e1b9','8ff8e2','323353','484a77','4d65b4','4d9be6','8fd3ff','45293f','6b3e75','905ea9','a884f3','eaaded','753c54','a24b6f','cf657f','ed8099','831c5d','c32454','f04f78','f68181','fca790','fdcbb0'];
+    const grid = document.getElementById('r64-grid');
+    if (grid && !grid.childElementCount) {
+      R64.forEach((h) => { const d = document.createElement('div'); d.title = '#' + h; d.style.cssText = 'width:100%;aspect-ratio:1;background:#' + h + ';'; grid.appendChild(d); });
+    }
+  }
+
+  _draw() {
+    this._sprites();
+    ['_sec1','_secLaunch','_sec2','_sec3','_sec4','_sec5','_sec6','_secMobile'].forEach((m) => {
+      if (this[m]) { try { this[m](); } catch (e) { console.error(m, e); } }
+    });
+    // paint frame 0 of every animation synchronously, so nothing is blank before the first rAF
+    for (const a of this._anims) { try { a.fn(0.001); } catch (e) {} }
+  }
+
+  // ============================================================ SPRITES
+  _sprites() {
+    const T = this.T, { R, mix, rng, blob, dither, make } = T, E = T.E;
+    // Collective ramp
+    const LT='#b2ba90', HL='#92a984', MD='#547e64', DK='#374e4a', DD='#313638',
+          ST='#625565', STL='#9babb2', CY='#0b8a8f', CYL='#0eaf9b', CYB='#30e1b9', CYH='#8ff8e2',
+          OR='#fb6b1d', ORY='#f9c22b', AM='#fbb954', AMD='#f79617';
+    this.C = { LT,HL,MD,DK,DD,ST,STL,CY,CYL,CYB,CYH,OR,ORY,AM,AMD };
+
+    // ---- MODULES (small detail parts) ----
+    const mWeapon = make(13,7,(g)=>{
+      R(g,0,1,7,5,MD); R(g,0,1,7,1,HL); R(g,0,5,7,1,DK);   // turret base
+      R(g,2,0,4,2,HL); R(g,2,0,4,1,LT);                     // riser
+      R(g,7,2,5,2,DK); R(g,7,2,5,1,ST);                     // barrel
+      R(g,12,2,1,2,STL);                                    // muzzle
+      R(g,3,3,1,1,CY);
+    },E);
+    const mTurret = make(8,7,(g)=>{
+      R(g,1,3,6,3,MD); R(g,1,3,6,1,HL); R(g,1,5,6,1,DK);    // base
+      R(g,2,1,4,2,HL); R(g,2,1,4,1,LT);                     // dome
+      R(g,6,3,2,2,DK); R(g,7,3,1,1,ST);                     // stub barrel
+      R(g,3,2,1,1,CYB);
+    },E);
+    const mEngine = make(12,8,(g)=>{
+      R(g,4,1,8,6,DK); R(g,4,1,8,1,ST); R(g,4,6,8,1,DD);    // housing
+      R(g,9,2,3,4,MD); R(g,9,2,3,1,HL);
+      R(g,1,2,3,4,'#3e3546'); R(g,1,2,3,1,ST);              // bell
+      R(g,0,3,1,2,CYH); R(g,1,3,2,2,CYB);                   // throat glow
+      R(g,5,3,4,1,CY);
+    },E);
+    const mUtil = make(8,8,(g)=>{
+      R(g,3,4,2,4,ST); R(g,3,4,2,1,STL);                    // mast
+      R(g,1,1,5,1,STL); R(g,2,2,3,1,STL); R(g,2,0,3,1,'#7f708a'); // dish
+      R(g,0,1,1,1,CYB);                                     // tip
+      R(g,2,6,4,2,DK); R(g,2,6,4,1,ST);                     // base
+    },E);
+    const mEmpty = make(8,8,(g)=>{
+      R(g,1,2,6,1,ST); R(g,1,2,1,5,ST); R(g,6,2,1,5,ST);    // U bracket
+      R(g,2,3,4,3,'#161821');                               // open interior
+      R(g,2,3,4,1,DD);
+      R(g,2,6,1,1,STL); R(g,5,6,1,1,DK);                    // bolts
+    });
+    Object.assign(this.S = this.S || {}, { mWeapon,mTurret,mEngine,mUtil,mEmpty });
+
+    // ---- BARE HULLS (64x32, nose right) ----
+    const hullGun = make(64,32,(g)=>{
+      // rear engine housing (bulky)
+      R(g,4,9,11,15,DK); R(g,4,9,11,1,ST); R(g,4,23,11,1,DD);
+      R(g,5,11,2,11,DD); R(g,8,11,1,11,'#3e3546'); R(g,11,11,1,11,'#3e3546');
+      // main fuselage
+      R(g,12,11,40,11,MD); R(g,14,10,34,1,LT); R(g,12,11,40,1,HL); R(g,12,21,40,1,DK); R(g,12,22,40,1,DD);
+      // armored dorsal hump
+      R(g,20,6,24,6,MD); R(g,21,5,22,1,LT); R(g,20,6,24,1,HL); R(g,20,11,24,1,DK);
+      // blunt nose wedge
+      R(g,52,12,8,9,MD); R(g,52,12,8,1,HL); R(g,52,20,8,1,DK);
+      R(g,60,13,3,7,MD); R(g,60,13,3,1,HL); R(g,63,15,1,3,LT);
+      // cockpit
+      R(g,45,8,6,3,CY); R(g,46,8,4,1,CYH); R(g,45,8,1,3,'#0b3a44');
+      // belly hardpoint
+      R(g,26,22,18,3,DK); R(g,26,22,18,1,'#3e3546'); R(g,26,24,18,1,DD);
+      // panel seams
+      R(g,24,12,1,9,DK); R(g,32,12,1,9,DK); R(g,40,12,1,9,DK);
+      // energy conduit
+      R(g,18,16,28,1,CY); R(g,22,16,12,1,CYL);
+      // mount nubs
+      R(g,23,5,4,2,ST); R(g,35,5,4,2,ST); R(g,33,24,5,2,ST); R(g,16,9,4,2,ST);
+      // running lights
+      R(g,17,19,1,1,OR); R(g,38,19,1,1,OR); R(g,50,18,1,1,OR);
+    },E);
+
+    const hullScout = make(64,32,(g)=>{
+      // big rear engine cluster (3 bells, engine-forward identity)
+      R(g,3,9,12,14,DK); R(g,3,9,12,1,ST); R(g,3,22,12,1,DD);
+      for (const ey of [10,15,19]) { R(g,0,ey,4,3,'#3e3546'); R(g,0,ey+1,2,1,CYB); R(g,1,ey+1,2,1,CYH); }
+      R(g,11,11,2,10,MD); R(g,11,11,2,1,HL);
+      // thin central fuselage (sleek)
+      R(g,13,14,38,5,MD); R(g,15,13,30,1,LT); R(g,13,14,38,1,HL); R(g,13,18,38,1,DK); R(g,13,19,36,1,DD);
+      // swept wings (top + bottom), trailing back
+      R(g,22,9,16,2,MD); R(g,22,9,16,1,HL); R(g,20,8,6,1,'#3e3546');         // top wing root
+      R(g,18,10,8,1,DK); R(g,16,11,6,1,DD);                                  // top wing sweep-back
+      R(g,24,21,16,2,MD); R(g,24,22,16,1,DK); R(g,22,21,6,1,'#3e3546');      // bottom wing
+      R(g,18,21,8,1,DK); R(g,16,21,6,1,DD);
+      // long dart nose
+      R(g,49,14,9,4,MD); R(g,49,14,9,1,HL); R(g,49,17,9,1,DK);
+      R(g,57,15,5,2,MD); R(g,57,15,5,1,LT); R(g,62,15,2,1,LT);
+      // cockpit bubble
+      R(g,44,13,5,3,CY); R(g,45,13,3,1,CYH);
+      // seams + conduit
+      R(g,30,15,1,4,DK); R(g,40,15,1,4,DK);
+      R(g,16,16,30,1,CY); R(g,20,16,14,1,CYL);
+      R(g,46,15,1,1,OR);
+    },E);
+
+    const hullFrt = make(64,32,(g)=>{
+      // wide boxy body
+      R(g,7,7,44,20,MD); R(g,7,7,44,1,HL); R(g,9,6,38,1,LT); R(g,7,26,44,1,DD); R(g,7,25,44,1,DK);
+      R(g,7,7,1,20,HL); R(g,50,7,1,20,DK);
+      // stacked cargo containers (varied tints + corrugation)
+      const cont=(x,y,w,h,c,cl,cd)=>{ R(g,x,y,w,h,c); R(g,x,y,w,1,cl); R(g,x,y+h-1,w,1,cd); for(let i=x+2;i<x+w-1;i+=3) R(g,i,y+1,1,h-2,cd); };
+      cont(10,8,13,8,'#7a6a55','#ab947a','#4c3e24');
+      cont(24,8,12,8,'#5e6450','#92a984','#374e4a');
+      cont(37,8,11,8,'#6e5a55','#9b7e6a','#45293f');
+      cont(13,17,14,8,'#5e6450','#92a984','#374e4a');
+      cont(28,17,13,8,'#7a6a55','#ab947a','#4c3e24');
+      // stubby short cab/nose
+      R(g,51,11,8,12,MD); R(g,51,11,8,1,HL); R(g,51,22,8,1,DK); R(g,59,13,2,8,MD);
+      R(g,53,13,5,3,CY); R(g,54,13,3,1,CYH);
+      // stubby rear engines
+      R(g,3,11,5,5,DK); R(g,2,12,1,3,CYB); R(g,3,17,5,5,DK); R(g,2,18,1,3,CYB);
+      // hazard stripe + lights
+      R(g,9,16,38,1,'#4c3e24'); R(g,12,24,1,1,OR); R(g,40,24,1,1,OR);
+    },E);
+    Object.assign(this.S, { hullGun, hullScout, hullFrt });
+
+    // ---- BUILT (hull + modules composited on a 72x40 field) ----
+    const buildOn = (hull, place, fire) => make(72,40,(g)=>{
+      g.drawImage(hull, 4, 5);
+      place(g);
+      if (fire) fire(g);
+    });
+    this.S.gunBuilt = buildOn(hullGun, (g)=>{
+      g.drawImage(mTurret, 4+22, 5+0);     // dorsal weapon 1
+      g.drawImage(mTurret, 4+34, 5+0);     // dorsal weapon 2
+      g.drawImage(mWeapon, 4+42, 5+22);    // belly weapon 3
+      g.drawImage(mEngine, 4-2, 5+11);     // rear engine
+      g.drawImage(mUtil,   4+15, 5+2);     // forward utility
+    }, (g)=>{ // muzzle fire
+      R(g,4+63,5+15,3,1,ORY); R(g,4+66,5+14,2,3,OR); R(g,4+68,5+15,2,1,AMD);
+    });
+    this.S.scoutBuilt = buildOn(hullScout, (g)=>{
+      g.drawImage(mWeapon, 4+40, 5+13);    // 1 weapon, nose
+      g.drawImage(mEngine, 4-3, 5+9);      // engine 1
+      g.drawImage(mEngine, 4-3, 5+17);     // engine 2
+      g.drawImage(mUtil,   4+24, 5+4);     // util 1 top
+      g.drawImage(mUtil,   4+30, 5+22);    // util 2 bottom
+    });
+    this.S.frtBuilt = buildOn(hullFrt, (g)=>{
+      g.drawImage(mWeapon, 4+50, 5+6);     // 1 weapon top of cab
+      g.drawImage(mEngine, 4-3, 5+9);
+      g.drawImage(mEngine, 4-3, 5+18);
+      g.drawImage(mUtil,   4+22, 5+1);     // util on cargo
+    });
+
+    // ---- OLD CHUNKY (the "before") ----
+    this.S.oldChunky = make(64,40,(g)=>{
+      // modest hull
+      R(g,12,16,34,9,MD); R(g,12,16,34,1,HL); R(g,12,24,34,1,DK);
+      R(g,46,17,6,7,MD); R(g,46,17,6,1,HL);
+      R(g,6,17,6,8,DK);
+      // OVERSIZED modules nearly hull-sized — the problem
+      R(g,14,4,16,14,'#547e64'); R(g,14,4,16,1,LT); R(g,14,17,16,1,DK); R(g,29,8,4,2,DK); // huge cannon
+      R(g,32,3,15,13,'#0b8a8f'); R(g,32,3,15,1,CYH); R(g,32,15,15,1,'#0b3a44');            // huge shield
+      R(g,2,9,15,14,'#374e4a'); R(g,2,9,15,1,ST); R(g,0,12,2,8,CYB);                       // huge engine
+      R(g,18,24,17,13,'#547e64'); R(g,18,24,17,1,LT); R(g,18,36,17,1,DK); R(g,20,33,1,1,AM); // huge armor
+    },E);
+
+    // ---- DROP POD (10x14) ----
+    const podBody=(g)=>{
+      R(g,2,3,6,9,MD); R(g,2,3,6,1,HL); R(g,2,11,6,1,DK); R(g,2,3,1,9,HL); R(g,7,3,1,9,DK);
+      R(g,3,0,4,3,MD); R(g,3,0,4,1,HL); R(g,4,0,2,1,LT);     // nose cone (down? nose is bottom for falling) -> treat top
+      R(g,2,6,6,2,'#7a3045'); R(g,3,6,1,2,AM); R(g,5,6,1,2,AM); // hazard stripe
+      R(g,4,4,2,2,CY); R(g,4,4,1,1,CYH);                     // throat dot
+    };
+    this.S.pod = {
+      dock: make(10,14,(g)=>{ podBody(g); },E),
+      open: make(14,16,(g)=>{
+        R(g,3,2,7,10,MD); R(g,3,2,7,1,HL); R(g,3,2,1,10,HL);
+        R(g,4,4,5,6,'#161821'); R(g,4,4,5,1,DD);             // open hatch dark
+        R(g,5,5,3,5,CY); R(g,6,5,1,4,CYH);                   // cloning glow inside
+        R(g,10,5,4,7,DK); R(g,10,5,4,1,ST);                  // hinged door
+        R(g,2,12,11,2,ST); R(g,2,12,11,1,STL);               // ramp
+        R(g,0,9,2,4,ST); R(g,12,9,2,4,ST);                   // legs
+      },E),
+    };
+    // mini clone (5x9)
+    this.S.cloneMini = make(5,9,(g)=>{
+      R(g,1,0,3,3,'#547e64'); R(g,1,0,3,1,'#92a984');        // helmet
+      R(g,1,1,3,1,CY); R(g,2,1,1,1,CYH);                      // visor
+      R(g,1,3,3,4,'#547e64'); R(g,1,3,3,1,'#92a984');         // torso
+      R(g,1,7,1,2,DK); R(g,3,7,1,2,DK);                       // legs
+    },E);
+
+    // ---- BLOOM CRUISER (88x52) — a leviathan SKELETON fused into a warship ----
+    this.S.cruiser = make(88,52,(g)=>{
+      const bone='#dfe8e2', boneM='#9babb2', boneD='#625565', boneDD='#3e3546';
+      const flesh='#6b3e75', fleshD='#45293f', sac='#a24b6f', sacL='#cf657f';
+      const spineY = 19;
+      const sy = (x)=> spineY + Math.round(Math.sin((x-12)/64*Math.PI)*-2);  // gentle arch
+      // 1) sparse flesh clinging inside the cage (secondary — bone dominates)
+      blob(g,46,32,24,9,fleshD,23,2);
+      const slung=(cx,cy,w,h,s)=>{ blob(g,cx,cy,w,h,sac,s,1); blob(g,cx-1,cy-1,w*0.55,h*0.5,sacL,s+3,1); R(g,cx-2,cy-h+1,2,1,'#ed8099'); };
+      slung(32,36,6,5,61); slung(46,38,6,5,65); slung(60,35,5,4,69);
+      // 2) violet membrane stretched between lower rib-tips (the distinct accent)
+      R(g,26,42,38,1,mix('#a884f3','#45293f',0.35)); R(g,30,43,28,1,mix('#a884f3','#45293f',0.55));
+      // 3) RIBCAGE — bold pale ribs curving down from the spine (drawn over flesh = a cage)
+      const ribs = [[20,17],[28,22],[36,25],[44,25],[52,24],[60,21],[68,16]];
+      for (const [rx,len] of ribs){
+        const ty = sy(rx)+1;
+        for (let i=0;i<len;i++){ const tt=i/len; const xo=Math.round(Math.sin(tt*Math.PI*0.5)*4);
+          R(g,rx+xo-1,ty+i,1,1,boneD); R(g,rx+xo,ty+i,1,1,bone); R(g,rx+xo+1,ty+i,1,1,boneM); }
+        // rib foot knob
+        const fo=Math.round(Math.sin(Math.PI*0.5)*4); R(g,rx+fo-1,ty+len,3,1,boneD); R(g,rx+fo,ty+len,1,1,boneM);
+      }
+      // 4) SPINE beam with vertebrae notches, over the rib roots
+      for (let x=12;x<=78;x++){ const y=sy(x); R(g,x,y-1,1,3,boneM); R(g,x,y,1,1,bone); if (x%5===0){ R(g,x,y-2,1,5,boneD); R(g,x,y,1,1,boneM);} }
+      // 5) SKULL + jaw at the prow (left), fused to spine by neck vertebrae — not floating
+      // neck vertebrae
+      for (const nx of [14,17]) { R(g,nx,sy(nx)-1,2,4,bone); R(g,nx,sy(nx)-1,2,1,'#f2f7f4'); R(g,nx+2,sy(nx)-1,1,4,boneD); }
+      // cranium
+      R(g,4,13,12,11,boneM); R(g,4,13,12,1,bone); R(g,5,12,9,1,'#f2f7f4'); R(g,4,23,12,1,boneD);
+      R(g,1,16,4,5,bone); R(g,0,17,2,3,boneM);                  // snout ram
+      // eye socket (deep) + green eye
+      R(g,8,16,5,5,'#160d18'); R(g,9,17,3,3,'#239063'); R(g,9,17,2,2,'#91db69'); R(g,10,17,1,1,'#cddf6c');
+      // hinged jaw (lower), attached at hinge x14
+      R(g,4,24,12,4,boneM); R(g,4,24,12,1,bone); R(g,4,27,12,1,boneD);
+      R(g,5,21,11,3,fleshD); R(g,7,22,6,1,'#831c5d');           // gullet between jaws
+      for (const tx of [5,8,11,14]) R(g,tx,20,1,2,bone);        // upper teeth
+      for (const tx of [6,9,12,15]) R(g,tx,25,1,2,bone);        // lower teeth
+      // 6) TAIL — spine tapers to fin-spines at the rear
+      R(g,78,sy(78)-1,4,2,boneM); R(g,80,15,3,2,boneM); R(g,82,18,2,3,boneD); R(g,79,22,3,1,bone);
+      R(g,80,24,2,4,boneD);                                     // ventral tail spur
+      // 7) violet dorsal spore pods (glow accent on the spine)
+      blob(g,40,11,4,3,flesh,71,1); R(g,40,10,2,1,'#a884f3'); R(g,40,10,1,1,'#eaaded');
+      blob(g,56,12,3,2,flesh,73,1); R(g,56,11,2,1,'#a884f3');
+      // 8) eye peering between ribs + faint mottle on the flesh only
+      R(g,48,30,2,2,'#165a4c'); R(g,48,30,1,1,'#91db69');
+      dither(g,26,30,40,12,sac,17,0.05);
+      R(g,84,26,1,1,flesh); R(g,2,40,1,1,fleshD); R(g,82,30,1,1,'#cddf6c');
+    },E);
+
+    // swarm pod (7x7) — reused, scattered & animated
+    this.S.swarmPod = make(7,7,(g)=>{
+      blob(g,3,4,3,3,'#676633',7,1); blob(g,3,3,2,2,'#a2a947',9,1);
+      R(g,2,3,2,2,'#165a4c'); R(g,2,3,1,1,'#91db69');        // eye
+      R(g,4,5,1,1,'#1ebc73'); R(g,1,5,1,1,'#cddf6c');         // spore flecks
+      R(g,5,2,1,1,'#905ea9');
+    },E);
+  }
+
+  // shared: planet (Deep-Fold-ish shaded sphere)
+  _planet(g, cx, cy, rad, ramp, atmo) {
+    const T = this.T, { R, mix } = T; const r = T.rng(7);
+    for (let y=-rad; y<=rad; y++) for (let x=-rad; x<=rad; x++) {
+      const d = Math.sqrt(x*x+y*y); if (d > rad) continue;
+      const shade = (x*0.7 + y*0.7)/rad;            // light from top-left
+      const lat = y/rad;
+      let base;
+      if (shade < -0.45) base = ramp[0];
+      else if (shade < 0.05) base = ramp[1];
+      else if (shade < 0.55) base = ramp[2];
+      else base = ramp[3];
+      // latitude banding wobble
+      const bandn = Math.sin(lat*7 + Math.sin(x*0.15)) ;
+      if (bandn > 0.55 && shade < 0.4) base = mix(base, ramp[0], 0.35);
+      if (bandn < -0.6 && shade > -0.2) base = mix(base, ramp[3], 0.4);
+      R(g, (cx+x)|0, (cy+y)|0, 1, 1, base);
+    }
+    // lit atmosphere rim (top-left) + faint full halo
+    for (let a=0; a<360; a+=4) {
+      const rad2 = rad+1; const x = Math.cos(a*Math.PI/180), y = Math.sin(a*Math.PI/180);
+      const lit = (-x - y) > 0.2;
+      const px = (cx + x*rad2)|0, py = (cy + y*rad2)|0;
+      R(g, px, py, 1, 1, lit ? atmo : mix(atmo,'#0b0d18',0.62));
+    }
+    // terminator deepen
+    for (let a=20; a<120; a+=6){ const x=Math.cos(a*Math.PI/180), y=Math.sin(a*Math.PI/180); R(g,(cx+x*(rad-1))|0,(cy+y*(rad-1))|0,1,1, mix(ramp[3],'#0b0d18',0.3)); }
+  }
+
+  _stars(g, W, H, dens) {
+    const T = this.T, { R } = T; const r = T.rng(1234);
+    const cols = ['#3e3546','#484a77','#625565','#7f708a'];
+    const n = (W*H*0.012*dens)|0;
+    for (let i=0;i<n;i++){ const x=(r()*W)|0,y=(r()*H)|0; R(g,x,y,1,1, cols[(r()*4)|0]); }
+    for (let i=0;i<n*0.18;i++){ const x=(r()*W)|0,y=(r()*H)|0; R(g,x,y,1,1, r()<0.5?'#8fd3ff':'#c7dcd0'); }
+  }
+
+  // ============================================================ §1 LANE DROP
+  _laneDrop(g, W, H, p, t) {
+    const T = this.T, { R, mix } = T;
+    R(g,0,0,W,H,'#0b0d18');
+    this._stars(g, W, H, 0.6);
+
+    let speed = p<1.2 ? 1 : (p<1.7 ? 1-(p-1.2)/0.5 : 0);
+    const flash = (p>=1.62 && p<2.0) ? Math.max(0, 1-Math.abs(p-1.78)/0.17) : 0;
+    const collapseT = p>=1.9 ? Math.min(1,(p-1.9)/0.45) : 0;
+    const orbitT = p>=2.05 ? Math.min(1,(p-2.05)/1.0) : 0;
+
+    const vanX = W*0.60, vanY = H*0.46, throatR = Math.max(8, H*0.06);
+    const wallScale = Math.max(0, 1 - collapseT);   // walls shrink away on collapse
+
+    // tunnel coral funnel (top + bottom bands converging to throat)
+    if (wallScale > 0.02) {
+      const rr = T.rng(99);
+      for (let x=0; x<W; x++) {
+        const frac = Math.min(1, x/vanX);
+        const topB = (vanY - throatR) * frac * wallScale;
+        const botB = H - (H - (vanY + throatR)) * frac * wallScale;
+        // band fills
+        for (let y=0; y<topB; y++) { const dimt = 0.25 + (1-y/Math.max(1,topB))*0.5; R(g,x,y,1,1, mix('#3a2740','#0b0d18', dimt)); }
+        for (let y=botB; y<H; y++) { const dimt = 0.25 + ((y-botB)/Math.max(1,H-botB))*0.5; R(g,x,y,1,1, mix('#3a2740','#0b0d18', dimt)); }
+        // wet violet inner lip + spore flecks
+        if (topB>2 && (x%2===0)) R(g,x,(topB-1)|0,1,1, rr()<0.3?'#1ebc73':'#6b3e75');
+        if (botB<H-2 && (x%2===0)) R(g,x,botB|0,1,1, rr()<0.3?'#91db69':'#6b3e75');
+        // coral lumps on the inner edge
+        if (rr()<0.06 && topB>4) T.blob(g, x, topB-3, 3, 3, mix('#6b3e75','#0b0d18',0.3), (x*7)|0, 1);
+        if (rr()<0.06 && botB<H-4) T.blob(g, x, botB+3, 3, 3, mix('#905ea9','#0b0d18',0.4), (x*5)|0, 1);
+      }
+    }
+
+    // throat / realspace beacon glow at vanishing point
+    const beaconG = 0.5 + 0.5*Math.sin(t*3);
+    if (orbitT < 0.6) {
+      T.blob(g, vanX, vanY, throatR*0.9, throatR*0.9, mix('#0b0d18','#323353',0.6), 4, 1);
+      T.blob(g, vanX, vanY, throatR*0.5, throatR*0.5, mix('#4d65b4','#0b0d18',0.2*(1-orbitT)), 6, 1);
+      R(g, vanX|0, vanY|0, 2, 2, mix('#8fd3ff','#0b0d18', orbitT));
+    }
+
+    // speed-lines radiating from throat
+    if (speed > 0.02) {
+      const r = T.rng(2);
+      const N = 46;
+      for (let i=0;i<N;i++){
+        const ang = r()*Math.PI*2;
+        const maxR = Math.hypot(W,H)*0.6;
+        const rPos = ((r()*maxR) + t*speed*420) % maxR;
+        const len = 6 + speed*26*(0.5+r());
+        const x1 = vanX + Math.cos(ang)*rPos, y1 = vanY + Math.sin(ang)*rPos;
+        const x2 = vanX + Math.cos(ang)*(rPos+len), y2 = vanY + Math.sin(ang)*(rPos+len);
+        const steps = Math.max(2,(len/2)|0);
+        const col = r()<0.25 ? '#8ff8e2' : (r()<0.5? '#6ad1e3' : (r()<0.7?'#91db69':'#7f708a'));
+        for (let s=0;s<=steps;s++){ const tt=s/steps; R(g,(x1+(x2-x1)*tt)|0,(y1+(y2-y1)*tt)|0,1,1, col); }
+      }
+    }
+
+    // PLANET rising (orbit)
+    if (orbitT > 0) {
+      const rad = Math.round(H*0.46);
+      const cyP = Math.round(H + rad*0.55 - (rad*0.62)*this._easeOut(orbitT));
+      this._planet(g, W*0.52, cyP, rad, ['#fbb954','#cd683d','#9e4539','#5a2a3a'], '#f57d4a');
+    }
+
+    // SHIP (player, side view facing right) center-ish
+    const ship = this.S.gunBuilt;
+    const sc = 2;
+    const recoil = (p>=1.2 && p<1.8) ? Math.sin((p-1.2)/0.6*Math.PI)*5 : 0;
+    const sx = Math.round(W*0.30 - recoil - ship.width*sc/2);
+    const sy = Math.round((orbitT>0 ? H*0.40 : vanY) - ship.height*sc/2 + (orbitT>0?Math.sin(t*1.5)*2:0));
+    // engine wash trailing left (cyan, scales with speed)
+    const wash = speed*0.7 + 0.25 + (orbitT>0?0.15*beaconG:0);
+    R(g, sx-6, sy+ship.height*sc/2-3, Math.round(8+speed*22), 2, mix('#0b0d18','#30e1b9', wash));
+    R(g, sx-4, sy+ship.height*sc/2-1, Math.round(5+speed*14), 2, mix('#0b0d18','#8ff8e2', wash*0.8));
+    g.drawImage(ship, sx, sy, ship.width*sc, ship.height*sc);
+
+    // DROP FLASH (cyan full-frame wash)
+    if (flash > 0) { g.fillStyle = `rgba(150,235,240,${flash*0.92})`; g.fillRect(0,0,W,H);
+      g.fillStyle = `rgba(255,255,255,${flash*flash*0.7})`; g.fillRect(0, vanY-H*0.5*flash, W, H*flash); }
+
+    // edge vignette baked faint
+  }
+  _easeOut(t){ return 1-(1-t)*(1-t); }
+
+  _sec1() {
+    const T = this.T; const LOOP = 4.0;
+    const gM = T.disp('cv-lanedrop', 290, 116);
+    if (gM) this._anims.push({ fn: (t)=>{ const p=(t)%LOOP; this._laneDrop(gM,290,116,p,t); } });
+    [['cv-ld-k1',0.55],['cv-ld-k2',1.45],['cv-ld-k3',1.78],['cv-ld-k4',2.12],['cv-ld-k5',3.4]].forEach(([id,p])=>{
+      const g = T.disp(id,240,122); if (g) this._laneDrop(g,240,122,p,p);
+    });
+  }
+
+  // ============================================================ §2 LANE LAUNCH (departure — the Drop reversed)
+  _laneLaunch(g, W, H, p, t) {
+    const T = this.T, { R, mix } = T;
+    R(g,0,0,W,H,'#0b0d18');
+    this._stars(g, W, H, 0.6);
+
+    const speed = p<1.55 ? 0 : this._easeIn(Math.min(1,(p-1.55)/0.95));
+    const flash = (p>=1.48 && p<1.8) ? Math.max(0, 1-Math.abs(p-1.6)/0.15) : 0;
+    const orbitT = p<0.9 ? 1 : Math.max(0, 1-(p-0.9)/0.8);          // 1 -> 0 (planet slides out)
+    const spool = p<0.9 ? 0 : Math.min(1,(p-0.9)/0.65);             // engine wind-up
+    const wallScale = p<1.55 ? 0 : Math.min(1,(p-1.55)/0.95);      // funnel blooms inward
+
+    const vanX = W*0.60, vanY = H*0.46, throatR = Math.max(8, H*0.06);
+
+    // PLANET sliding away (down) while still in/near orbit
+    if (orbitT > 0) {
+      const rad = Math.round(H*0.46);
+      const cyP = Math.round(H + rad*0.55 - (rad*0.62)*orbitT);
+      this._planet(g, W*0.52, cyP, rad, ['#fbb954','#cd683d','#9e4539','#5a2a3a'], '#f57d4a');
+    }
+
+    // infested throat ahead — glows violet/green as the lane opens (destination = the Bloom lane)
+    if (wallScale > 0.02) {
+      const gl = 0.4 + 0.6*Math.sin(t*4);
+      T.blob(g, vanX, vanY, throatR*1.0*wallScale+2, throatR*1.0*wallScale+2, mix('#0b0d18','#45293f',0.6*wallScale), 4, 1);
+      T.blob(g, vanX, vanY, throatR*0.55*wallScale, throatR*0.55*wallScale, mix('#6b3e75','#0b0d18',0.3), 6, 1);
+      R(g, vanX|0, vanY|0, 2, 2, mix('#0b0d18','#91db69', wallScale*(0.4+gl*0.4)));
+    }
+
+    // funnel coral walls — bloom INWARD (grow with wallScale)
+    if (wallScale > 0.02) {
+      const rr = T.rng(99);
+      for (let x=0; x<W; x++) {
+        const frac = Math.min(1, x/vanX);
+        const topB = (vanY - throatR) * frac * wallScale;
+        const botB = H - (H - (vanY + throatR)) * frac * wallScale;
+        for (let y=0; y<topB; y++) { const dimt=0.25+(1-y/Math.max(1,topB))*0.5; R(g,x,y,1,1, mix('#3a2740','#0b0d18',dimt)); }
+        for (let y=botB; y<H; y++) { const dimt=0.25+((y-botB)/Math.max(1,H-botB))*0.5; R(g,x,y,1,1, mix('#3a2740','#0b0d18',dimt)); }
+        if (topB>2 && (x%2===0)) R(g,x,(topB-1)|0,1,1, rr()<0.3?'#1ebc73':'#6b3e75');
+        if (botB<H-2 && (x%2===0)) R(g,x,botB|0,1,1, rr()<0.3?'#91db69':'#6b3e75');
+        if (rr()<0.06 && topB>4) T.blob(g, x, topB-3, 3, 3, mix('#6b3e75','#0b0d18',0.3), (x*7)|0, 1);
+        if (rr()<0.06 && botB<H-4) T.blob(g, x, botB+3, 3, 3, mix('#905ea9','#0b0d18',0.4), (x*5)|0, 1);
+      }
+    }
+
+    // speed-lines build with acceleration
+    if (speed > 0.02) {
+      const r = T.rng(2); const N = 46, maxR = Math.hypot(W,H)*0.6;
+      for (let i=0;i<N;i++){
+        const ang = r()*Math.PI*2;
+        const rPos = ((r()*maxR) + t*speed*420) % maxR;
+        const len = 6 + speed*26*(0.5+r());
+        const x1 = vanX+Math.cos(ang)*rPos, y1 = vanY+Math.sin(ang)*rPos;
+        const x2 = vanX+Math.cos(ang)*(rPos+len), y2 = vanY+Math.sin(ang)*(rPos+len);
+        const steps = Math.max(2,(len/2)|0);
+        const col = r()<0.25?'#8ff8e2':(r()<0.5?'#6ad1e3':(r()<0.7?'#91db69':'#7f708a'));
+        for (let s=0;s<=steps;s++){ const tt=s/steps; R(g,(x1+(x2-x1)*tt)|0,(y1+(y2-y1)*tt)|0,1,1, col); }
+      }
+    }
+
+    // SHIP (player) center, accelerating right into the lane
+    const ship = this.S.gunBuilt, sc = 2;
+    const lunge = speed*6;
+    const sx = Math.round(W*0.30 + lunge - ship.width*sc/2);
+    const sy = Math.round((orbitT>0 ? H*0.40 : vanY) - ship.height*sc/2 + (orbitT>0.5?Math.sin(t*1.5)*2:0));
+    // engine wash trailing left — swells on spool-up, roars on accel
+    const wash = Math.max(spool*0.8, speed*0.9) + 0.2;
+    const wlen = Math.round(8 + spool*16 + speed*26);
+    R(g, sx-wlen, sy+ship.height*sc/2-4, wlen, 3, mix('#0b0d18','#fb6b1d', wash*0.7));
+    R(g, sx-Math.round(wlen*0.7), sy+ship.height*sc/2-2, Math.round(wlen*0.7), 3, mix('#0b0d18','#30e1b9', wash));
+    R(g, sx-Math.round(wlen*0.4), sy+ship.height*sc/2-1, Math.round(wlen*0.4), 2, mix('#0b0d18','#8ff8e2', wash));
+    g.drawImage(ship, sx, sy, ship.width*sc, ship.height*sc);
+
+    // JUMP FLASH (cyan)
+    if (flash > 0) { g.fillStyle = `rgba(150,235,240,${flash*0.92})`; g.fillRect(0,0,W,H);
+      g.fillStyle = `rgba(255,255,255,${flash*flash*0.7})`; g.fillRect(0,0,W,H); }
+  }
+
+  _secLaunch() {
+    const T = this.T; const LOOP = 4.0;
+    const gM = T.disp('cv-lanelaunch', 290, 116);
+    if (gM) this._anims.push({ fn:(t)=>{ this._laneLaunch(gM,290,116,(t)%LOOP,t); } });
+    [['cv-ll-k1',0.5],['cv-ll-k2',1.2],['cv-ll-k3',1.62],['cv-ll-k4',2.1],['cv-ll-k5',3.2]].forEach(([id,p])=>{
+      const g = T.disp(id,240,122); if (g) this._laneLaunch(g,240,122,p,p);
+    });
+  }
+
+  // ============================================================ §3 DROP POD
+  _podDrop(g, W, H, p, t) {
+    const T = this.T, { R, mix } = T;
+    R(g,0,0,W,H,'#0b0d18');
+    // phase
+    const surf = p >= 2.05;                 // surface scene
+    const cut = (p>=1.95 && p<2.25) ? Math.max(0,1-Math.abs(p-2.1)/0.16) : 0;
+
+    if (!surf) {
+      // ---- SCENE A: ORBITAL ----
+      this._stars(g,W,H,0.7);
+      const rad = Math.round(H*0.7);
+      this._planet(g, W*0.5, Math.round(H + rad*0.62), rad, ['#9fd3ff','#4d9be6','#3a6ea5','#27406a'], '#8fd3ff');
+      // ship in orbit (upper area)
+      const ship = this.S.gunBuilt, sc=2;
+      const shx = Math.round(W*0.5 - ship.width*sc/2), shy = Math.round(H*0.14);
+      g.drawImage(ship, shx, shy, ship.width*sc, ship.height*sc);
+      // pod
+      const pod = this.S.pod.dock, ps=2;
+      let podx, pody, heat=0;
+      if (p < 0.7) { podx = W*0.5; pody = shy + ship.height*sc - 2; }
+      else {
+        const fp = Math.min(1, (p-0.7)/1.35);
+        podx = W*0.5 + fp*W*0.04;
+        pody = (shy + ship.height*sc) + this._easeOut(fp) * (H*0.62);
+        heat = Math.max(0, (fp-0.45)/0.55);
+        // retro puff at detach
+        if (p<1.0){ const pf=1-(p-0.7)/0.3; R(g,(podx)|0,(pody-6)|0,2,3, mix('#0b0d18','#ff9e2c',pf)); }
+      }
+      // heat trail (amber) as it nears atmosphere
+      if (heat>0){ for(let i=0;i<7;i++){ const yy=pody-2-i*2; R(g,(podx-1)|0,yy|0,2+(i<3?1:0),2, mix('#0b0d18', i<2?'#ffb454':'#f79617', heat*(1-i/7))); } }
+      g.drawImage(pod, (podx-pod.width)|0, (pody-pod.height)|0, pod.width*ps, pod.height*ps);
+      // atmosphere skin glow building near bottom
+      if (heat>0){ g.fillStyle = `rgba(255,180,84,${heat*0.18})`; g.fillRect(0,H*0.6,W,H*0.4); }
+    } else {
+      // ---- SCENE B: SURFACE ----
+      const sp = p - 2.05;
+      // sky
+      for (let y=0;y<H;y++) R(g,0,y,W,1, mix('#f57d4a','#7a3045', Math.min(1,y/(H*0.75))));
+      // distant mesas
+      const mesa=(x,w,tp)=>{ R(g,x,tp,w,H-tp, mix('#9e4539','#7a3045',0.4)); R(g,x,tp,w,1,'#cd683d'); };
+      mesa(W*0.05,W*0.16,H*0.5); mesa(W*0.30,W*0.12,H*0.56); mesa(W*0.62,W*0.20,H*0.46); mesa(W*0.85,W*0.14,H*0.54);
+      // ground band
+      const groundY = Math.round(H*0.78);
+      R(g,0,groundY,W,H-groundY,'#9e4539'); R(g,0,groundY,W,2,'#cd683d'); R(g,0,groundY,W,1,'#e6904e');
+      T.dither(g,0,groundY,W,H-groundY,'#7a3045',57,0.05);
+      // landing spot
+      const lx = Math.round(W*0.5);
+      // pod descent / land / open
+      let podY, streak=0, landed = sp>=0.75, dust=0, opened = sp>=1.55;
+      if (sp < 0.75) { const dp = sp/0.75; podY = -10 + this._easeIn(dp)*(groundY-10); streak = 1-dp; }
+      else { podY = groundY; }
+      const impact = (sp>=0.7 && sp<0.95) ? Math.max(0,1-Math.abs(sp-0.78)/0.12) : 0;
+      // screen shake
+      const shake = impact>0 ? Math.round((Math.random()-0.5)*4*impact) : 0;
+      // retro fire while descending (orange) near the end
+      if (sp<0.75 && sp>0.45){ const rf=(sp-0.45)/0.3; R(g,(lx-2)|0,(podY+12)|0,4,Math.round(3+rf*6), mix('#0b0d18','#fb6b1d',rf)); R(g,lx|0,(podY+14)|0,1,Math.round(2+rf*5),'#f9c22b'); }
+      // heat streak
+      if (streak>0){ for(let i=0;i<10;i++){ R(g,(lx-1)|0,(podY-4-i*3)|0,2,3, mix('#0b0d18', i<3?'#ffb454':'#f79617', streak*(1-i/10))); } }
+      // dust ring on impact + after
+      if (sp>=0.7){ dust = Math.max(0, 1-(sp-0.7)/0.7);
+        for(let i=0;i<26;i++){ const a=i/26*Math.PI*2; const rr=(sp-0.7)*W*0.9; R(g,(lx+Math.cos(a)*rr)|0,(groundY-2+Math.sin(a)*rr*0.3)|0,2,2, mix('#0b0d18','#e6904e',dust*0.8)); } }
+      // pod sprite (open after settle)
+      if (opened) { const pod=this.S.pod.open, ps=3; g.drawImage(pod,(lx-pod.width*ps/2+shake)|0,(groundY-pod.height*ps+2)|0,pod.width*ps,pod.height*ps);
+        // clone steps out
+        const cl=this.S.cloneMini, cs=2; const stepT=Math.min(1,(sp-1.55)/0.6); const cxp=lx+10+stepT*16;
+        g.drawImage(cl,(cxp+shake)|0,(groundY-cl.height*cs)|0,cl.width*cs,cl.height*cs);
+      } else { const pod=this.S.pod.dock, ps=3; g.drawImage(pod,(lx-pod.width*ps/2+shake)|0,(podY-pod.height*ps+10)|0,pod.width*ps,pod.height*ps); }
+      // impact red flash
+      if (impact>0){ g.fillStyle=`rgba(255,71,87,${impact*0.4})`; g.fillRect(0,0,W,H); }
+    }
+    // CUT wash (amber→white) masking the A/B swap
+    if (cut>0){ g.fillStyle=`rgba(255,180,84,${cut*0.9})`; g.fillRect(0,0,W,H); g.fillStyle=`rgba(255,245,230,${cut*cut*0.6})`; g.fillRect(0,0,W,H); }
+  }
+  _easeIn(t){ return t*t; }
+
+  _sec2() {
+    const T = this.T; const LOOP = 4.6;
+    const gM = T.disp('cv-poddrop', 290, 116);
+    if (gM) this._anims.push({ fn: (t)=>{ const p=(t)%LOOP; this._podDrop(gM,290,116,p,t); } });
+    [['cv-pd-k1',0.4],['cv-pd-k2',1.0],['cv-pd-k3',1.7],['cv-pd-k4',2.45],['cv-pd-k5',2.78],['cv-pd-k6',3.3]].forEach(([id,p])=>{
+      const g = T.disp(id,168,112); if (g) this._podDrop(g,168,112,p,p);
+    });
+  }
+
+  // ============================================================ §3 SHIP REFINEMENT
+  _sec3() {
+    const T = this.T;
+    // before (chunky)
+    const gb = T.disp('cv-ship-before',176,112);
+    if (gb){ T.R(gb,0,0,176,112,'#11131c'); this._stars(gb,176,112,0.4); const s=this.S.oldChunky; const sc=2; gb.drawImage(s,(176-s.width*sc)/2|0,(112-s.height*sc)/2|0,s.width*sc,s.height*sc); }
+    // after (refined) — animated engine flicker
+    const ga = T.disp('cv-ship-after',176,112);
+    if (ga){ const s=this.S.gunBuilt, sc=2; const ox=(176-s.width*sc)/2|0, oy=(112-s.height*sc)/2|0;
+      this._anims.push({ fn:(t)=>{ T.R(ga,0,0,176,112,'#11131c'); this._stars(ga,176,112,0.4);
+        const fl=0.55+0.45*Math.abs(Math.sin(t*6));
+        T.R(ga, ox-8, oy+Math.round(s.height*sc*0.62), Math.round(6+fl*10), 3, T.mix('#0b0d18','#30e1b9',fl));
+        ga.drawImage(s,ox,oy,s.width*sc,s.height*sc);
+        // muzzle flicker
+        if (Math.sin(t*3)>0.6){ T.R(ga, ox+s.width*sc-2, oy+Math.round(s.height*sc*0.42), 4,2,'#f9c22b'); }
+      }});
+    }
+    // module detail sprites (3x scale)
+    const mod=(id,spr,sc)=>{ const g=T.disp(id,48,32); if(g){ T.R(g,0,0,48,32,'#11131c'); g.drawImage(spr,(48-spr.width*sc)/2|0,(32-spr.height*sc)/2|0,spr.width*sc,spr.height*sc);} };
+    mod('cv-m-weapon', this.S.mWeapon, 3); mod('cv-m-engine', this.S.mEngine, 3);
+    mod('cv-m-util', this.S.mUtil, 3); mod('cv-m-empty', this.S.mEmpty, 3);
+  }
+
+  // ============================================================ §4 HULL VARIETY
+  _sec4() {
+    const T = this.T;
+    const bare=(id,spr)=>{ const g=T.disp(id,128,64); if(g){ T.R(g,0,0,128,64,'#0b0d18'); this._stars(g,128,64,0.3); const sc=2; g.drawImage(spr,(128-spr.width*sc)/2|0,(64-spr.height*sc)/2|0,spr.width*sc,spr.height*sc);} };
+    const built=(id,spr)=>{ const g=T.disp(id,160,80); if(g){ T.R(g,0,0,160,80,'#0b0d18'); this._stars(g,160,80,0.3); const sc=2; g.drawImage(spr,(160-spr.width*sc)/2|0,(80-spr.height*sc)/2|0,spr.width*sc,spr.height*sc);} };
+    bare('cv-hull-gun-bare', this.S.hullGun); bare('cv-hull-scout-bare', this.S.hullScout); bare('cv-hull-frt-bare', this.S.hullFrt);
+    built('cv-hull-gun-built', this.S.gunBuilt); built('cv-hull-scout-built', this.S.scoutBuilt); built('cv-hull-frt-built', this.S.frtBuilt);
+    // silhouette compare
+    const gc = T.disp('cv-hull-compare',456,80);
+    if (gc){ T.R(gc,0,0,456,80,'#0b0d18');
+      const sil=(spr,ox)=>{ const c=document.createElement('canvas'); c.width=spr.width;c.height=spr.height; const cg=c.getContext('2d'); cg.drawImage(spr,0,0); const im=cg.getImageData(0,0,spr.width,spr.height),d=im.data; for(let i=0;i<d.length;i+=4){ if(d[i+3]>0){ d[i]=11;d[i+1]=13;d[i+2]=24;d[i+3]=255; } } cg.putImageData(im,0,0); const sc=2; gc.drawImage(c,ox,(80-spr.height*sc)/2|0,spr.width*sc,spr.height*sc); };
+      // light steel wash behind so black silhouettes pop
+      for(let x=0;x<456;x++) T.R(gc,x,0,1,80, T.mix('#4a4f5b','#5c6270', x/456));
+      sil(this.S.hullGun, 24); sil(this.S.hullScout, 24+150); sil(this.S.hullFrt, 24+300);
+    }
+  }
+
+  // ============================================================ §5 BLOOM SHIPS
+  _sec5() {
+    const T = this.T;
+    const gc = T.disp('cv-bloom-cruiser',210,126);
+    if (gc){ const s=this.S.cruiser, sc=2; const ox=(210-s.width*sc)/2|0, oy=(126-s.height*sc)/2|0;
+      this._anims.push({ fn:(t)=>{ T.R(gc,0,0,210,126,'#0b0d18'); this._stars(gc,210,126,0.4);
+        const bob=Math.round(Math.sin(t*1.1)*2);
+        gc.drawImage(s, ox, oy+bob, s.width*sc, s.height*sc);
+        // throbbing violet spore core (the live accent)
+        const pulse=0.5+0.5*Math.sin(t*2.4);
+        T.R(gc, ox+40*sc/1+ (0), 0,0,0,'#000'); // noop guard
+        const px = ox+Math.round(40*sc), py = oy+bob+Math.round(11*sc);
+        gc.fillStyle=`rgba(168,132,243,${0.4+pulse*0.5})`; gc.fillRect(px, py, 3,3);
+      }});
+    }
+    const gs = T.disp('cv-bloom-swarm',210,126);
+    if (gs){ const pod=this.S.swarmPod, sc=2;
+      // base layout (a left-pointing shoal) seeded
+      const r=T.rng(88); const pods=[];
+      for(let i=0;i<14;i++){ pods.push({ bx: 40+r()*120, by: 30+r()*64, ph: r()*Math.PI*2, sp: 0.6+r()*0.8 }); }
+      this._anims.push({ fn:(t)=>{ T.R(gs,0,0,210,126,'#0b0d18'); this._stars(gs,210,126,0.4);
+        // mycelial threads between near pods
+        gs.strokeStyle='rgba(69,41,63,0.7)'; gs.lineWidth=1;
+        const pts=pods.map(p=>({x:p.bx+Math.sin(t*p.sp+p.ph)*5, y:p.by+Math.cos(t*p.sp*0.8+p.ph)*5}));
+        gs.beginPath(); for(let i=0;i<pts.length;i++){ for(let j=i+1;j<pts.length;j++){ const dx=pts[i].x-pts[j].x,dy=pts[i].y-pts[j].y; if(dx*dx+dy*dy<900){ gs.moveTo(pts[i].x,pts[i].y); gs.lineTo(pts[j].x,pts[j].y);} } } gs.stroke();
+        for(const pt of pts){ gs.drawImage(pod, (pt.x-pod.width)|0, (pt.y-pod.height)|0, pod.width*sc, pod.height*sc); }
+      }});
+    }
+  }
+
+  // ============================================================ §6 HULL PICKER
+  _sec6() {
+    const T = this.T;
+    const card=(id,spr)=>{ const g=T.disp(id,112,56); if(g){ T.R(g,0,0,112,56,'#11131c'); this._stars(g,112,56,0.3); const sc=1.7|0||2; const s2=Math.round(Math.min(112/spr.width,56/spr.height)); g.drawImage(spr,(112-spr.width*s2)/2|0,(56-spr.height*s2)/2|0,spr.width*s2,spr.height*s2);} };
+    card('cv-pick-gun', this.S.gunBuilt); card('cv-pick-scout', this.S.scoutBuilt); card('cv-pick-frt', this.S.frtBuilt);
+  }
+
+  // ============================================================ MOBILE
+  _secMobile() {
+    const T = this.T; const L1=4.0, L2=4.6;
+    const g1 = T.disp('cv-m-lanedrop', 188, 140);
+    if (g1) this._anims.push({ fn:(t)=>{ this._laneDrop(g1,188,140,(t)%L1,t); } });
+    const g2 = T.disp('cv-m-poddrop', 188, 140);
+    if (g2) this._anims.push({ fn:(t)=>{ this._podDrop(g2,188,140,(t)%L2,t); } });
+  }
+}
+</script>
+</body>
+</html>
