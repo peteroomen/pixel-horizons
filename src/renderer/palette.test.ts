@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { RESURRECT_64, planetRamps, rampToFloats, snapToPalette } from './palette';
+import { RESURRECT_64, planetRamps, rampToFloats, snapToPalette, surfaceRampFor } from './palette';
 
 describe('Resurrect 64 palette', () => {
   it('has 64 unique colours, all 6-digit hex', () => {
@@ -40,6 +40,35 @@ describe('planetRamps', () => {
   it('spreads across more than one combination over many seeds', () => {
     const combos = new Set(Array.from({ length: 40 }, (_, i) => JSON.stringify(planetRamps(i))));
     expect(combos.size).toBeGreaterThan(1);
+  });
+});
+
+describe('surfaceRampFor', () => {
+  it('terran uses the planet land ramp (orbit and surface agree)', () => {
+    expect(surfaceRampFor({ seed: 42, type: 'terran' })).toEqual(planetRamps(42).land);
+  });
+
+  it('is deterministic — same descriptor gives the same terrain ramp', () => {
+    const d = { seed: 7, type: 'terran' } as const;
+    expect(surfaceRampFor(d)).toEqual(surfaceRampFor(d));
+  });
+
+  it('returns a 6-step ramp, every step palette-locked', () => {
+    const ramp = surfaceRampFor({ seed: 13, type: 'terran' });
+    expect(ramp).toHaveLength(6);
+    for (const hex of ramp) expect(RESURRECT_64).toContain(hex);
+  });
+
+  it('spans light → dark (a readable contrast spread, not a flat ramp)', () => {
+    const lum = (hex: string): number => {
+      const n = Number.parseInt(hex.slice(1), 16);
+      return ((n >> 16) & 0xff) + ((n >> 8) & 0xff) + (n & 0xff);
+    };
+    for (let seed = 0; seed < 20; seed++) {
+      const ramp = surfaceRampFor({ seed, type: 'terran' });
+      // index 0 is the lightest, index 5 the darkest — a meaningful spread
+      expect(lum(ramp[0])).toBeGreaterThan(lum(ramp[5]) + 120);
+    }
   });
 });
 

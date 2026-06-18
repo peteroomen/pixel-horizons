@@ -1,6 +1,7 @@
 import type { Application } from 'pixi.js';
 
 import { FIXED_DT_MS, MAX_FRAME_MS } from '@/game/data/surface';
+import type { Ramp } from '@/renderer/palette';
 import { createSurfaceRenderer } from '@/renderer/surface-renderer';
 import type { SurfaceRenderer } from '@/renderer/surface-renderer';
 import type { InputState } from '../surface/clone';
@@ -29,6 +30,8 @@ export interface SurfaceModeOptions {
   level: string[];
   podWindowMs: number;
   loadout: SurfaceLoadout;
+  /** Planet terrain ramp (6.1 slice 2) — recolours the rock tiles to match the orbit planet. */
+  terrainRamp: Ramp;
 }
 
 export interface SurfaceModeCallbacks {
@@ -58,7 +61,7 @@ export function startSurfaceMode(
     podWindowMs: options.podWindowMs,
     loadout: options.loadout,
   });
-  const renderer: SurfaceRenderer = createSurfaceRenderer(app);
+  const renderer: SurfaceRenderer = createSurfaceRenderer(app, options.terrainRamp);
 
   // Held-key snapshot owned by the mode; rising-edge detection is in clone.ts
   const input: InputState = { left: false, right: false, jump: false, attack: false, dash: false };

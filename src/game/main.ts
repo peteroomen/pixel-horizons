@@ -2,6 +2,7 @@ import { Application, TextureSource } from 'pixi.js';
 
 import { ROCKY_TEST_LEVEL } from '@/game/data/levels';
 import { POD_WINDOW_MS } from '@/game/data/surface';
+import { surfaceRampFor } from '@/renderer/palette';
 import { computeScale, VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from '@/renderer/pixel-scale';
 import type { CombatView } from './combat-view';
 import { getEnemy, getHull, getModule } from './data';
@@ -18,6 +19,7 @@ import { startSurfaceMode } from './modes/surface-mode';
 import type { SurfaceAction, SurfaceMode } from './modes/surface-mode';
 import { PLANET_TYPES } from './data/planets';
 import { planetForNode } from './sim/planet';
+import type { PlanetDescriptor } from './sim/planet';
 import { createSaveStore } from './save';
 import {
   buyModule,
@@ -404,6 +406,9 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   let orbitMode: OrbitMode | null = null;
   /** Node the active lane travels toward. */
   let laneDestination: string | null = null;
+  // The planet most recently shown in orbit — carried into the surface drop so the ground
+  // matches the orbit the player just saw (6.1 slice 2). Derived, never stored on RunState.
+  let currentPlanet: PlanetDescriptor | null = null;
   /** Run loaded from storage, held until the title screen resolves. */
   let savedRun: RunState | null = null;
   /** The event presented at the current node, held while the player chooses (GDD §4.4). */
@@ -443,12 +448,17 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   };
 
   const enterSurface = (): void => {
+    // Use the orbit's planet so ground and orbit agree; the `?mode=surface` dev path has no
+    // orbit, so fall back to a descriptor derived from the current node (or a dev default).
+    const descriptor =
+      currentPlanet ?? planetForNode(run.seed, run.position.nodeId ?? 'dev-surface');
     surfaceMode = startSurfaceMode(
       app,
       {
         level: ROCKY_TEST_LEVEL,
         podWindowMs,
         loadout: projectLoadout(run.modules, run.reactorLevel),
+        terrainRamp: surfaceRampFor(descriptor),
       },
       { onUpdate: (view) => callbacks.onSurfaceUpdate?.(enrichSurfaceView(view)) },
     );
@@ -459,6 +469,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   // is derived from the run seed + node id (sim/planet), so the orbit and surface always agree.
   const enterOrbit = (nodeId: string): void => {
     const descriptor = planetForNode(run.seed, nodeId);
+    currentPlanet = descriptor;
     const shipModules = run.modules.map((m) => getModule(m.id).name);
     orbitMode = startOrbitMode(app, descriptor, shipModules);
     callbacks.onOrbitUpdate?.({ name: PLANET_TYPES[descriptor.type].name, type: descriptor.type });

@@ -83,12 +83,12 @@ export const bedrockTile = (): HTMLCanvasElement =>
   });
 
 /** Biomineral vein — rock body + a Bloom-grown crystal socket (ramps toward green, never pure). */
-export const biomineralTile = (): HTMLCanvasElement =>
+export const biomineralTile = (P: Ramp = ROCKY): HTMLCanvasElement =>
   make(
     16,
     16,
     (g) => {
-      g.drawImage(rockFillTile(), 0, 0);
+      g.drawImage(rockFillTile(P), 0, 0);
       R(g, 4, 4, 8, 8, '#45293f');
       R(g, 6, 5, 4, 6, '#6b3e75');
       R(g, 6, 5, 2, 6, '#905ea9');
@@ -105,12 +105,12 @@ export const biomineralTile = (): HTMLCanvasElement =>
   );
 
 /** Buried Collective salvage — a machined box embedded in rock. */
-export const scrapCacheTile = (): HTMLCanvasElement =>
+export const scrapCacheTile = (P: Ramp = ROCKY): HTMLCanvasElement =>
   make(
     16,
     16,
     (g) => {
-      g.drawImage(rockFillTile(), 0, 0);
+      g.drawImage(rockFillTile(P), 0, 0);
       R(g, 3, 5, 10, 7, '#374e4a');
       R(g, 3, 5, 10, 1, '#547e64');
       R(g, 3, 11, 10, 1, '#313638');
@@ -128,9 +128,9 @@ export const scrapCacheTile = (): HTMLCanvasElement =>
   );
 
 /** Scanned vein — plain rock + a muted-cyan internal vein revealed by the scanner. */
-export const scannedTile = (): HTMLCanvasElement =>
+export const scannedTile = (P: Ramp = ROCKY): HTMLCanvasElement =>
   make(16, 16, (g) => {
-    g.drawImage(rockFillTile(), 0, 0);
+    g.drawImage(rockFillTile(P), 0, 0);
     R(g, 4, 6, 7, 1, '#0b5e65');
     R(g, 5, 7, 1, 2, '#0b5e65');
     R(g, 8, 7, 1, 3, '#0b8a8f');
@@ -141,15 +141,15 @@ export const scannedTile = (): HTMLCanvasElement =>
   });
 
 /** Hidden deposit — identical to plain rock by design (only the scanner tells them apart). */
-export const hiddenTile = (): HTMLCanvasElement => rockFillTile();
+export const hiddenTile = (P: Ramp = ROCKY): HTMLCanvasElement => rockFillTile(P);
 
 /** Core crystal — the one tile that earns a pure-cyan glint (the bridge rule's lone exception). */
-export const coreTile = (): HTMLCanvasElement =>
+export const coreTile = (P: Ramp = ROCKY): HTMLCanvasElement =>
   make(
     16,
     16,
     (g) => {
-      g.drawImage(rockFillTile(), 0, 0);
+      g.drawImage(rockFillTile(P), 0, 0);
       R(g, 4, 4, 8, 9, '#45293f'); // socket
       R(g, 6, 5, 4, 7, '#0b5e65');
       R(g, 6, 5, 2, 7, '#0b8a8f');
@@ -165,13 +165,13 @@ export const coreTile = (): HTMLCanvasElement =>
   );
 
 /** Spike Bramble — non-solid Bloom thorn bed sitting on the tile floor (16×16). */
-export const brambleTile = (): HTMLCanvasElement =>
+export const brambleTile = (P: Ramp = ROCKY): HTMLCanvasElement =>
   make(
     16,
     16,
     (g) => {
-      R(g, 0, 12, 16, 4, ROCKY[4]);
-      R(g, 0, 12, 16, 1, ROCKY[3]);
+      R(g, 0, 12, 16, 4, P[4]);
+      R(g, 0, 12, 16, 1, P[3]);
       const thorn = (x: number, h: number, lean: number): void => {
         for (let i = 0; i < h; i++) R(g, x + Math.round(i * lean), 12 - i, 1, 1, '#6b3e75');
         R(g, x + Math.round((h - 1) * lean), 12 - h, 1, 1, '#91db69');
@@ -189,22 +189,22 @@ export const brambleTile = (): HTMLCanvasElement =>
   );
 
 /** Crumbling Sandstone — lighter, hollow-looking block webbed with fractures (16×16). */
-export const crumbleTile = (): HTMLCanvasElement =>
+export const crumbleTile = (P: Ramp = ROCKY): HTMLCanvasElement =>
   make(
     16,
     16,
     (g) => {
-      R(g, 0, 0, 16, 16, ROCKY[1]);
-      R(g, 0, 0, 16, 2, ROCKY[0]);
-      R(g, 0, 13, 16, 3, ROCKY[3]);
-      const cr = '#7a3045';
+      R(g, 0, 0, 16, 16, P[1]);
+      R(g, 0, 0, 16, 2, P[0]);
+      R(g, 0, 13, 16, 3, P[3]);
+      const cr = P[4];
       R(g, 6, 0, 1, 9, cr);
       R(g, 6, 6, 7, 1, cr);
       R(g, 12, 2, 1, 11, cr);
       R(g, 2, 9, 5, 1, cr);
       R(g, 9, 9, 1, 5, cr);
       R(g, 3, 3, 1, 4, cr);
-      dither(g, 0, 2, 16, 11, ROCKY[2], 57, 0.05);
+      dither(g, 0, 2, 16, 11, P[2], 57, 0.05);
     },
     OUTLINE,
   );
@@ -539,20 +539,21 @@ export const itemSprite = (kind: ItemKind): HTMLCanvasElement =>
 // ─── Core FX (flat coded shapes; the pure accent only at the instant of action) ──
 
 /** Mining shatter — rock chunks + dust + a pure-orange impact spark (24×24). */
-export const fxShatterSprite = (): HTMLCanvasElement =>
+export const fxShatterSprite = (P: Ramp = ROCKY): HTMLCanvasElement =>
   make(24, 24, (g) => {
-    R(g, 10, 11, 4, 3, ROCKY[3]);
+    R(g, 10, 11, 4, 3, P[3]);
     const chunk = (x: number, y: number, c: string): void => {
       R(g, x, y, 2, 2, c);
-      R(g, x, y, 2, 1, ROCKY[0]);
+      R(g, x, y, 2, 1, P[0]);
     };
-    chunk(4, 6, ROCKY[2]);
-    chunk(18, 5, ROCKY[1]);
-    chunk(3, 15, ROCKY[3]);
-    chunk(19, 16, ROCKY[2]);
-    chunk(11, 3, ROCKY[1]);
-    dither(g, 6, 9, 12, 9, '#e6904e', 81, 0.12);
+    chunk(4, 6, P[2]);
+    chunk(18, 5, P[1]);
+    chunk(3, 15, P[3]);
+    chunk(19, 16, P[2]);
+    chunk(11, 3, P[1]);
+    dither(g, 6, 9, 12, 9, P[1], 81, 0.12);
     dither(g, 8, 11, 8, 6, '#fdcbb0', 83, 0.1);
+    // pure-orange impact spark — the one action accent, fixed regardless of biome
     R(g, 11, 10, 2, 1, '#f9c22b');
     R(g, 12, 9, 1, 2, '#fb6b1d');
     R(g, 10, 12, 1, 1, '#f79617');
@@ -560,15 +561,15 @@ export const fxShatterSprite = (): HTMLCanvasElement =>
   });
 
 /** Landing puff — low, wide dust cloud + kicked pebbles (24×18). */
-export const fxDustSprite = (): HTMLCanvasElement =>
+export const fxDustSprite = (P: Ramp = ROCKY): HTMLCanvasElement =>
   make(24, 18, (g) => {
-    blob(g, 12, 13, 10, 4, '#cd683d', 77, 2);
-    blob(g, 12, 12, 8, 3, '#e6904e', 79, 1);
+    blob(g, 12, 13, 10, 4, P[2], 77, 2);
+    blob(g, 12, 12, 8, 3, P[1], 79, 1);
     dither(g, 3, 9, 18, 7, '#fdcbb0', 76, 0.16);
-    R(g, 4, 8, 1, 1, ROCKY[3]);
-    R(g, 19, 7, 1, 1, ROCKY[3]);
-    R(g, 8, 6, 1, 1, ROCKY[2]);
-    R(g, 15, 6, 1, 1, ROCKY[2]);
+    R(g, 4, 8, 1, 1, P[3]);
+    R(g, 19, 7, 1, 1, P[3]);
+    R(g, 8, 6, 1, 1, P[2]);
+    R(g, 15, 6, 1, 1, P[2]);
   });
 
 // ─── Parallax cave-mouth backdrop (three depth layers, recolor-dimmed) ───────
@@ -588,12 +589,12 @@ const skyLayer = (g: Ctx, W: number, H: number): void => {
   mesa(165 * s, 44 * s, H * 0.52);
 };
 
-const midLayer = (g: Ctx, W: number, H: number): void => {
+const midLayer = (g: Ctx, W: number, H: number, P: Ramp): void => {
   const col = (x: number, w: number, top: number): void => {
-    R(g, x, top, w, H - top, '#7a3045');
-    R(g, x, top, w, 2, '#9e4539');
-    R(g, x, top, 2, H - top, '#9e4539');
-    R(g, x + w - 2, top, 2, H - top, '#45293f');
+    R(g, x, top, w, H - top, P[4]);
+    R(g, x, top, w, 2, P[3]);
+    R(g, x, top, 2, H - top, P[3]);
+    R(g, x + w - 2, top, 2, H - top, P[5]);
   };
   const s = W / 220;
   col(14 * s, 18 * s, H * 0.4);
@@ -601,25 +602,30 @@ const midLayer = (g: Ctx, W: number, H: number): void => {
   col(92 * s, 22 * s, H * 0.35);
   col(140 * s, 16 * s, H * 0.5);
   col(176 * s, 20 * s, H * 0.45);
-  R(g, 70 * s, H * 0.5, 20 * s, 4, '#45293f');
+  R(g, 70 * s, H * 0.5, 20 * s, 4, P[5]);
 };
 
-const nearLayer = (g: Ctx, W: number, H: number): void => {
+const nearLayer = (g: Ctx, W: number, H: number, P: Ramp): void => {
   const r = rng(55);
-  R(g, 0, 0, W, H * 0.16, '#1a1320'); // top lip
-  R(g, 0, 0, W * 0.2, H, '#1a1320'); // left
-  R(g, W * 0.82, 0, W * 0.18, H, '#1a1320'); // right
+  // Cave-frame darks derived from the biome's darkest ramp steps so the mouth matches the
+  // planet; kept well below the ramp (mixed toward black) to stay a dark vignette frame.
+  const frame = mix(P[5], '#000000', 0.5);
+  const edge = mix(P[5], '#000000', 0.3);
+  const lip = mix(P[4], '#000000', 0.25);
+  R(g, 0, 0, W, H * 0.16, frame); // top lip
+  R(g, 0, 0, W * 0.2, H, frame); // left
+  R(g, W * 0.82, 0, W * 0.18, H, frame); // right
   for (let y = 0; y < H; y++) {
     const lx = (W * 0.2 + Math.sin(y * 0.3) * 4 + r() * 3) | 0;
-    R(g, 0, y, lx, 1, '#241828');
+    R(g, 0, y, lx, 1, edge);
     const rx = (W * 0.82 - Math.sin(y * 0.25) * 4 - r() * 3) | 0;
-    R(g, rx, y, W - rx, 1, '#241828');
+    R(g, rx, y, W - rx, 1, edge);
   }
   for (let x = 0; x < W; x++) {
     const ty = (H * 0.16 + Math.sin(x * 0.2) * 5 + r() * 3) | 0;
-    R(g, x, 0, 1, ty, '#1a1320');
+    R(g, x, 0, 1, ty, frame);
   }
-  // bloom flecks on the near wall — the infestation reached the rock
+  // bloom flecks on the near wall — the infestation reached the rock (Bloom signal, fixed)
   const flecks: Array<[number, number]> = [
     [10, 40],
     [14, 80],
@@ -632,16 +638,20 @@ const nearLayer = (g: Ctx, W: number, H: number): void => {
   ];
   for (const [x, y] of flecks) R(g, x, y % H, 1, 1, r() < 0.5 ? '#6b3e75' : '#1ebc73');
   // foreground ground ledge
-  R(g, 0, H - 10, W, 10, '#241828');
-  R(g, 0, H - 10, W, 1, '#3a2740');
+  R(g, 0, H - 10, W, 10, edge);
+  R(g, 0, H - 10, W, 1, lip);
 };
 
-/** The full cave-mouth backdrop (sky + mid columns + near wall frame), composed at W×H. */
-export const surfaceBackdrop = (W: number, H: number): HTMLCanvasElement =>
+/**
+ * The full cave-mouth backdrop (sky + mid columns + near wall frame), composed at W×H.
+ * `P` (the planet terrain ramp) recolours the rock layers (mid columns + near cave frame) to
+ * match the planet from orbit; the sky + sun + horizon stay fixed (atmosphere — later slice).
+ */
+export const surfaceBackdrop = (W: number, H: number, P: Ramp = ROCKY): HTMLCanvasElement =>
   make(W, H, (g) => {
     skyLayer(g, W, H);
-    midLayer(g, W, H);
-    nearLayer(g, W, H);
+    midLayer(g, W, H, P);
+    nearLayer(g, W, H, P);
   });
 
 /** A drifting-spore-mote field for the gloom — deterministic placement, animated in the renderer. */

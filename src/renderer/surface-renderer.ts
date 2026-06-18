@@ -28,6 +28,7 @@ import {
   tileAt,
 } from '@/game/surface/tilemap';
 import type { SurfaceState } from '@/game/surface/surface';
+import type { Ramp } from './palette';
 import { VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from './pixel-scale';
 import {
   bedrockTile,
@@ -96,19 +97,24 @@ function itemKindFor(item: WorldItem): ItemKind {
   return 'scrap';
 }
 
-export function createSurfaceRenderer(app: Application): SurfaceRenderer {
+/**
+ * @param terrainRamp The planet's terrain ramp (6.1 slice 2) — recolours the rock tiles + rock
+ * debris so the surface matches the planet seen from orbit. Signal/grammar tiles (bedrock,
+ * biomineral, scrap, scanned, core) stay fixed regardless of biome.
+ */
+export function createSurfaceRenderer(app: Application, terrainRamp: Ramp): SurfaceRenderer {
   // ── Static textures, built once (client-side) and shared across all sprites ──
   const TILE_TEX = {
-    fill: tex(rockFillTile()),
-    surface: tex(rockSurfaceTile()),
+    fill: tex(rockFillTile(terrainRamp)),
+    surface: tex(rockSurfaceTile(terrainRamp)),
     bedrock: tex(bedrockTile()),
-    biomineral: tex(biomineralTile()),
-    scrap: tex(scrapCacheTile()),
-    scanned: tex(scannedTile()),
-    hidden: tex(hiddenTile()),
-    core: tex(coreTile()),
-    bramble: tex(brambleTile()),
-    crumble: tex(crumbleTile()),
+    biomineral: tex(biomineralTile(terrainRamp)),
+    scrap: tex(scrapCacheTile(terrainRamp)),
+    scanned: tex(scannedTile(terrainRamp)),
+    hidden: tex(hiddenTile(terrainRamp)),
+    core: tex(coreTile(terrainRamp)),
+    bramble: tex(brambleTile(terrainRamp)),
+    crumble: tex(crumbleTile(terrainRamp)),
   };
   const POSE_TEX: Record<ClonePose, Texture> = {
     idle: tex(cloneSprite('idle')),
@@ -130,13 +136,13 @@ export function createSurfaceRenderer(app: Application): SurfaceRenderer {
     core: tex(itemSprite('core')),
   };
   const CORPSE_TEX = tex(corpseSprite());
-  const SHATTER_TEX = tex(fxShatterSprite());
-  const DUST_TEX = tex(fxDustSprite());
+  const SHATTER_TEX = tex(fxShatterSprite(terrainRamp));
+  const DUST_TEX = tex(fxDustSprite(terrainRamp));
 
   // ── Layer 0: cave-mouth backdrop (screen-fixed) + drifting spore motes ──────
   const bg = new Container();
   app.stage.addChildAt(bg, 0);
-  const backdrop = new Sprite(tex(surfaceBackdrop(VIRTUAL_WIDTH, VIRTUAL_HEIGHT)));
+  const backdrop = new Sprite(tex(surfaceBackdrop(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, terrainRamp)));
   bg.addChild(backdrop);
   const motes = moteField(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, 44);
   const moteGfx = new Graphics();
