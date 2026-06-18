@@ -21,18 +21,18 @@ Port the pixel-art hull sprites and module grammar from `docs/design/foundry-tra
 ## Steps
 
 - [x] Create branch `feature/ship-sprites` from origin/main
-- [ ] Write plan file (this file)
-- [ ] Add Collective palette constants to sprites.ts
-- [ ] Add 4 module sprite factories (mWeapon, mTurret, mEngine, mUtil, mEmpty)
-- [ ] Add 3 hull factories (gunshipHullNew 64×32, scoutHull 64×32, freighterHull 64×32)
-- [ ] Add mount point config per hull + `compositeShipForHull`
-- [ ] Update `muzzleFlash` to 72×40
-- [ ] Export `HullSlot` type and `compositeShipForHull`
-- [ ] Add `hullId` to `CombatView`
-- [ ] Update `space-renderer.ts` to use hull-aware compositor
-- [ ] Fix Freighter slots in hulls.ts
-- [ ] `pnpm lint && pnpm type-check && pnpm test`
-- [ ] Commit + push + PR
+- [x] Write plan file (this file)
+- [x] Add Collective palette constants to sprites.ts
+- [x] Add 4 module sprite factories (mWeapon, mTurret, mEngine, mUtil, mEmpty)
+- [x] Add 3 hull factories (gunshipHullNew 64×32, scoutHull 64×32, freighterHull 64×32)
+- [x] Add mount point config per hull + `compositeShipForHull`
+- [x] Update `muzzleFlash` to 72×40
+- [x] Export `HullSlot` type and `compositeShipForHull`
+- [x] Add `hullId` to `CombatView`
+- [x] Update `space-renderer.ts` to use hull-aware compositor
+- [x] Fix Freighter slots in hulls.ts
+- [x] `pnpm lint && pnpm type-check && pnpm test`
+- [x] Commit + push + PR
 
 ## Manual test steps
 
@@ -55,7 +55,12 @@ Port the pixel-art hull sprites and module grammar from `docs/design/foundry-tra
 
 ## What actually happened
 
-(fill in during/after session)
+- Ported all sprite factories verbatim from `docs/design/foundry-transitions-ships.dc.html`'s `_sprites()` method — pixel layout is a direct translation of the design doc's canvas drawing calls
+- Added Tactical hull as a gunship-hull placeholder with 2W/2U/1E mount layout (design doc only covers 3 hulls; Tactical mount positions reuse gunship geometry with the 3rd weapon slot swapped to a 2nd utility)
+- Muzzle flash nose tip adjusted to composite x=67-71 (gunship hull nose tip lands at hull-coord x=63 + HULL_X=4)
+- Branch was created from origin/main rather than local main due to a Claude worktree lock on main; branch was 2 commits behind origin/main (PR #23 surface recolor) and required a stash/pull/pop before the final staged files were committed
+- 516 tests green; lint/type-check/build clean
+- Browser verification (happy path + 375px + muzzle flash) remains a human manual step per plan
 
 ## Files created / modified
 
@@ -68,5 +73,5 @@ Port the pixel-art hull sprites and module grammar from `docs/design/foundry-tra
 ## Status
 
 - [ ] In progress
-- [ ] Complete
+- [x] Complete
 - [ ] Partial — see deferred
