@@ -15,6 +15,8 @@
  * ramps as uniforms; nothing here touches the GPU, so it is fully unit-testable.
  */
 
+import type { PlanetDescriptor } from '@/game/sim/planet';
+
 /** The 64 Resurrect 64 colours, in palette order. The world's entire colour vocabulary. */
 export const RESURRECT_64 = [
   '#2e222f',
@@ -154,4 +156,18 @@ export function planetRamps(seed: number): PlanetRamps {
 /** Flatten a ramp to the normalised RGB triples a shader uniform wants (6 × vec3, 0..1). */
 export function rampToFloats(ramp: Ramp): number[] {
   return ramp.flatMap((hex) => hexToRgb(hex).map((c) => c / 255));
+}
+
+/**
+ * The terrain ramp a planet's surface is recoloured with (6.1 slice 2, ADR 010) — the same
+ * ramp the planet was generated from, so the ground reads in the hue family the player saw
+ * from orbit. Terran is the only type today; 5.3 branches here for Volcanic/Ice. The result is
+ * palette-locked by construction (it is one of the curated `planetRamps` ramps).
+ */
+export function surfaceRampFor(descriptor: PlanetDescriptor): Ramp {
+  switch (descriptor.type) {
+    case 'terran':
+    default:
+      return planetRamps(descriptor.seed).land;
+  }
 }
