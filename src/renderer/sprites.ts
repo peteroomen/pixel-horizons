@@ -19,7 +19,348 @@ import { blob, dither, make, makeCanvas, mix, OUTLINE, R, rng } from './sprite-p
 
 export { mix } from './sprite-primitives';
 
+// ─── Collective palette — Horizon Collective ramp (from the transitions design doc) ───
+
+const LT = '#b2ba90';
+const HL = '#92a984';
+const MD = '#547e64';
+const DK = '#374e4a';
+const DD = '#313638';
+const ST = '#625565';
+const STL = '#9babb2';
+const CY = '#0b8a8f';
+const CYL = '#0eaf9b';
+const CYB = '#30e1b9';
+const CYH = '#8ff8e2';
+const OR = '#fb6b1d';
+const AMD = '#f79617';
+
+// ─── Module sprites — small detail parts (8×8 / 12×8 / 13×7), bolted onto hulls ──
+
+/** Forward weapon barrel (~13×7): pointed nose-right, turret base + riser + barrel. */
+const moduleWeapon = (): HTMLCanvasElement =>
+  make(
+    13,
+    7,
+    (g) => {
+      R(g, 0, 1, 7, 5, MD);
+      R(g, 0, 1, 7, 1, HL);
+      R(g, 0, 5, 7, 1, DK);
+      R(g, 2, 0, 4, 2, HL);
+      R(g, 2, 0, 4, 1, LT);
+      R(g, 7, 2, 5, 2, DK);
+      R(g, 7, 2, 5, 1, ST);
+      R(g, 12, 2, 1, 2, STL);
+      R(g, 3, 3, 1, 1, CY);
+    },
+    OUTLINE,
+  );
+
+/** Dorsal turret (~8×7): dome top, stub barrel pointing right. */
+const moduleTurret = (): HTMLCanvasElement =>
+  make(
+    8,
+    7,
+    (g) => {
+      R(g, 1, 3, 6, 3, MD);
+      R(g, 1, 3, 6, 1, HL);
+      R(g, 1, 5, 6, 1, DK);
+      R(g, 2, 1, 4, 2, HL);
+      R(g, 2, 1, 4, 1, LT);
+      R(g, 6, 3, 2, 2, DK);
+      R(g, 7, 3, 1, 1, ST);
+      R(g, 3, 2, 1, 1, CYB);
+    },
+    OUTLINE,
+  );
+
+/** Thruster bell (~12×8): housing + bell nozzle with cyan throat glow. */
+const moduleEngine = (): HTMLCanvasElement =>
+  make(
+    12,
+    8,
+    (g) => {
+      R(g, 4, 1, 8, 6, DK);
+      R(g, 4, 1, 8, 1, ST);
+      R(g, 4, 6, 8, 1, DD);
+      R(g, 9, 2, 3, 4, MD);
+      R(g, 9, 2, 3, 1, HL);
+      R(g, 1, 2, 3, 4, '#3e3546');
+      R(g, 1, 2, 3, 1, ST);
+      R(g, 0, 3, 1, 2, CYH);
+      R(g, 1, 3, 2, 2, CYB);
+      R(g, 5, 3, 4, 1, CY);
+    },
+    OUTLINE,
+  );
+
+/** Dish / scanner antenna (~8×8): mast, dish bowl, cyan tip. */
+const moduleUtil = (): HTMLCanvasElement =>
+  make(
+    8,
+    8,
+    (g) => {
+      R(g, 3, 4, 2, 4, ST);
+      R(g, 3, 4, 2, 1, STL);
+      R(g, 1, 1, 5, 1, STL);
+      R(g, 2, 2, 3, 1, STL);
+      R(g, 2, 0, 3, 1, '#7f708a');
+      R(g, 0, 1, 1, 1, CYB);
+      R(g, 2, 6, 4, 2, DK);
+      R(g, 2, 6, 4, 1, ST);
+    },
+    OUTLINE,
+  );
+
+/** Open U-bracket mount — shown when a slot is unfilled. */
+const moduleEmpty = (): HTMLCanvasElement =>
+  make(8, 8, (g) => {
+    R(g, 1, 2, 6, 1, ST);
+    R(g, 1, 2, 1, 5, ST);
+    R(g, 6, 2, 1, 5, ST);
+    R(g, 2, 3, 4, 3, '#161821');
+    R(g, 2, 3, 4, 1, DD);
+    R(g, 2, 6, 1, 1, STL);
+    R(g, 5, 6, 1, 1, DK);
+  });
+
+// ─── Hull sprites — 64×32, nose pointing right ──────────────────────────────
+
+/** Gunship bare hull (64×32): blunt nose, armored dorsal hump, twin turret mounts, belly hardpoint. */
+const gunshipHullNew = (): HTMLCanvasElement =>
+  make(
+    64,
+    32,
+    (g) => {
+      R(g, 4, 9, 11, 15, DK);
+      R(g, 4, 9, 11, 1, ST);
+      R(g, 4, 23, 11, 1, DD);
+      R(g, 5, 11, 2, 11, DD);
+      R(g, 8, 11, 1, 11, '#3e3546');
+      R(g, 11, 11, 1, 11, '#3e3546');
+      R(g, 12, 11, 40, 11, MD);
+      R(g, 14, 10, 34, 1, LT);
+      R(g, 12, 11, 40, 1, HL);
+      R(g, 12, 21, 40, 1, DK);
+      R(g, 12, 22, 40, 1, DD);
+      R(g, 20, 6, 24, 6, MD);
+      R(g, 21, 5, 22, 1, LT);
+      R(g, 20, 6, 24, 1, HL);
+      R(g, 20, 11, 24, 1, DK);
+      R(g, 52, 12, 8, 9, MD);
+      R(g, 52, 12, 8, 1, HL);
+      R(g, 52, 20, 8, 1, DK);
+      R(g, 60, 13, 3, 7, MD);
+      R(g, 60, 13, 3, 1, HL);
+      R(g, 63, 15, 1, 3, LT);
+      R(g, 45, 8, 6, 3, CY);
+      R(g, 46, 8, 4, 1, CYH);
+      R(g, 45, 8, 1, 3, '#0b3a44');
+      R(g, 26, 22, 18, 3, DK);
+      R(g, 26, 22, 18, 1, '#3e3546');
+      R(g, 26, 24, 18, 1, DD);
+      R(g, 24, 12, 1, 9, DK);
+      R(g, 32, 12, 1, 9, DK);
+      R(g, 40, 12, 1, 9, DK);
+      R(g, 18, 16, 28, 1, CY);
+      R(g, 22, 16, 12, 1, CYL);
+      R(g, 23, 5, 4, 2, ST);
+      R(g, 35, 5, 4, 2, ST);
+      R(g, 33, 24, 5, 2, ST);
+      R(g, 16, 9, 4, 2, ST);
+      R(g, 17, 19, 1, 1, OR);
+      R(g, 38, 19, 1, 1, OR);
+      R(g, 50, 18, 1, 1, OR);
+    },
+    OUTLINE,
+  );
+
+/** Scout bare hull (64×32): swept delta wings, 3-bell rear engine cluster, dart nose. */
+const scoutHull = (): HTMLCanvasElement =>
+  make(
+    64,
+    32,
+    (g) => {
+      R(g, 3, 9, 12, 14, DK);
+      R(g, 3, 9, 12, 1, ST);
+      R(g, 3, 22, 12, 1, DD);
+      for (const ey of [10, 15, 19]) {
+        R(g, 0, ey, 4, 3, '#3e3546');
+        R(g, 0, ey + 1, 2, 1, CYB);
+        R(g, 1, ey + 1, 2, 1, CYH);
+      }
+      R(g, 11, 11, 2, 10, MD);
+      R(g, 11, 11, 2, 1, HL);
+      R(g, 13, 14, 38, 5, MD);
+      R(g, 15, 13, 30, 1, LT);
+      R(g, 13, 14, 38, 1, HL);
+      R(g, 13, 18, 38, 1, DK);
+      R(g, 13, 19, 36, 1, DD);
+      R(g, 22, 9, 16, 2, MD);
+      R(g, 22, 9, 16, 1, HL);
+      R(g, 20, 8, 6, 1, '#3e3546');
+      R(g, 18, 10, 8, 1, DK);
+      R(g, 16, 11, 6, 1, DD);
+      R(g, 24, 21, 16, 2, MD);
+      R(g, 24, 22, 16, 1, DK);
+      R(g, 22, 21, 6, 1, '#3e3546');
+      R(g, 18, 21, 8, 1, DK);
+      R(g, 16, 21, 6, 1, DD);
+      R(g, 49, 14, 9, 4, MD);
+      R(g, 49, 14, 9, 1, HL);
+      R(g, 49, 17, 9, 1, DK);
+      R(g, 57, 15, 5, 2, MD);
+      R(g, 57, 15, 5, 1, LT);
+      R(g, 62, 15, 2, 1, LT);
+      R(g, 44, 13, 5, 3, CY);
+      R(g, 45, 13, 3, 1, CYH);
+      R(g, 30, 15, 1, 4, DK);
+      R(g, 40, 15, 1, 4, DK);
+      R(g, 16, 16, 30, 1, CY);
+      R(g, 20, 16, 14, 1, CYL);
+      R(g, 46, 15, 1, 1, OR);
+    },
+    OUTLINE,
+  );
+
+/** Freighter bare hull (64×32): wide boxy body, stacked cargo containers, stubby nose. */
+const freighterHull = (): HTMLCanvasElement =>
+  make(
+    64,
+    32,
+    (g) => {
+      R(g, 7, 7, 44, 20, MD);
+      R(g, 7, 7, 44, 1, HL);
+      R(g, 9, 6, 38, 1, LT);
+      R(g, 7, 26, 44, 1, DD);
+      R(g, 7, 25, 44, 1, DK);
+      R(g, 7, 7, 1, 20, HL);
+      R(g, 50, 7, 1, 20, DK);
+      // cargo containers: body + top highlight + bottom shadow + vertical corrugation
+      const cont = (
+        x: number,
+        y: number,
+        w: number,
+        h: number,
+        c: string,
+        cl: string,
+        cd: string,
+      ): void => {
+        R(g, x, y, w, h, c);
+        R(g, x, y, w, 1, cl);
+        R(g, x, y + h - 1, w, 1, cd);
+        for (let i = x + 2; i < x + w - 1; i += 3) R(g, i, y + 1, 1, h - 2, cd);
+      };
+      cont(10, 8, 13, 8, '#7a6a55', '#ab947a', '#4c3e24');
+      cont(24, 8, 12, 8, '#5e6450', '#92a984', '#374e4a');
+      cont(37, 8, 11, 8, '#6e5a55', '#9b7e6a', '#45293f');
+      cont(13, 17, 14, 8, '#5e6450', '#92a984', '#374e4a');
+      cont(28, 17, 13, 8, '#7a6a55', '#ab947a', '#4c3e24');
+      R(g, 51, 11, 8, 12, MD);
+      R(g, 51, 11, 8, 1, HL);
+      R(g, 51, 22, 8, 1, DK);
+      R(g, 59, 13, 2, 8, MD);
+      R(g, 53, 13, 5, 3, CY);
+      R(g, 54, 13, 3, 1, CYH);
+      R(g, 3, 11, 5, 5, DK);
+      R(g, 2, 12, 1, 3, CYB);
+      R(g, 3, 17, 5, 5, DK);
+      R(g, 2, 18, 1, 3, CYB);
+      R(g, 9, 16, 38, 1, '#4c3e24');
+      R(g, 12, 24, 1, 1, OR);
+      R(g, 40, 24, 1, 1, OR);
+    },
+    OUTLINE,
+  );
+
+// ─── Hull-aware compositor ───────────────────────────────────────────────────
+
+/** A module slot type — maps to a set of mount points on a hull. */
+export type HullSlot = 'weapon' | 'engine' | 'utility';
+
+interface MountPoint {
+  slot: HullSlot;
+  /** X in the 72×40 composite field. */
+  x: number;
+  /** Y in the 72×40 composite field. */
+  y: number;
+  sprite: 'weapon' | 'turret' | 'engine' | 'util';
+}
+
+// Hull offset within the 72×40 composite (matches the design doc's buildOn convention).
+const HULL_X = 4;
+const HULL_Y = 5;
+
+const HULL_MOUNTS: Record<string, readonly MountPoint[]> = {
+  'hull-gunship': [
+    { slot: 'weapon', x: HULL_X + 22, y: HULL_Y + 0, sprite: 'turret' },
+    { slot: 'weapon', x: HULL_X + 34, y: HULL_Y + 0, sprite: 'turret' },
+    { slot: 'weapon', x: HULL_X + 42, y: HULL_Y + 22, sprite: 'weapon' },
+    { slot: 'engine', x: HULL_X - 2, y: HULL_Y + 11, sprite: 'engine' },
+    { slot: 'utility', x: HULL_X + 15, y: HULL_Y + 2, sprite: 'util' },
+  ],
+  'hull-scout': [
+    { slot: 'weapon', x: HULL_X + 40, y: HULL_Y + 13, sprite: 'weapon' },
+    { slot: 'engine', x: HULL_X - 3, y: HULL_Y + 9, sprite: 'engine' },
+    { slot: 'engine', x: HULL_X - 3, y: HULL_Y + 17, sprite: 'engine' },
+    { slot: 'utility', x: HULL_X + 24, y: HULL_Y + 4, sprite: 'util' },
+    { slot: 'utility', x: HULL_X + 30, y: HULL_Y + 22, sprite: 'util' },
+  ],
+  'hull-freighter': [
+    { slot: 'weapon', x: HULL_X + 50, y: HULL_Y + 6, sprite: 'weapon' },
+    { slot: 'engine', x: HULL_X - 3, y: HULL_Y + 9, sprite: 'engine' },
+    { slot: 'engine', x: HULL_X - 3, y: HULL_Y + 18, sprite: 'engine' },
+    { slot: 'utility', x: HULL_X + 22, y: HULL_Y + 1, sprite: 'util' },
+  ],
+  // hull-tactical uses gunship hull as a placeholder; 2W/2U/1E layout
+  'hull-tactical': [
+    { slot: 'weapon', x: HULL_X + 22, y: HULL_Y + 0, sprite: 'turret' },
+    { slot: 'weapon', x: HULL_X + 34, y: HULL_Y + 0, sprite: 'turret' },
+    { slot: 'engine', x: HULL_X - 2, y: HULL_Y + 11, sprite: 'engine' },
+    { slot: 'utility', x: HULL_X + 15, y: HULL_Y + 2, sprite: 'util' },
+    { slot: 'utility', x: HULL_X + 42, y: HULL_Y + 22, sprite: 'util' },
+  ],
+};
+
+const MOUNT_SPRITE: Record<'weapon' | 'turret' | 'engine' | 'util', () => HTMLCanvasElement> = {
+  weapon: moduleWeapon,
+  turret: moduleTurret,
+  engine: moduleEngine,
+  util: moduleUtil,
+};
+
+const HULL_SPRITE: Record<string, () => HTMLCanvasElement> = {
+  'hull-gunship': gunshipHullNew,
+  'hull-scout': scoutHull,
+  'hull-freighter': freighterHull,
+  'hull-tactical': gunshipHullNew,
+};
+
+/**
+ * Composites a 72×40 player-ship sprite: bare hull + module sprites at each
+ * mount point. Filled mounts show the correct module art; empty mounts show
+ * the open U-bracket placeholder, so a half-built ship reads intentional.
+ */
+export const compositeShipForHull = (
+  hullId: string,
+  slotCounts: Record<HullSlot, number>,
+): HTMLCanvasElement => {
+  const hull = (HULL_SPRITE[hullId] ?? HULL_SPRITE['hull-gunship'])();
+  const mounts = HULL_MOUNTS[hullId] ?? HULL_MOUNTS['hull-gunship'];
+  const { canvas, g } = makeCanvas(72, 40);
+  g.drawImage(hull, HULL_X, HULL_Y);
+  const filled: Record<HullSlot, number> = { weapon: 0, engine: 0, utility: 0 };
+  for (const mount of mounts) {
+    const isFilled = filled[mount.slot] < slotCounts[mount.slot];
+    const sprite = isFilled ? MOUNT_SPRITE[mount.sprite]() : moduleEmpty();
+    g.drawImage(sprite, mount.x, mount.y);
+    if (isFilled) filled[mount.slot]++;
+  }
+  return canvas;
+};
+
 // ─── Module overlays (Collective: mechanical, ruler-drawn) ──────────────────
+// Legacy overlay system — kept for reference; superseded by compositeShipForHull above.
 
 export type ShipModuleKind = 'cannon' | 'shield' | 'engine' | 'armor';
 
@@ -190,13 +531,12 @@ export const compositeShip = (kinds: readonly ShipModuleKind[]): HTMLCanvasEleme
   return canvas;
 };
 
-/** Pure-orange muzzle flash (52×36, aligned to the composite ship's nose) — a signal. */
+/** Pure-orange muzzle flash (72×40, aligned to the compositeShipForHull nose) — a signal. */
 export const muzzleFlash = (): HTMLCanvasElement =>
-  make(52, 36, (g) => {
-    R(g, 40, 6, 3, 1, '#f9c22b');
-    R(g, 43, 5, 2, 3, '#fb6b1d');
-    R(g, 45, 6, 2, 1, '#f79617');
-    R(g, 47, 6, 1, 1, '#fbb954');
+  make(72, 40, (g) => {
+    R(g, 67, 20, 3, 1, '#f9c22b');
+    R(g, 70, 19, 2, 3, OR);
+    R(g, 71, 20, 1, 1, AMD);
   });
 
 // ─── The Bloom (organic: sponge-drawn, breaks the grid) ─────────────────────

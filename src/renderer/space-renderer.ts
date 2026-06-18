@@ -6,12 +6,11 @@ import { VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from './pixel-scale';
 import {
   anchormawBoss,
   bloomGrunt,
-  compositeShip,
+  compositeShipForHull,
   laneBackdrop,
   muzzleFlash,
-  shipModuleKind,
 } from './sprites';
-import type { ShipModuleKind } from './sprites';
+import type { HullSlot } from './sprites';
 import { nearestTexture } from './textures';
 
 const FLASH_MS = 160;
@@ -58,12 +57,17 @@ export interface SpaceRenderer {
   destroy(): void;
 }
 
-function shipKindsKey(view: CombatView): string {
-  const kinds = new Set<ShipModuleKind>();
-  for (const m of view.modules) kinds.add(shipModuleKind(m.name));
-  return (['cannon', 'shield', 'engine', 'armor'] as ShipModuleKind[])
-    .filter((k) => kinds.has(k))
-    .join(',');
+function moduleSlotType(name: string): HullSlot {
+  const n = name.toLowerCase();
+  if (/flak|cannon|missile|laser|railgun|gun/.test(n)) return 'weapon';
+  if (/thruster|engine|hauler|drive/.test(n)) return 'engine';
+  return 'utility';
+}
+
+function shipCompositeKey(view: CombatView): string {
+  const c = { weapon: 0, engine: 0, utility: 0 };
+  for (const m of view.modules) c[moduleSlotType(m.name)]++;
+  return `${view.hullId}|w${c.weapon}e${c.engine}u${c.utility}`;
 }
 
 export function createSpaceRenderer(app: Application): SpaceRenderer {
@@ -159,9 +163,17 @@ export function createSpaceRenderer(app: Application): SpaceRenderer {
     window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 
   const setPlayerShip = (key: string): void => {
-    const kinds = key === '' ? [] : (key.split(',') as ShipModuleKind[]);
+    const pipeIdx = key.indexOf('|');
+    const hullId = pipeIdx >= 0 ? key.slice(0, pipeIdx) : 'hull-gunship';
+    const rest = pipeIdx >= 0 ? key.slice(pipeIdx + 1) : '';
+    const m = rest.match(/w(\d+)e(\d+)u(\d+)/);
+    const slotCounts: Record<HullSlot, number> = {
+      weapon: parseInt(m?.[1] ?? '0'),
+      engine: parseInt(m?.[2] ?? '0'),
+      utility: parseInt(m?.[3] ?? '0'),
+    };
     if (kindsKey !== null) playerShip.texture.destroy(true); // not the initial EMPTY
-    playerShip.texture = nearestTexture(compositeShip(kinds));
+    playerShip.texture = nearestTexture(compositeShipForHull(hullId, slotCounts));
   };
 
   const setEnemyShip = (boss: boolean): void => {
@@ -260,7 +272,7 @@ export function createSpaceRenderer(app: Application): SpaceRenderer {
       isBoss = view.boss;
       bossPhase = view.bossPhase ?? -1;
 
-      const nextKey = shipKindsKey(view);
+      const nextKey = shipCompositeKey(view);
       if (nextKey !== kindsKey) {
         setPlayerShip(nextKey);
         kindsKey = nextKey;

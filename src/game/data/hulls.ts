@@ -50,7 +50,7 @@ export const HULL_DEFS: readonly HullDef[] = [
   {
     id: 'hull-freighter',
     name: 'Freighter',
-    slots: { weapon: 1, utility: 2, engine: 1 },
+    slots: { weapon: 1, utility: 1, engine: 2 },
     startingModules: [
       'mod-mining-laser',
       'mod-cargo-scanner',
@@ -65,7 +65,7 @@ export const HULL_DEFS: readonly HullDef[] = [
       uses: 'passive',
       effect: { kind: 'scrap-on-victory', amount: 2 },
     },
-    playstyle: 'Resource-focused, utility-heavy.',
+    playstyle: 'Resource-focused, engine-heavy hauler.',
   },
   {
     id: 'hull-tactical',

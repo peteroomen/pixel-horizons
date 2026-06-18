@@ -114,6 +114,8 @@ export interface IntentView {
 }
 
 export interface CombatView {
+  /** Hull selected for this run — drives the renderer's ship sprite selection. */
+  hullId: string;
   turn: number;
   ap: number;
   apPerTurn: number;
@@ -167,6 +169,7 @@ export function buildCombatView(state: CombatState): CombatView {
   const intent = currentIntent(state);
   const innate = getHull(state.hullId).innateAbility;
   return {
+    hullId: state.hullId,
     turn: state.turn,
     ap: state.ap,
     apPerTurn: state.apPerTurn,
