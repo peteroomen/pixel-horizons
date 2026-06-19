@@ -56,7 +56,7 @@ function OfferRow({
   return (
     <div
       className={`border-2 ${
-        offer.owned
+        offer.soldOut
           ? 'border-[#4a4a6a]/50 bg-fd-plate/30 opacity-50'
           : 'border-[#4a4a6a] bg-fd-plate'
       }`}
@@ -79,8 +79,10 @@ function OfferRow({
             {offer.price} SCRAP · {SLOT_LABELS[offer.slot]}
           </div>
         </button>
-        {offer.owned ? (
-          <span className="font-label text-[7px] uppercase text-white/40 sm:text-[9px]">Owned</span>
+        {offer.soldOut ? (
+          <span className="font-label text-[7px] uppercase text-white/40 sm:text-[9px]">
+            Sold Out
+          </span>
         ) : (
           <div className="flex flex-col items-end gap-1">
             <FoundryButton

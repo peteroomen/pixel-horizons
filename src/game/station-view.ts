@@ -31,9 +31,12 @@ export interface ShopOfferView {
   /** Slot this module would occupy — shown so the offer's cost in slots is legible. */
   slot: ModuleSlot;
   canBuy: boolean;
-  /** Already owned (installed or in cargo) — greyed out, no buy button. */
-  owned: boolean;
-  /** `null` when buyable or owned; otherwise the reason a blocked buy is blocked. */
+  /**
+   * This offer's stock is gone — the player already bought it from this shop this run.
+   * Greyed out with a SOLD OUT label; buying is disabled. (4.13: stock = 1 per offer.)
+   */
+  soldOut: boolean;
+  /** `null` when buyable or sold out; otherwise the reason a blocked buy is blocked. */
   blockReason: OfferBlock | null;
   /** Cards this module would add to the deck (GDD §5.3) — inspect before buying. */
   cards: ModuleCardView[];
@@ -71,21 +74,9 @@ export interface EngineerView {
 
 export type StationView = MerchantView | EngineerView;
 
-function ownedModuleIds(run: RunState): Set<string> {
-  const ids = new Set<string>();
-  for (const m of run.modules) ids.add(m.id);
-  for (const m of run.cargo) ids.add(m.id);
-  return ids;
-}
-
 /** Why a not-buyable offer is blocked — only ever the scrap shortfall (slots don't gate). */
-function blockReason(
-  run: RunState,
-  moduleId: string,
-  owned: boolean,
-  canBuy: boolean,
-): OfferBlock | null {
-  if (owned || canBuy) return null;
+function blockReason(run: RunState, moduleId: string, canBuy: boolean): OfferBlock | null {
+  if (canBuy) return null;
   const price = modulePrice(moduleId);
   if (run.resources.scrap < price) {
     return { kind: 'need-scrap', price, have: run.resources.scrap };
@@ -94,14 +85,14 @@ function blockReason(
 }
 
 export function buildMerchantView(run: RunState): MerchantView {
-  const offers = generateShopOffers(run.seed, run.position.sector, run.position.nodeId!);
-  const owned = ownedModuleIds(run);
+  const { sector, nodeId } = run.position;
+  // Pass purchased offers so sold-out items are excluded from the generated list (4.13).
+  const offers = generateShopOffers(run.seed, sector, nodeId!, run.purchasedOffers);
   const slots = slotUsage(run.hullId, run.modules);
   return {
     kind: 'merchant',
     offers: offers.map((o) => {
-      const isOwned = owned.has(o.moduleId);
-      const canBuy = !isOwned && canBuyModule(run, o.moduleId);
+      const canBuy = canBuyModule(run, o.moduleId);
       const def = getModule(o.moduleId);
       return {
         moduleId: o.moduleId,
@@ -109,8 +100,8 @@ export function buildMerchantView(run: RunState): MerchantView {
         price: o.price,
         slot: def.slot,
         canBuy,
-        owned: isOwned,
-        blockReason: blockReason(run, o.moduleId, isOwned, canBuy),
+        soldOut: false,
+        blockReason: blockReason(run, o.moduleId, canBuy),
         cards: describeModuleCards(o.moduleId),
       };
     }),

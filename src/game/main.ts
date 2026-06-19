@@ -38,7 +38,7 @@ import { createRunState } from './sim/run-state';
 import type { Resources, RunState } from './sim/run-state';
 import { deriveRng } from './sim/rng';
 import { parseSeedParam, seedToSearchParam } from './sim/seed-url';
-import { generateShopOffers } from './sim/shop-inventory';
+import { generateShopOffers, shopOfferKey } from './sim/shop-inventory';
 import { buildShipView } from './ship-view';
 import type { ShipView } from './ship-view';
 import { buildMerchantView, buildEngineerView } from './station-view';
@@ -736,11 +736,15 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     },
     buyModule(offerIndex: number): void {
       if (phase !== 'shop') return;
-      const offers = generateShopOffers(run.seed, run.position.sector, run.position.nodeId!);
+      const { sector, nodeId } = run.position;
+      // Pass purchased set so the index aligns with the filtered offer list (4.13).
+      const offers = generateShopOffers(run.seed, sector, nodeId!, run.purchasedOffers);
       const offer = offers[offerIndex];
       if (offer === undefined) return;
       const result = buyModule(run, offer.moduleId);
       if (!result.ok) return;
+      // Record the purchase so this offer is sold out on resume (4.13 — stock = 1).
+      run.purchasedOffers.push(shopOfferKey(sector, nodeId!, offer.moduleId));
       store.save(run);
       emitShipAndStation();
     },

@@ -23,6 +23,7 @@ describe('createRunState', () => {
     expect(state.position).toEqual({ sector: 1, nodeId: null });
     expect(state.cargo).toEqual([]);
     expect(state.reactorLevel).toBe(BASELINE_AP);
+    expect(state.purchasedOffers).toEqual([]);
   });
 
   it("installs the hull's starting modules as tier-1 instances for every hull", () => {
@@ -81,6 +82,13 @@ describe('serialize / deserialize round-trip', () => {
     const restored = deserializeRunState(serializeRunState(state));
     expect(restored).toEqual(state);
     expect(restored?.modules[0].modifiers).toEqual(['modifier-tuned-capacitors']);
+  });
+
+  it('round-trips purchasedOffers (v4, 4.13 shop stock)', () => {
+    const state = createRunState('offers');
+    state.purchasedOffers = ['1:n2-0:mod-flak-array', '1:n3-1:mod-thruster'];
+    const restored = deserializeRunState(serializeRunState(state));
+    expect(restored?.purchasedOffers).toEqual(state.purchasedOffers);
   });
 });
 
@@ -145,6 +153,11 @@ describe('deserializeRunState validation', () => {
     expect(deserializeRunState(JSON.stringify(tampered))).toBeNull();
   });
 
+  it('returns null for v3 saves (pre-purchasedOffers, bumped to v4)', () => {
+    const v3 = { ...JSON.parse(valid()), version: 3 };
+    expect(deserializeRunState(JSON.stringify(v3))).toBeNull();
+  });
+
   it('returns null for v2 saves (pre-modifiers)', () => {
     const v2 = { ...JSON.parse(valid()), version: 2 };
     expect(deserializeRunState(JSON.stringify(v2))).toBeNull();
@@ -157,6 +170,12 @@ describe('deserializeRunState validation', () => {
     delete v1.cargo;
     delete v1.reactorLevel;
     expect(deserializeRunState(JSON.stringify(v1))).toBeNull();
+  });
+
+  it('returns null on malformed purchasedOffers', () => {
+    const tampered = JSON.parse(valid());
+    tampered.purchasedOffers = [1, 2, 3];
+    expect(deserializeRunState(JSON.stringify(tampered))).toBeNull();
   });
 
   it('returns null when an rng stream is missing or malformed', () => {
