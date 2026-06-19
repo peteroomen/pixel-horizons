@@ -79,4 +79,61 @@ export const EVENT_DEFS: readonly EventDef[] = [
       },
     ],
   },
+  {
+    id: 'event-weapons-cache',
+    title: 'Sealed Weapons Cache',
+    body: 'A capital-ship debris field hides a sealed ordnance pod, still pressurized. Cracking the seal trips a security charge — but the rack inside is intact.',
+    choices: [
+      {
+        label: 'Crack the seal',
+        description: 'Take a Kinetic Railgun into cargo; the charge costs you 6 hull.',
+        outcomes: [
+          { kind: 'gain-module-to-cargo', moduleId: 'mod-kinetic-railgun' },
+          { kind: 'damage-hull', amount: 6 },
+        ],
+      },
+      {
+        label: 'Bypass the rack for parts',
+        description: 'Leave the ordnance; strip the loose plating. Gain 7 scrap.',
+        outcomes: [{ kind: 'gain-resources', resource: 'scrap', amount: 7 }],
+      },
+    ],
+  },
+  {
+    id: 'event-drifting-prospector',
+    title: 'Drifting Prospector',
+    body: "A long-dead prospector's rig tumbles past, its mining gear cold but undamaged. The salvage clamps will hold — if you spend the scrap to fire them.",
+    choices: [
+      {
+        label: 'Fire the salvage clamps (4 scrap)',
+        description: 'Pull a Mining Laser into cargo.',
+        outcomes: [
+          { kind: 'lose-resources', resource: 'scrap', amount: 4 },
+          { kind: 'gain-module-to-cargo', moduleId: 'mod-mining-laser' },
+        ],
+      },
+      {
+        label: 'Vent its tanks',
+        description: 'Skip the rig; harvest the biomineral residue. Gain 6 biominerals.',
+        outcomes: [{ kind: 'gain-resources', resource: 'biominerals', amount: 6 }],
+      },
+    ],
+  },
+  {
+    id: 'event-abandoned-relay',
+    title: 'Abandoned Relay Station',
+    body: 'A derelict comms relay hangs dark in the lane. Its maintenance bay still cradles a stowed module — yours for the taking, no strings, if you can dock the clamps.',
+    choices: [
+      {
+        label: 'Dock and strip the bay',
+        description: 'Take a Phase Shifter into cargo. No cost.',
+        outcomes: [{ kind: 'gain-module-to-cargo', moduleId: 'mod-phase-shifter' }],
+      },
+      {
+        label: 'Scrap the relay array',
+        description: 'Ignore the module; gut the dish for parts. Gain 5 scrap.',
+        outcomes: [{ kind: 'gain-resources', resource: 'scrap', amount: 5 }],
+      },
+    ],
+  },
 ];

@@ -42,7 +42,7 @@ export const MODULE_BASE_PRICE: Record<string, number> = {
 export const MODULE_DEFAULT_PRICE = 25;
 
 /** Merchant shop: number of module offers per visit. */
-export const SHOP_OFFER_COUNT = 3;
+export const SHOP_OFFER_COUNT = 4;
 
 /**
  * Modules available in the merchant pool (no clone-bay matrices — those are

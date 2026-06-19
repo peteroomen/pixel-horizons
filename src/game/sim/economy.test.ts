@@ -42,13 +42,13 @@ function makeRun(overrides: Partial<ReturnType<typeof createRunState>> = {}) {
 describe('slotUsage', () => {
   it('reports used / limit per slot for the starting Scout loadout', () => {
     // Scout: weapon 1, utility 2, engine 2 + the implicit shield and clone-bay; starting
-    // modules are light-laser (weapon), phase-shifter (utility), 2× thruster (engine),
-    // shield-generator (shield), print matrix (clone-bay).
+    // modules are light-laser (weapon), 2× thruster (engine), shield-generator (shield),
+    // print matrix (clone-bay). One utility slot starts open (4.9 trim — dropped phase-shifter).
     const run = createRunState('test-slots');
     const usage = slotUsage(run.hullId, run.modules);
     expect(usage).toEqual([
       { slot: 'weapon', used: 1, limit: 1 },
-      { slot: 'utility', used: 1, limit: 2 },
+      { slot: 'utility', used: 0, limit: 2 },
       { slot: 'engine', used: 2, limit: 2 },
       { slot: 'shield', used: 1, limit: 1 },
       { slot: 'clone-bay', used: 1, limit: 1 },
@@ -207,7 +207,9 @@ describe('upgradeModule', () => {
         blueprints: 0,
       },
     });
-    // Find a module that has mk2 defined (mod-phase-shifter does)
+    // Install a module that has mk2 defined (mod-phase-shifter does) — Scout's
+    // default loadout no longer carries one after the 4.9 starting-deck trim.
+    run.modules.push({ id: 'mod-phase-shifter', tier: 1 });
     const idx = run.modules.findIndex((m) => m.id === 'mod-phase-shifter');
     expect(idx).toBeGreaterThanOrEqual(0);
     const result = upgradeModule(run, idx);
@@ -221,6 +223,7 @@ describe('upgradeModule', () => {
     const run = makeRun({
       resources: { scrap: 100, biominerals: 100, coreCrystals: 0, blueprints: 0 },
     });
+    run.modules.push({ id: 'mod-phase-shifter', tier: 1 });
     const idx = run.modules.findIndex((m) => m.id === 'mod-phase-shifter');
     run.modules[idx].tier = 2;
     expect(upgradeModule(run, idx)).toEqual({ ok: false, reason: 'already-max-tier' });
@@ -239,6 +242,7 @@ describe('upgradeModule', () => {
     const run = makeRun({
       resources: { scrap: 0, biominerals: 0, coreCrystals: 0, blueprints: 0 },
     });
+    run.modules.push({ id: 'mod-phase-shifter', tier: 1 });
     const idx = run.modules.findIndex((m) => m.id === 'mod-phase-shifter');
     expect(upgradeModule(run, idx)).toEqual({ ok: false, reason: 'cannot-afford' });
   });
@@ -252,6 +256,7 @@ describe('upgradeModule', () => {
         blueprints: 0,
       },
     });
+    run.modules.push({ id: 'mod-phase-shifter', tier: 1 });
     const idx = run.modules.findIndex((m) => m.id === 'mod-phase-shifter');
     expect(canUpgradeModule(run, idx)).toBe(true);
     run.modules[idx].tier = 2;
@@ -354,6 +359,7 @@ describe('installModule', () => {
 describe('uninstallModule', () => {
   it('moves a module from installed to cargo', () => {
     const run = makeRun();
+    run.modules.push({ id: 'mod-phase-shifter', tier: 1 });
     const idx = run.modules.findIndex((m) => m.id === 'mod-phase-shifter');
     const mod = run.modules[idx];
     const beforeLen = run.modules.length;
@@ -434,8 +440,11 @@ describe('slot limits per hull (GDD §4.1)', () => {
     expect(canInstallModule(run, 1)).toBe(true); // 1 utility free
   });
 
-  it('Gunship: 3 weapon slots all full at start — no 4th weapon installs', () => {
+  it('Gunship: filling all 3 weapon slots blocks a 4th weapon install', () => {
     const run = createRunState('test-economy', 'hull-gunship');
+    // 4.9 trim: Gunship now starts with 2 weapons (Flak + Missile); install a 3rd
+    // to fill the rack, then a 4th must be refused.
+    run.modules.push({ id: 'mod-autocannon', tier: 1 });
     run.cargo.push({ id: 'mod-light-laser', tier: 1 });
     expect(canInstallModule(run, 0)).toBe(false);
   });

@@ -238,7 +238,9 @@ export const CARD_DEFS: readonly CardDef[] = [
     id: 'card-telemetry-sync',
     name: 'Telemetry Sync',
     apCost: 1,
-    effects: [{ kind: 'draw', count: 1 }],
+    // Draws 2 (net +1 card for the AP) so it earns its cost — Desync Hull is the
+    // free 0-AP Retain cantrip; this baseline matrix card is the paid card-advantage one.
+    effects: [{ kind: 'draw', count: 2 }],
   },
   {
     id: 'card-resource-ping',

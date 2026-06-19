@@ -17,9 +17,9 @@ function hullLoadout(hullId: string) {
 }
 
 describe('projectLoadout — per-hull identities (GDD §6.3)', () => {
-  it('Scout: phase dash + stacked double jumps, two engines of pod window', () => {
+  it('Scout: stacked double jumps, two engines of pod window (4.9 trim drops the phase-shifter dash)', () => {
     const loadout = hullLoadout('hull-scout');
-    expect(loadout.capabilities.dash).toEqual({ distancePx: 48, cooldownMs: 1500 });
+    expect(loadout.capabilities.dash).toBeNull();
     expect(loadout.capabilities.maxAirJumps).toBe(2);
     expect(loadout.capabilities.jumpVelocityMultiplier).toBe(1);
     expect(loadout.podWindowBonusMs).toBe(2 * POD_WINDOW_PER_ENGINE_MS);
@@ -35,10 +35,10 @@ describe('projectLoadout — per-hull identities (GDD §6.3)', () => {
     expect(loadout.backpackCapacity).toBe(BACKPACK_CAPACITY);
   });
 
-  it('Freighter: 2× mining, scanner, high jump, reinforced backpack', () => {
+  it('Freighter: 2× mining, high jump, reinforced backpack (4.9 trim drops the cargo-scanner)', () => {
     const loadout = hullLoadout('hull-freighter');
     expect(loadout.yieldMultiplier).toBe(2);
-    expect(loadout.scanner).toBe(true);
+    expect(loadout.scanner).toBe(false);
     expect(loadout.capabilities.jumpVelocityMultiplier).toBe(1.25);
     expect(loadout.capabilities.maxAirJumps).toBe(0);
     expect(loadout.backpackCapacity).toBe(BACKPACK_CAPACITY + 10);

@@ -439,9 +439,9 @@ describe('card effects', () => {
   it('draw pulls from the draw pile', () => {
     const state = fresh(['card-telemetry-sync']);
     const pileBefore = state.drawPile.length;
-    playCard(state, 0);
-    expect(state.hand.length).toBe(1);
-    expect(state.drawPile.length).toBe(pileBefore - 1);
+    playCard(state, 0); // Telemetry Sync draws 2
+    expect(state.hand.length).toBe(2);
+    expect(state.drawPile.length).toBe(pileBefore - 2);
   });
 
   it('gain-scrap accumulates in the combat state', () => {
@@ -568,12 +568,12 @@ describe('malfunctions (GDD §5.6)', () => {
 
   it('with every module down, a module hit is plain hull damage', () => {
     const state = createCombat(stripShields(scoutRun()), PARASITE);
-    for (const index of [0, 1, 2, 3, 4]) {
+    for (const index of [0, 1, 2, 3]) {
       flagModule(state, index);
     }
     endTurn(state);
     expect(state.hullHp).toBe(97);
-    expect(malfunctioningModules(state)).toEqual([0, 1, 2, 3, 4]);
+    expect(malfunctioningModules(state)).toEqual([0, 1, 2, 3]);
   });
 
   it('repair-all-modules (Repair Clone) clears every malfunction at once', () => {
@@ -791,6 +791,9 @@ describe('turn structure (GDD §5.5)', () => {
       malfunctioning: true,
     };
     state.hand = [flagged];
+    // Stock the draw pile so the post-discard draw doesn't empty it and reshuffle the
+    // just-discarded card back into hand (the trimmed Gunship deck is small enough to).
+    state.drawPile = hand('card-burn', 'card-burn', 'card-burn', 'card-burn', 'card-burn');
     endTurn(state);
     expect(state.discardPile).toContain(flagged);
   });
@@ -1150,9 +1153,10 @@ describe('Infestations (GDD §5.6)', () => {
 
   it('Spore Cluster drops a shield layer as it is drawn — mid-card draws included', () => {
     const state = createCombat(gunshipRun(), SPORECASTER);
-    state.drawPile.unshift(sporeCard());
+    // Spore is the only card in the pile, so Telemetry's draw-2 pulls just it.
+    state.drawPile = [sporeCard()];
     state.hand = hand('card-telemetry-sync');
-    playCard(state, 0); // draw 1 → the spore enters the hand
+    playCard(state, 0); // draw → the spore enters the hand, firing its on-draw
     expect(ids(state.hand)).toEqual([SPORE]);
     expect(state.shields.filter((layer) => layer.turnsUntilUp > 0).length).toBe(1);
   });

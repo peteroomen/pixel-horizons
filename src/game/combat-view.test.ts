@@ -109,11 +109,10 @@ describe('buildCombatView', () => {
     expect(view.modules.map((m) => m.name)).toEqual([
       'Flak Array',
       'Missile Pod',
-      'Autocannon',
       'Shield Generator',
       'Standard Print Matrix',
     ]);
-    expect(view.modules.map((m) => m.malfunctioning)).toEqual([false, true, false, false, false]);
+    expect(view.modules.map((m) => m.malfunctioning)).toEqual([false, true, false, false]);
   });
 
   it('projects the hull innate with its usability', () => {
