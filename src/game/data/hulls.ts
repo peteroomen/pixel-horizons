@@ -11,7 +11,6 @@ export const HULL_DEFS: readonly HullDef[] = [
     slots: { weapon: 1, utility: 2, engine: 2 },
     startingModules: [
       'mod-light-laser',
-      'mod-phase-shifter',
       'mod-thruster',
       'mod-thruster',
       'mod-shield-generator',
@@ -33,7 +32,6 @@ export const HULL_DEFS: readonly HullDef[] = [
     startingModules: [
       'mod-flak-array',
       'mod-missile-pod',
-      'mod-autocannon',
       'mod-shield-generator',
       'mod-standard-print-matrix',
     ],
@@ -53,7 +51,6 @@ export const HULL_DEFS: readonly HullDef[] = [
     slots: { weapon: 1, utility: 1, engine: 2 },
     startingModules: [
       'mod-mining-laser',
-      'mod-cargo-scanner',
       'mod-hauler-engine',
       'mod-shield-generator',
       'mod-standard-print-matrix',
@@ -73,7 +70,6 @@ export const HULL_DEFS: readonly HullDef[] = [
     slots: { weapon: 2, utility: 2, engine: 1 },
     startingModules: [
       'mod-light-laser',
-      'mod-missile-pod',
       'mod-shield-generator',
       'mod-cargo-scanner',
       'mod-thruster',

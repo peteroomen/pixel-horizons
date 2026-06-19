@@ -19,8 +19,6 @@ describe('generateDeck', () => {
   it('Scout produces its documented starting deck (GDD §4.1 + §5.8)', () => {
     expect(tally(startingDeck('hull-scout'))).toEqual({
       'card-laser-burst': 2,
-      'card-ghost-shift': 2,
-      'card-desync-hull': 1,
       'card-burn': 4,
       'card-afterburner': 2,
       'card-reinforce': 2,
@@ -35,7 +33,6 @@ describe('generateDeck', () => {
       'card-tracer-lock': 1,
       'card-missile-salvo': 1,
       'card-lock-on': 1,
-      'card-cannon-burst': 2,
       'card-reinforce': 2,
       'card-emergency-barrier': 1,
       'card-telemetry-sync': 1,
@@ -45,7 +42,6 @@ describe('generateDeck', () => {
   it('Freighter produces its documented starting deck', () => {
     expect(tally(startingDeck('hull-freighter'))).toEqual({
       'card-slag-shot': 1,
-      'card-deep-scan': 1,
       'card-burn': 1,
       'card-cargo-thrust': 1,
       'card-reinforce': 2,
@@ -57,8 +53,6 @@ describe('generateDeck', () => {
   it('Tactical produces its documented starting deck', () => {
     expect(tally(startingDeck('hull-tactical'))).toEqual({
       'card-laser-burst': 2,
-      'card-missile-salvo': 1,
-      'card-lock-on': 1,
       'card-reinforce': 2,
       'card-emergency-barrier': 1,
       'card-deep-scan': 1,
