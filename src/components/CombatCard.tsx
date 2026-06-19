@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion } from 'motion/react';
 
-import type { CardView } from '@/game/main';
+import type { CardType, CardView } from '@/game/main';
 
 type CardState = 'normal' | 'malfunction' | 'infested' | 'discard';
 
@@ -53,6 +53,13 @@ const STATE_STYLES: Record<
   },
 };
 
+/** Card type chip colour (4.13 legibility pass). */
+const TYPE_COLOR: Record<CardType, string> = {
+  ATTACK: 'text-fd-red',
+  POWER: 'text-fd-orange',
+  SKILL: 'text-fd-cyan',
+};
+
 export default function CombatCard({ card, state, disabled, onClick }: CombatCardProps) {
   const s = STATE_STYLES[state];
   const selectable = !disabled;
@@ -79,6 +86,9 @@ export default function CombatCard({ card, state, disabled, onClick }: CombatCar
     tags.push({ label: keyword, color: 'text-fd-muted' });
   }
 
+  // Card width: fills its hand slot (uniform within the row). On mobile the hand makes
+  // every slot an equal flex share capped at 88px so any hand size fits a phone width;
+  // on desktop the slot is a fixed 128px (4.13 legibility pass — quick mobile-fit fix).
   return (
     <motion.button
       type="button"
@@ -92,12 +102,12 @@ export default function CombatCard({ card, state, disabled, onClick }: CombatCar
       } ${!card.affordable && state !== 'discard' ? 'opacity-40' : ''}`}
     >
       <div className={`chamfer chamfer-5 sm:chamfer-8 ${s.fill} flex h-full flex-col`}>
-        {/* Header strip */}
+        {/* Header strip: louder title + AP cost (4.13 legibility pass) */}
         <div
           className={`${s.header} flex items-start justify-between gap-1 px-1.5 py-1 sm:px-2 sm:py-1.5`}
         >
           <span
-            className={`${s.name} font-label uppercase text-[6px] sm:text-[10px] min-w-0 [overflow-wrap:anywhere] leading-tight`}
+            className={`${s.name} font-label uppercase text-[8px] sm:text-[12px] min-w-0 [overflow-wrap:anywhere] leading-tight font-bold`}
           >
             {card.name}
           </span>
@@ -108,11 +118,18 @@ export default function CombatCard({ card, state, disabled, onClick }: CombatCar
           )}
         </div>
 
-        {/* Body */}
+        {/* Type chip + body (4.13 legibility pass) */}
         <div
-          className={`${s.body} font-readout text-[12px] sm:text-fd-body p-1.5 sm:p-2 text-left`}
+          className={`${s.body} font-readout text-[11px] sm:text-fd-body p-1.5 sm:p-2 text-left flex flex-col gap-0.5`}
         >
-          {card.text}
+          {state === 'normal' && (
+            <span
+              className={`font-label uppercase text-[6px] sm:text-[9px] ${TYPE_COLOR[card.cardType]}`}
+            >
+              {card.cardType}
+            </span>
+          )}
+          <span>{card.text}</span>
         </div>
 
         {/* Footer tags */}

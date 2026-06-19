@@ -11,7 +11,6 @@ import type {
 import type { Status } from './sim/status';
 import type { CombatOutcome, CombatState } from './sim/combat';
 import {
-  canPayToll,
   canUseInnate,
   cardDiscardCost,
   cardPlayCost,
@@ -28,6 +27,14 @@ import { STARTING_HULL_HP } from './sim/run-state';
  * React components receive CombatView through main.ts callbacks and never touch
  * CombatState directly.
  */
+
+/**
+ * Card category chip shown in the card body (4.13 legibility pass).
+ * - ATTACK: damage-dominant cards (at least one `damage` effect, not a pure-status/utility card)
+ * - POWER: applies a status to self/target, or Exhaust-buff cards
+ * - SKILL: shield, travel, utility, draw — everything else
+ */
+export type CardType = 'ATTACK' | 'POWER' | 'SKILL';
 
 export interface CardView {
   /** Unique within the hand (duplicates share a CardId) — stable enough for React keys. */
@@ -50,6 +57,8 @@ export interface CardView {
   unplayable: boolean;
   /** Bloom infestation card — green frame, no AP chip. Set by a future Bloom slice. */
   infested?: boolean;
+  /** Card category for the type chip (4.13 legibility pass). */
+  cardType: CardType;
 }
 
 export interface ShieldLayerView {
@@ -147,8 +156,9 @@ export interface CombatView {
   /**
    * Non-null while an anchor enemy holds the lane (GDD §5.7). Always visible — the
    * latch is archetype state, not intent info; a halt you can't see is a stat drain.
+   * The only way past is to kill it (Scrap toll removed — 4.13).
    */
-  anchor: { tollScrap: number; payable: boolean } | null;
+  anchor: { blocked: true } | null;
   /** Run scrap as of right now (start-of-fight stock plus this fight's gains). */
   scrap: number;
   scrapGained: number;
@@ -232,6 +242,7 @@ export function buildCombatView(state: CombatState): CombatView {
           discardCost: 0,
           malfunction: true,
           unplayable: false,
+          cardType: 'SKILL' as CardType,
         };
       }
       const card = getCard(instance.cardId);
@@ -256,6 +267,7 @@ export function buildCombatView(state: CombatState): CombatView {
         discardCost,
         malfunction: false,
         unplayable,
+        cardType: unplayable ? ('SKILL' as CardType) : deriveCardType(card),
       };
     }),
     drawCount: state.drawPile.length,
@@ -270,10 +282,7 @@ export function buildCombatView(state: CombatState): CombatView {
             ),
             distance: state.lane.distance,
           },
-    anchor:
-      enemy.anchor !== undefined && state.enemyHp > 0
-        ? { tollScrap: enemy.anchor.tollScrap, payable: canPayToll(state) }
-        : null,
+    anchor: enemy.anchor === true && state.enemyHp > 0 ? { blocked: true } : null,
     scrap: state.scrapAtStart + state.scrapGained,
     scrapGained: state.scrapGained,
     outcome: state.outcome,
@@ -336,6 +345,22 @@ export function describeModuleCards(moduleId: string, tier: 1 | 2 = 1): ModuleCa
       keywords: cardKeywords(card),
     };
   });
+}
+
+/**
+ * Derives the card type chip (4.13): ATTACK if any effect is `damage`; POWER if it
+ * applies a status (buff to self or debuff to target); SKILL otherwise (shield layers,
+ * travel progress, draw, utility — everything that doesn't fit the two above categories).
+ * Exhaust alone does not make a POWER — only status-applying cards are.
+ * Malfunction and unplayable cards get SKILL as a neutral fallback — their state
+ * already communicates more than a type chip would.
+ */
+function deriveCardType(card: CardDef): CardType {
+  const hasDamage = card.effects.some((e) => e.kind === 'damage');
+  if (hasDamage) return 'ATTACK';
+  const appliesStatus = card.effects.some((e) => e.kind === 'apply-status');
+  if (appliesStatus) return 'POWER';
+  return 'SKILL';
 }
 
 /** Keyword chips for the card UI (GDD §5.9). EXHAUST keeps its own dedicated chip. */

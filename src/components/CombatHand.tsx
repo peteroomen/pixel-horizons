@@ -55,7 +55,7 @@ export default function CombatHand({
               animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
               exit={reduced ? { opacity: 0 } : { opacity: 0, y: -44, scale: 0.6 }}
               transition={{ type: 'spring', stiffness: 500, damping: 32 }}
-              className="relative flex-1 basis-0 min-w-0 sm:w-[200px] sm:flex-none"
+              className="relative min-w-0 flex-1 max-w-[88px] sm:max-w-none sm:flex-none sm:w-[128px]"
             >
               <CombatCard
                 card={card}

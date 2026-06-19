@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { SHOP_OFFER_COUNT } from '@/game/data/economy';
-import { generateShopOffers } from './shop-inventory';
+import { generateShopOffers, shopOfferKey } from './shop-inventory';
 
 describe('generateShopOffers', () => {
   it('returns SHOP_OFFER_COUNT distinct module offers', () => {
@@ -26,5 +26,19 @@ describe('generateShopOffers', () => {
   it('every offer has a positive price', () => {
     const offers = generateShopOffers('price-check', 1, 'n1-0');
     expect(offers.every((o) => o.price > 0)).toBe(true);
+  });
+
+  it('purchased offers are excluded from the result — 1 stock per offer (4.13)', () => {
+    const all = generateShopOffers('stock-test', 1, 'n2-0');
+    expect(all.length).toBeGreaterThan(0);
+    const first = all[0];
+    const purchased = [shopOfferKey(1, 'n2-0', first.moduleId)];
+    const after = generateShopOffers('stock-test', 1, 'n2-0', purchased);
+    expect(after.find((o) => o.moduleId === first.moduleId)).toBeUndefined();
+    expect(after.length).toBe(all.length - 1);
+  });
+
+  it('shopOfferKey is stable for resume (same inputs = same key)', () => {
+    expect(shopOfferKey(1, 'n2-0', 'mod-flak-array')).toBe('1:n2-0:mod-flak-array');
   });
 });

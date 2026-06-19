@@ -8,31 +8,13 @@ interface ButtonBarProps {
   onEndTurn: () => void;
   onInnate: () => void;
   innateArmed: boolean;
-  onPayToll: () => void;
 }
 
-export default function ButtonBar({
-  view,
-  onEndTurn,
-  onInnate,
-  innateArmed,
-  onPayToll,
-}: ButtonBarProps) {
+export default function ButtonBar({ view, onEndTurn, onInnate, innateArmed }: ButtonBarProps) {
   return (
     // Mobile: fixed-width vertical stack, every button stretched to the same width,
     // End Turn last (closest to thumb). Desktop: auto-width row.
     <div className="flex w-48 shrink-0 flex-col items-stretch gap-2.5 sm:w-auto sm:flex-row sm:items-end sm:gap-3">
-      {view.anchor !== null && (
-        <FoundryButton
-          variant="secondary"
-          className="w-full sm:w-auto"
-          disabled={!view.anchor.payable}
-          onClick={onPayToll}
-          cost={{ amount: view.anchor.tollScrap, resource: 'scrap' }}
-        >
-          Pay Toll
-        </FoundryButton>
-      )}
       {!view.innate.passive && (
         <FoundryButton
           variant="secondary"

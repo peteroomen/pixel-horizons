@@ -70,7 +70,7 @@ export const ENEMY_DEFS: readonly EnemyDef[] = [
     maxHp: 26,
     pattern: 'cycle',
     scrapReward: { min: 7, max: 12 },
-    anchor: { tollScrap: 5 },
+    anchor: true,
     intents: [
       { kind: 'attack', name: 'Constrict', amount: 5 },
       { kind: 'attack', name: 'Maw Slam', amount: 4, hits: 2 },
@@ -86,7 +86,7 @@ export const ENEMY_DEFS: readonly EnemyDef[] = [
     pattern: 'cycle',
     scrapReward: { min: 15, max: 25 },
     armor: { amount: 8, regen: 3 },
-    anchor: { tollScrap: 999 },
+    anchor: true,
     // Targetable organs (GDD §5.4): silence the Spore-Sac to stop the infestation, or
     // pop the Armor-Node to break the shell. The core is killable any time — organs are
     // pressure, not a gate. Cleave hits all of them; focus-fire burns one down.

@@ -8,7 +8,7 @@ import { deriveRng } from './rng';
  * serializes losslessly for saves and shareable seeds.
  */
 
-export const RUN_STATE_VERSION = 3;
+export const RUN_STATE_VERSION = 4;
 
 export const RNG_STREAMS = ['map-gen', 'combat', 'surface'] as const;
 export type RngStream = (typeof RNG_STREAMS)[number];
@@ -36,6 +36,11 @@ export interface RunState {
   reactorLevel: number;
   position: RunPosition;
   rng: Record<RngStream, RngState>;
+  /**
+   * Offers already purchased in this run, keyed as `${sector}:${nodeId}:${moduleId}`.
+   * Stock is 1 per offer — buying removes that offer from the shop (4.13).
+   */
+  purchasedOffers: string[];
 }
 
 export const STARTING_HULL_HP = 100;
@@ -60,6 +65,7 @@ export function createRunState(seed: string, hullId = 'hull-scout'): RunState {
     reactorLevel: BASELINE_AP,
     position: { sector: 1, nodeId: null },
     rng,
+    purchasedOffers: [],
   };
 }
 
@@ -170,6 +176,18 @@ export function deserializeRunState(json: string): RunState | null {
     rngStates[stream] = parsedStream;
   }
 
+  // purchasedOffers (v4) — optional for forward compat: absent = empty array.
+  const purchasedOffers: string[] = [];
+  if (parsed.purchasedOffers !== undefined) {
+    if (
+      !Array.isArray(parsed.purchasedOffers) ||
+      !(parsed.purchasedOffers as unknown[]).every(isNonEmptyString)
+    ) {
+      return null;
+    }
+    purchasedOffers.push(...(parsed.purchasedOffers as string[]));
+  }
+
   return {
     version: RUN_STATE_VERSION,
     seed,
@@ -186,5 +204,6 @@ export function deserializeRunState(json: string): RunState | null {
     reactorLevel,
     position: { sector: position.sector, nodeId: position.nodeId },
     rng: rngStates,
+    purchasedOffers,
   };
 }

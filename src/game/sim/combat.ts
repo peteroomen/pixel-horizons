@@ -64,7 +64,7 @@ export interface CombatModifiers {
   intentRevealed: boolean;
 }
 
-/** 'escaped' = the encounter ended without a kill: arrival in realspace or a paid toll. */
+/** 'escaped' = the encounter ended without a kill: arrival in realspace. */
 export type CombatOutcome = 'ongoing' | 'victory' | 'defeat' | 'escaped';
 
 /**
@@ -124,7 +124,7 @@ export interface CombatState {
   travelProgress: number;
   /** Null = fight outside a lane (tests): no passive tick, no escape-by-arrival. */
   lane: { distance: number; progressAtStart: number } | null;
-  /** Run scrap frozen at combat start — toll affordability is `scrapAtStart + scrapGained`. */
+  /** Run scrap frozen at combat start — scrapGained is accumulated here and committed on end. */
   scrapAtStart: number;
   /** Accumulated here; applied to RunState resources by the caller when the fight ends. */
   scrapGained: number;
@@ -251,11 +251,11 @@ function flagModule(state: CombatState, moduleIndex: number): void {
 
 /**
  * Travel is halted while an anchor enemy lives (GDD §5.7) — the passive tick and
- * `travel` card effects do nothing. Engine cards stay playable; learning they're
- * wasted against a Blockade is the counterplay signal.
+ * `travel` card effects do nothing. The only way past is to kill it; engine cards
+ * stay playable but the Blockade must be defeated regardless.
  */
 export function isTravelAnchored(state: CombatState): boolean {
-  return getEnemy(state.enemyId).anchor !== undefined && state.enemyHp > 0;
+  return getEnemy(state.enemyId).anchor === true && state.enemyHp > 0;
 }
 
 /** Arrival ends everything (GDD §5.1): drop to realspace, encounter over, no kill rewards. */
@@ -266,37 +266,6 @@ function checkArrival(state: CombatState): void {
   ) {
     state.outcome = 'escaped';
   }
-}
-
-/**
- * Pays the Anchormaw's Scrap toll (GDD §5.7) — the blockade lets you pass: the
- * encounter ends as 'escaped', no victory rewards, and the toll lands as a negative
- * `scrapGained` delta for `applyCombatResult` to commit.
- */
-export function payToll(state: CombatState): void {
-  if (state.outcome !== 'ongoing') {
-    throw new Error('combat already ended');
-  }
-  const anchor = getEnemy(state.enemyId).anchor;
-  if (anchor === undefined) {
-    throw new Error(`${state.enemyId} does not anchor the lane`);
-  }
-  if (anchor.tollScrap > state.scrapAtStart + state.scrapGained) {
-    throw new Error(
-      `cannot afford toll: costs ${anchor.tollScrap} scrap, have ${state.scrapAtStart + state.scrapGained}`,
-    );
-  }
-  state.scrapGained -= anchor.tollScrap;
-  state.outcome = 'escaped';
-}
-
-/** Whether the toll button should be offered at all right now (mirrors payToll's guards). */
-export function canPayToll(state: CombatState): boolean {
-  if (state.outcome !== 'ongoing') {
-    return false;
-  }
-  const anchor = getEnemy(state.enemyId).anchor;
-  return anchor !== undefined && anchor.tollScrap <= state.scrapAtStart + state.scrapGained;
 }
 
 /** The AP this card costs to play right now — the repair cost while flipped. */

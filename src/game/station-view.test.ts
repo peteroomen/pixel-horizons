@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createRunState } from './sim/run-state';
 import { slotUsage } from './sim/economy';
+import { shopOfferKey } from './sim/shop-inventory';
 import { buildMerchantView } from './station-view';
 
 function shopRun() {
@@ -40,5 +41,29 @@ describe('buildMerchantView', () => {
       expect(block.price).toBe(scrapBlocked!.price);
       expect(block.have).toBe(0);
     }
+  });
+
+  it('purchased offers are excluded from the shop — 1 stock per offer (4.13)', () => {
+    const run = shopRun();
+    // See which offers exist before purchase.
+    const before = buildMerchantView(run);
+    expect(before.offers.length).toBeGreaterThan(0);
+    const firstOffer = before.offers[0];
+
+    // Simulate a purchase by recording the key on the run.
+    run.purchasedOffers.push(
+      shopOfferKey(run.position.sector, run.position.nodeId!, firstOffer.moduleId),
+    );
+    const after = buildMerchantView(run);
+
+    // The purchased offer must no longer appear.
+    expect(after.offers.find((o) => o.moduleId === firstOffer.moduleId)).toBeUndefined();
+    // The other offers are unaffected.
+    expect(after.offers.length).toBe(before.offers.length - 1);
+  });
+
+  it('all offers start with soldOut false (sold items are excluded, not flagged)', () => {
+    const view = buildMerchantView(shopRun());
+    expect(view.offers.every((o) => !o.soldOut)).toBe(true);
   });
 });
