@@ -6,6 +6,19 @@
 
 **Guiding sequence:** prove the space combat loop first (it's the bigger design risk), then the platformer, then connect them into the run loop, then complete Act 1 (Sector 1), then identity/polish, then platform features. Sectors 2–3, ascension, and the secret sector come after Act 1 is fun.
 
+> ## ⚠️ PIVOT (2026-06-19): Surface loop → Core Breaker
+>
+> The action-platformer surface loop is **retired** in favour of **Core Breaker**, a Peglin-style
+> deterministic physics-extraction loop (aim · fire balls · shatter deposit pegs · bank the drop).
+> Rationale, full design, and what survives/retires: **ADR 011** and **GDD §6** (rewritten).
+> Modules now project a **third face** — module → *ball* (alongside module → card); Mk tier buffs
+> both faces together; reactor = shots-per-drop.
+> - **Survives:** runtime planet art (ADR 010), `palette.ts` ramps, orbit screen, surface recolor.
+> - **Retires:** `surface/physics.ts` (AABB), clone moveset/feel, touch platformer controls,
+>   chunk-grammar level gen, platformer surface-enemy/hazard entities, clone death/corpse-run.
+> - **Phase 3 below (3.1–3.4, shipped) is superseded** by the **Phase CB** rebuild track. The
+>   shipped platformer code is removed as Phase CB lands; keep it referenceable in git history.
+
 ---
 
 ## Phase 0 — Design ✅
@@ -30,12 +43,29 @@
 - [ ] **2.4 Hyperspace run** — Lane distance in turns, travel-progress cards, encounter triggers along the lane, escape-by-arrival, malfunctions persisting within a lane and clearing on arrival. Anchormaw (halts progress).
 - [ ] **2.5 Enemy roster** — Remaining archetypes (Carapace, Sporecaster + Infestation cards), intents telegraphed in UI. **Checkpoint: is the combat loop fun on its own? Tune before proceeding.**
 
-## Phase 3 — Surface Vertical
+## Phase 3 — Surface Vertical ⚠️ SUPERSEDED (platformer retired — see PIVOT banner + Phase CB)
+
+> These slices shipped (3.1, 3.2, 3.4 merged) but are retired by the Core Breaker pivot (ADR 011).
+> Kept for history; the code is removed as Phase CB lands. Do not build further on this track.
 
 - [ ] **3.1 Platformer core** — Fixed-timestep loop, AABB physics, run/jump/melee, tilemap collision + render (one hand-made Rocky test level). Keyboard + touch controls.
 - [ ] **3.2 Mining + drop pod** — Deposits, backpack, deposit-at-pod, pod timer + auto-launch, miss-the-window consequence.
 - [ ] **3.3 Module item projection** — Items derived from installed ship modules (double jump, phase dash, scanner, shield bubble…), reactor item cap. *This is the slice where the north star becomes real — test with multiple loadouts.*
 - [ ] **3.4 Clone death + hazards** — Death/backpack drop/corpse run, free first print + Scrap re-prints, basic surface enemies + Rocky-biome hazards. *Design complete — see GDD §6.3, §6.7–6.10.*
+
+## Phase CB — Core Breaker (Surface Rebuild)
+
+> Replaces Phase 3. Design: GDD §6 (rewritten), ADR 011. Sim stays React/Pixi-free and
+> **deterministic** (ADR 003): new ball physics is seeded + fixed-timestep. Ship small slices.
+
+- [ ] **CB.0 Feel prototype (throwaway)** — A `/core-breaker-spike` dev harness (cf. `/planet-spike`): one peg field, drag-to-aim + release-to-fire, circle-vs-peg bounce, 2–3 ball types. **Not deterministic, not wired to the sim** — pure feel test of the carom. *Done = the aim-and-shatter is fun on desktop + phone; if it isn't, stop and re-judge the pivot before building real slices.*
+- [ ] **CB.1 Deterministic physics core (sim only)** — `surface/core-breaker.ts`: seeded, fixed-timestep circle-vs-peg simulation (positions, restitution, multi-hit pegs, ball-consumed-by-hazard, settle/rest detection). Vitest: same seed + same shot inputs ⇒ identical peg-break + drop streams. *No rendering.* Retire `surface/physics.ts` (AABB).
+- [ ] **CB.2 Field generation** — `surface/field-gen.ts`: deterministic peg layout from run seed + planet descriptor (peg types §6.7, density/richness by difficulty, Bloom growths guarding ore/crystal pegs). Vitest: same seed ⇒ same field; all pegs reachable by at least one trajectory class. Replaces `tilemap.ts`/chunk grammar.
+- [ ] **CB.3 Module → ball projection** — Extend the module projection (alongside `deck.ts`) so installed modules form the **bag** of balls; ball role/behaviour + Mk-tier buff per module (§6.4); reactor = shots-per-drop; Engine = bonus shots/passives; Clone Bay = surface passive (§6.9). Vitest: a loadout yields its documented bag; tier changes both card and ball. *North-star slice — test multiple loadouts.*
+- [ ] **CB.4 Core Breaker renderer + playable** — `renderer/core-breaker-renderer.ts`: peg field (recoloured from the planet's R64 ramp, ADR 010), aim guide, ball flight, shatter/drop FX, hopper bank readout, shots-remaining HUD. Drag-to-aim/release-to-fire touch + mouse. Wire orbit DROP → Core Breaker. *Done = a stranger can do a full drop on a phone and bank resources.*
+- [ ] **CB.5 Ball glyph grammar + module UI** — Trajectory glyph per ball (straight/arc/curve) + count badge; the dual-face `<ModuleCard>` showing combat + surface faces (§6.4 UI law) across Workbench/DeckViewer/shop/bag preview at 375px. Coordinate with 4.8/6.7 station-UX.
+- [ ] **CB.6 Bloom interference + risk** — Hopper-clog / field-foul growths that eat banked yield if ignored (§6.5/§6.10); the soft fail state. Tune the shot economy against yield. Replaces clone death/hazard contact damage.
+- [ ] **CB.7 Cleanup** — Remove retired platformer code paths (`surface/physics.ts`, clone moveset, corpse run, chunk grammar, platformer enemy/hazard entities, `?mode=surface` platformer knob) and stale tests once Core Breaker is the live surface loop. Update `?mode=` knob to drop into Core Breaker.
 
 ## Phase 4 — The Run Loop
 
