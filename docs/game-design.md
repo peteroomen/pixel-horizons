@@ -1,10 +1,10 @@
 # PIXEL HORIZONS — Game Design Document
 
-> **Version:** 0.2 DRAFT
-> **Genre:** Dual-Loop Roguelite (Turn-Based Deckbuilder + Action Platformer)
+> **Version:** 0.3 DRAFT
+> **Genre:** Dual-Loop Roguelite (Turn-Based Deckbuilder + Physics Extraction)
 > **Art Style:** 2D Pixel Art (Deep-Fold Pixel Planet Generator ecosystem)
-> **Platform:** Web-first (browser playable, shareable via URL)
-> **Input:** Keyboard + Mouse / Gamepad
+> **Platform:** Web-first (browser playable, shareable via URL), mobile/touch-first
+> **Input:** Touch-first (drag-to-aim) · Mouse · Keyboard
 
 ---
 
@@ -40,17 +40,17 @@ This fiction does load-bearing work:
        │                              │
        ▼                              ▼
 ┌──────────────┐              ┌──────────────────┐
-│ HYPERSPACE   │              │  PLANET LANDING  │
-│ RUN (lane    │              │   (drop pod,     │
-│ travel,      │              │    3-5 min)      │
+│ HYPERSPACE   │              │  PLANET DROP     │
+│ RUN (lane    │              │   (Core Breaker, │
+│ travel,      │              │    1-3 min)      │
 │ 5-10 min)    │              │                  │
-│              │              │ Platformer       │
-│ Card combat  │              │ mining run       │
+│              │              │ Physics          │
+│ Card combat  │              │ extraction       │
 │ vs Bloom     │              │                  │
-│ ships in the │              │ Pod = base camp  │
-│ lane.        │              │ Clone = explorer │
-│ 3 axes:      │              │ Modules = items  │
-│ • Engine     │              │ Timed window     │
+│ ships in the │              │ Pod = hopper     │
+│ lane.        │              │ Modules = balls  │
+│ 3 axes:      │              │ Reactor = shots  │
+│ • Engine     │              │ Shatter pegs     │
 │ • Shield     │              │                  │
 │ • Weapon     │              │                  │
 └──────┬───────┘              └────────┬─────────┘
@@ -90,15 +90,15 @@ Deck size is the sum of installed modules' card contributions. A lean hull (Scou
 
 Modules are the atomic unit of the game. Each module:
 - Adds specific cards to the space combat deck
-- Projects zero or more items/passives to the clone on planet surfaces
+- Projects a **ball or passive** in Core Breaker, the surface extraction loop (§6.4)
 - Can be damaged in combat (its cards flip to Malfunction cards until field-repaired — see 5.6)
-- Can be upgraded with resources to a higher Mk tier (improving cards + planetside items)
+- Can be upgraded with resources to a higher Mk tier; tier improves **both faces** — combat cards and surface ball — together (§6.4)
 
 **Slot types:**
-- **Weapon** — generates attack cards; projects offensive items to clone (e.g., orbital strike beacon)
-- **Utility** — generates tactical/support cards and shield layers; projects traversal/survival items to clone (e.g., phase dash, scanner)
-- **Engine** — generates travel/evasion cards; defines clone mobility (jump, dash, boost) and extends the drop-pod window
-- **Clone Bay** — defines the clone chassis printed for planet surfaces; contributes 1 card to the deck (keeping the module→card mapping universal)
+- **Weapon** — generates attack cards; projects an offensive **ball** (e.g. piercing laser shot, explosive missile)
+- **Utility** — generates tactical/support cards and shield layers; projects a utility **ball or passive** (e.g. homing ball, phase-through, survive-one-hazard)
+- **Engine** — generates travel/evasion cards; projects a **passive** (bonus shots, aim-guide length, shot power)
+- **Clone Bay** — projects a **surface passive** (§6.9); contributes 1 card to the deck (keeping the module→card mapping universal)
 
 **Clone Bay examples** (numbers tunable). Clone Bay cards are *clone-flavored* — deploying clones as combat actions, which opens unique design space:
 
@@ -115,7 +115,7 @@ Modules are the atomic unit of the game. Each module:
 The reactor sets the energy ceiling for the entire run.
 
 - **Space combat:** Reactor level = starting Action Points (AP) per turn. Baseline: 3 AP.
-- **Planet surface:** Reactor level = maximum concurrent active items the clone can equip.
+- **Planet surface (Core Breaker):** Reactor level = shots fired per drop (§6.3).
 - **Upgrades:** Each upgrade gives +1 AP. Two sources, both of which compete with other rewards so upgrades stay rare (expect 1-2 per run):
   - **Sector boss reward:** defeating a boss offers a **choice of one**: a Core Crystal (+1 AP), a rare Mk II module, or a Blueprint Matrix + resource cache.
   - **Found Core Crystals:** rarely findable deep on high-difficulty planets — a bonus beyond whatever you picked from bosses.
@@ -206,6 +206,8 @@ Single-ship encounters against Bloom organisms. Each has a distinct quirk demand
 
 Single source of truth for example modules. All numbers tunable.
 
+> ⚠️ The **Planet Item** columns below describe the retired platformer loop and are superseded by **Core Breaker ball/passive projection** (§6.4, ADR 011). They will be re-specced as a *ball behaviour* column when the Core Breaker module table is built; treat them as historical until then.
+
 | Module | Slot | Mk I Cards | Mk II Cards | Mk I Planet Item | Mk II Planet Item |
 |--------|------|-----------|-------------|------------------|-------------------|
 | **Light Laser** | Weapon | 2× Laser Burst (1 AP, 4 dmg) | 2× Focused Beam (1 AP, 6 dmg), 1× Overcharge (0 AP, next laser deals 2×) | — | Laser Cutter (mine hard rock) |
@@ -248,176 +250,179 @@ Cards today apply only one-shot, here-and-now effects (a single attack's `+N`, a
 
 ---
 
-## 6. Surface Operations (Action Platformer Mode)
+## 6. Surface Operations (Core Breaker — Physics Extraction Mode)
+
+> **This section supersedes the action-platformer design** (ADR 011, 2026-06-19). The old
+> platformer spec is preserved in git history. Phases 3.1–3.4 shipped that loop; it is being
+> retired and rebuilt as Core Breaker.
 
 ### 6.1 Philosophy
 
-Planet exploration is a focused mining run, not a sprawling adventure. Get in, grab resources, get out. 3-5 minutes per visit. The platformer is simple but precise — run, jump, attack, use items. Depth comes from what items you have (determined by ship modules), not from complex character progression.
+Planet extraction is a focused, tactile burst: aim, fire, watch it shatter, bank the drop.
+~1–3 minutes per visit. It is the **hands** half of the game to space combat's **brain** —
+where combat is deliberate and turn-based, Core Breaker is a physics toy you read and release.
+Depth comes from which **balls** you carry (determined by ship modules) and how you read the
+field, not from character progression. Reference point: **Peglin**, themed to the planet.
 
-### 6.2 The Drop Pod
+### 6.2 The Playfield
 
-The ship stays in orbit. A **drop pod** carries the clone to the surface and serves as base camp:
+The ship stays in orbit; the drop pod descends and the captain fires the pod's extraction
+ordnance into the planet's crust, rendered as a **side-on cross-section**:
 
-- **The pod is on a timer** (~5 minutes baseline; Engine module quality extends the window). When the window closes, the pod auto-launches back to orbit — with or without you.
-- Walk back to the pod to **deposit resources** — deposited resources are safe no matter what happens after.
-- **Leave early:** standing on the pod, you can launch before the window closes — the backpack deposits and you ride up with everything banked. Mining out a planet never means waiting out the clock.
-- **Abandon:** the clone can always be recalled to orbit (e.g. trapped in a pit) — same consequences as missing the window. The pod leaves with what was deposited.
-- **Miss the launch window:** the pod leaves with whatever was deposited. Resources still in the clone's backpack are lost; clone consciousness snaps back to orbit. Harsh but recoverable.
-- Module items can be swapped at the pod (between forays on the same planet).
-- **Pod-defense events:** something attacks the pod while you're deep in a cave, forcing a rushed return. Makes the base camp *felt*, and connects both game modes in real time.
+- The field is packed with **deposit pegs** — mineral nodes, ore veins, Bloom growths —
+  generated from the planet (biome sets layout density, richness, and hazard mix; §6.8).
+- You **aim from the top** (drag to set angle/power, release to fire) and a ball drops into the
+  field, **bouncing and ricocheting** off pegs.
+- Hitting a deposit peg **shatters it** (some take multiple hits) and **drops resources** that
+  fall to the **pod hopper** at the bottom — banked the instant they land.
+- A drop is a **bounded number of shots** (the pod budget; §6.5). Spend them well, then launch.
 
-The timer is the reason to leave: there is no staying indefinitely.
+The pleasure is the carom: one shot that chains through a cluster and pays out far more than
+you aimed for.
 
-### 6.3 The Clone System
+### 6.3 The Bag & Shots
 
-The captain never leaves the ship. A printed clone (defined by the Clone Bay matrix) is deployed via the pod.
+Core Breaker is fired from a **bag of balls**, Peglin-style — the direct surface analogue of
+the combat deck:
 
-**Clone baseline:** Run, jump, basic melee attack. That's it. Everything else comes from ship modules projecting items.
+- Your **installed modules project to balls** (§6.4). The bag is the multiset of those balls;
+  **module count = how many copies** of that ball are in the bag.
+- You fire balls from the bag in order; when it empties it **refills** (reshuffles) for the
+  next pass, the way the combat draw pile cycles.
+- The **reactor level = shots per drop** (the surface analogue of AP-per-turn). A bigger
+  reactor means more shots before the pod launches — the bounded budget that replaces the
+  platformer's pod *timer* as the core pressure. Engine modules can grant bonus shots.
+- The bag is fixed for the drop (no mid-drop refitting), mirroring "no mid-lane refitting" in
+  combat. Loadout changes take effect on the next drop.
 
-- No Engine module = no double jump
-- No Utility module = no dash/blink
-- No Weapon module = no ranged attack or orbital support
+### 6.4 Ball Roles & the Module Projection
 
-The clone should feel deliberately incomplete based on your ship config. A Gunship player has orbital strikes but can barely jump. A Scout player is agile but has minimal firepower. Your ship build creates your platformer experience. There are no character-level upgrades separate from the ship — clone variation lives in the Clone Bay module.
+This is the North Star made literal a third time. A module already projects to **cards** in
+combat (`deck.ts`); Core Breaker adds **module → ball**. Modules project to one of **two
+surface roles** — never a placeable board piece:
 
-**Clone HP by matrix:** Standard Print Matrix = 3 HP; Scavenger Matrix = 2 HP; Enforcer Matrix = 2 HP. All Sector 1 enemies and hazards deal exactly 1 HP per hit.
+- **Ball** — a projectile fired into the field. Most Weapon / Utility / Engine modules.
+  Behaviour comes from the module's identity:
+  - **Mining Laser** → piercing straight shot (low bounce, punches a line through soft rock).
+  - **Missile Pod** → heavy, bouncy ball that explodes on rest (AoE shatter).
+  - **Tractor Beam / scanner** → curving ball that magnetises toward ore.
+  - **Phase Shifter** → a ball that phases through one Bloom growth without being consumed.
+- **Passive** — a standing modifier on the drop. **Reactor → shots-per-drop**; an **Engine**
+  module may extend aim-guide length or shot power; a defensive module may let a ball survive
+  one Bloom hazard. The surface analogue of a combat Power, not a projectile.
 
-**Invincibility frames (iFrames):** 1.5 s (90 frames at 60 Hz) after taking damage. Sprite blinks at 10 Hz during this window. iFrames activate during the freeze-frame phase (§6.10), preventing chain hits from adjacent hazards. Hit-stun eats 0.20 s of input lock; momentum-based knockback also eats pod-timer seconds.
+**Shared upgrade axis.** A module's **Mk tier buffs both faces together** — Mining Laser Mk II
+is a better attack card *and* a better ball (more pierce / bounces / yield). One upgrade path,
+no separate mining economy to balance. Your ship build is your ship, everywhere.
 
-**Moveset matrix:**
+**Divergence only via events.** A ball and its card stay locked except when a rare **event**
+targets a single face — exactly parallel to today's event-modifies-a-module →
+changes-its-combat-card. Events are the *only* way the two faces ever drift; never a
+build-planning axis. (Data: tier drives both; an event records a per-face override.)
 
-| State | Available Inputs |
-|-------|-----------------|
-| Ground | Run · Jump · Ground Melee Swipe |
-| Airborne | Air Spin (one per airborne sequence; jump-button tap) |
+**Ball glyph grammar (UI law, ADR 011).** Each ball reads at a glance via a trajectory glyph —
+**straight** (pierce), **arc** (bounce), **curve** (homing) — plus a count badge, no text
+required. A single `<ModuleCard>` component shows both faces (combat + surface) off one anchor
+(icon · name · tier pips · count); tier and count are the only changing numbers and get fixed,
+prominent positions on every screen (Workbench, DeckViewer, shop, event, orbit loadout, bag
+preview), down to 375px. Extends the hull-sprite "module grammar."
 
-*Ground Melee Swipe:* 24 × 16 px hitbox, front-facing. 3f startup / 4f active / 5f recovery (<0.25 s total). 0.4 s cooldown between swings. Deals 1 HP + minor knockback; Enforcer Matrix scales to 2 HP (one-shots Scrap Grubbers). Passes through wall tiles — no recoil on terrain contact.
+### 6.5 The Pod & Hopper
 
-*Air Spin:* exclusive to the airborne state. 0.15 s gravity clamp; ±1.5 m/s horizontal drift. One per airborne sequence; refreshes on: solid floor landing, wall-slide contact, or successful enemy bounce.
+The drop pod is still the vessel and base camp, but the loop is shots, not footsteps:
 
-**Module-item composition:**
+- **Shots are the budget** (reactor-set; Engine modules can grant bonus shots). When shots run
+  out — or you choose to **launch early** — the pod returns to orbit with everything in the
+  hopper.
+- **The hopper banks on contact:** resources that fall into it are safe the instant they land.
+  There is no run-back-to-deposit step and no backpack to lose.
+- **Bloom interference (pod-defense, reimagined):** on infested planets the Bloom can **clog
+  the hopper or foul the field** as you fire — a growth that must be cleared with a shot, or it
+  starts eating banked yield. This keeps the "base camp under threat" tension of the old
+  pod-defense idea, expressed in the new verbs.
+- **No staying indefinitely:** the shot budget is the reason every drop ends.
 
-- *Double Jump + Air Spin:* jump → double-jump at apex → Spin for hover/drift. Spin refreshes after each double-jump sequence.
-- *Phase Dash + Air Spin:* complete the blink, then tap Spin while still airborne. Input priority: Phase Dash wins over simultaneous Spin input; Spin becomes Available once the dash exits.
-- *Phase Dash distinction:* invincible horizontal blink *through* tiles and enemies; Air Spin deflects enemies on contact. They are separate states, not alternatives.
+### 6.6 Planet Resources
 
-### 6.4 Death Penalty
-
-- **Clone dies:** NOT a run-ender. Consciousness snaps back to orbit. Backpack resources drop at the death point. **First clone print per planet visit is free; re-prints cost Scrap.** You can redeploy (within the remaining pod window) to corpse-run your dropped loot (see §6.10 for corpse marker lifecycle).
-- **Ship destroyed (space combat):** Immediate Game Over. Run terminates.
-
-This asymmetry is key: planet risks are recoverable, space risks are fatal. It encourages bold exploration but careful combat. Minimum Scrap drops from every won encounter guarantee the economy can't fully bottom out.
-
-### 6.5 Planet Resources
+The resource model is unchanged from the platformer design — only the *delivery* changes
+(shattered pegs drop into the hopper instead of being mined by a clone):
 
 | Resource | Found On | Used For |
 |----------|----------|----------|
-| **Scrap** | Everywhere (surface caches, defeated enemies, space combat drops — minimum drop guaranteed) | Hull repairs, crafting costs, shop currency, clone re-prints. The universal currency — every spending decision competes. |
-| **Biominerals** | Planet subsurface layers (mining) | Module upgrades, specialization branches |
-| **Core Crystals** | Deep caves on high-difficulty planets only | Reactor upgrades (+1 AP). Extremely rare. Also one of the three boss reward choices. |
-| **Blueprint Matrices** | Hidden in deep caves, anomalous ruins | Unlock new module variants at the workbench |
+| **Scrap** | Everywhere (deposit pegs, cleared Bloom-growth pegs, space combat drops — minimum drop guaranteed) | Hull repairs, crafting costs, shop currency. The universal currency. |
+| **Biominerals** | Ore-vein pegs (deeper / harder-to-reach lanes of the field) | Module upgrades, specialization branches |
+| **Core Crystals** | Rare **crystal pegs**, deep in high-difficulty planet fields only | Reactor upgrades (+1 shot / +1 AP). Extremely rare. Also a boss reward choice. |
+| **Blueprint Matrices** | Hidden **vault pegs** behind hazard clusters | Unlock new module variants at the workbench |
 
-**Surface enemy drops** go into the clone's **backpack** — not direct-banked — preserving the risk/reward tension of the pod timer. A full backpack causes drops to bounce to the nearest valid floor position as world items; pickup magnetism radius is 2.5 tiles. See §6.7 for enemy rosters, §6.9 for corpse mechanics.
+Resources fall into the hopper and bank on contact (§6.5) — no backpack, no corpse run.
 
-Planet type determines what resources are available and in what quantities:
+**Surface discoveries** carry over from the old design at the node/event layer (not the
+field): **module modifiers** (found in vault pegs or applied by the **Tinkerer**; attach to the
+*module*, persist through Mk upgrades, can now target either face — card or ball — see §6.4
+divergence); **random events**; and **environmental intel** about upcoming nodes.
 
-- **Rocky/Desert worlds:** Rich in Biominerals, safe but low-value
-- **Volcanic worlds:** Biomineral-rich + Core Crystal chance, but extreme hazards (lava, fire, heat pressure)
-- **Ice worlds:** Safe, moderate Biominerals, some unique blueprint locations
-- **Jungle/Toxic worlds:** Blueprint-rich (alien ruins), dangerous fauna, poison hazards
-- **Ocean worlds:** Buoyancy/underwater traversal, unique deep-sea blueprint caches
-- **Gas Moons:** Storm hazards, wind physics, but high-value salvage from orbital debris
+### 6.7 Peg & Hazard Types (Sector 1)
 
-This makes planet choice a strategic decision: do you need Biominerals (safe rocky world) or are you hunting a Core Crystal (dangerous volcanic world)?
+The platformer's enemies/hazards convert to **peg types** in the field. Sector 1
+(Rocky/Desert):
 
-### 6.6 Surface Discoveries
+| Peg | Behaviour | Drop |
+|-----|-----------|------|
+| **Mineral Node** | Single-hit deposit peg | 1 Scrap |
+| **Ore Vein** | Multi-hit (3); chips down per bounce | 2 Biominerals when broken |
+| **Hardrock** | Multi-hit (2); wants a piercing/heavy ball or repeated bounces | 1 Scrap |
+| **Bloom Growth** | Hazard peg; **consumes the ball** that hits it (shot wasted) unless the ball pierces/phases; spreads to a neighbour every few shots if left | — (clearing it drops 1 Scrap) |
+| **Crystal Peg** | Rare, deep, armoured | Core Crystal (very rare) |
 
-Beyond raw resources, planets can yield:
+**Field rules (analogues of the old spawn rules):**
+- Field = one screen of pegs, themed by biome; peg count/density set by planet difficulty.
+- Bloom Growths weighted to guard ore veins and crystal pegs (risk gates reward).
+- Deterministic, seeded layout (ADR 003) — same seed = same field.
 
-- **Module modifiers:** Found in ruins or reward caches, or applied by a rare **Tinkerer** character (event/shop encounter) who hack-customizes a module. Modifiers attach to the *module* (not the abstract card), persist through Mk upgrades, and leave with the module if it's sold. Examples: -1 AP cost on one of its cards, "starts in hand," "draw 1 when played."
-- **Random events:** Distress signals, alien encounters, environmental puzzles. Can yield unique modules, resources, or information about the sector.
-- **Environmental intel:** Scanning certain formations reveals information about upcoming nodes (enemy types, shop inventory, hazard warnings).
+### 6.8 Biome Theming
 
-### 6.7 Surface Enemies (Sector 1 Roster)
+The field is recoloured and re-stocked from the **same R64 ramp the orbit planet was generated
+from** (ADR 010 / `palette.ts`) — no separate art pipeline. Biome also sets a **field-physics
+modifier**, which keeps Core Breaker varied across worlds:
 
-Three enemy types appear on Rocky/Desert planets in Sector 1. All deal 1 HP per hit.
+| Biome | Field Character (physics modifier) | Resources | Difficulty |
+|-------|-----------------------------------|-----------|------------|
+| **Rocky/Desert** | Open peg field, few hazards (baseline) | Biominerals (common) | Low |
+| **Ice** | Slick pegs — higher restitution, ball bounces further/wilder | Biominerals (moderate), blueprints | Low-Med |
+| **Volcanic** | Lava-gap lanes + many Bloom/hazard pegs | Biominerals (rich), Core Crystal chance | High |
+| **Jungle/Toxic** | Dense growth, vault pegs behind hazards | Blueprint Matrices | Med-High |
+| **Ocean** | Buoyancy drift — slow upward curve on the ball | Deep-field blueprint caches | Med |
+| **Gas Moon** | Wind-impulse zones nudge the ball mid-flight | High-value pegs, Core Crystal chance | High |
 
-| Enemy | Behavior | Drop |
-|-------|----------|------|
-| **Bloom Hopper** | Ground patrol; 3-tile horizontal range; leaps toward clone when within 5 tiles | 1 Scrap |
-| **Scrap Grubber** | Slow-moving ground scavenger; attacks only if cornered or attacked first | 2 Scrap (each item takes 1 backpack slot) |
-| **Ceiling Dropper** | Clings to ceiling; drops when clone passes beneath; brief stun on landing; thrown upward 1.0 s on Shield Bubble pop | 1 Scrap |
+Sector 1 ships Rocky; Ice/Volcanic and the wind/buoyancy/restitution modifiers are later biome
+slices — they're the field-physics knobs that keep extraction fresh.
 
-**Spawn rules:**
-- Chunk size: 16 × 10 tiles (one viewport). Maximum 2 enemies per chunk.
-- Minimum 5-tile separation between enemy spawn points.
-- 8-tile zero-spawn radius around the Drop Pod.
-- Enemies weighted to spawn within 3 tiles of high-value deposits.
-- No vertical stacking: Ceiling Dropper cannot spawn above a Bloom Hopper in the same column.
-- Enemies do **not** respawn once killed — dead state persists for the current pod window.
+### 6.9 The Clone Bay on the Surface
 
-All enemy drops land in the clone's **backpack** (not direct-banked). Full backpack: drops bounce to the nearest valid floor position as world items. Boundary drops use the nearest valid floor position to prevent items stuck in geometry. Pickup magnetism radius: 2.5 tiles.
+There is no walking avatar, so the Clone Bay slot keeps its **combat card** (the module→card
+mapping stays universal) and projects a **surface passive** instead of a platformer chassis:
 
-### 6.8 Environmental Hazards (Sector 1)
+| Matrix | Surface Passive (Core Breaker) | Card Contributed (space) |
+|--------|--------------------------------|--------------------------|
+| **Standard Print Matrix** | Baseline (no modifier) | 1× Telemetry Sync (1 AP, draw 1) |
+| **Scavenger Matrix** | +15% resource yield from shattered pegs | 1× Resource Ping (0 AP, gain 1 Scrap, exhaust) |
+| **Enforcer Matrix** | Balls hit harder — count as +1 hit on multi-hit pegs | 1× Combat Sim (1 AP, next attack +3 dmg) |
+| **Repair Matrix** | +1 shot per drop | 1× Repair Clone (2 AP, fix ALL malfunctioning modules) |
+| **Assault Matrix** | Longer aim guide / truer trajectory preview | 1× Boarding Clone (2 AP, 5 dmg, ignores shield layers) |
 
-| Hazard | Tile Token | Behavior | Notes |
-|--------|-----------|----------|-------|
-| **Spike Bramble** | H1 | Stationary; deals 1 HP on contact | iFrames from the triggering hit allow a recovery jump or wall-kick out of a bramble pit |
-| **Crumbling Sandstone** | — | Breaks 0.5 s after standing contact; re-forms after 8 s | Requires movement across or a timed jump-chain |
-| **Sandstorm Vent** | V1 | ±2 m/s horizontal impulse push while active; visual dust column | Cycles on/off with a clearly telegraphed timing window |
+### 6.10 Risk & Failure
 
-Shield Bubble absorbs all damage types including environmental hazards (1 hit, then pops — see §6.10 for visual states and recharge). Knockback into a Spike Bramble: existing iFrames remain active, giving the full 1.5 s window to escape.
+Surface risk is recoverable and bounded — the asymmetry with combat is preserved (planet risks
+recoverable, space risks fatal), just expressed in the new verbs:
 
-### 6.9 Level Design Grammar
-
-Levels are assembled from named chunk templates and validated before serving to the player.
-
-**Chunk templates (Sector 1 — Rocky/Desert):**
-
-| Template | Dimensions | Focus | Typical Enemies |
-|----------|-----------|-------|-----------------|
-| **A — Open Mining Cave** | 32 × 10 tiles | Horizontal, Biomineral-rich | Scrap Grubbers |
-| **B — Vertical Shaft** | 10 × 30 tiles | Wall-kicks required for full traversal | Bloom Hoppers |
-| **C — Choke Point Corridor** | Variable; 2-tile ceiling height | Tight space, limited dodge room | Ceiling Droppers |
-
-**Tile spawn tokens:**
-
-| Token | Meaning |
-|-------|---------|
-| E1 | Bloom Hopper spawn point |
-| E2 | Scrap Grubber spawn point |
-| E3 | Ceiling Dropper spawn point |
-| H1 | Spike Bramble hazard tile |
-| V1 | Sandstorm Vent |
-
-**Flood-fill validation:** After assembly, a flood-fill runs from the Drop Pod tile to every resource node (deposits, caches). Any node unreachable without module-gated abilities (double jump, phase dash) causes the level to be rejected and a new one generated. This guarantees all resources are attainable by any starting loadout.
-
-### 6.10 Damage Feedback & Death Sequence
-
-**Per-hit feedback sequence:**
-
-1. 0.05 s freeze-frame — iFrames begin here, blocking chain hits from adjacent hazards
-2. 12-frame camera shake
-3. 0.1 s red-flash screen overlay
-4. Knockback: 4-tile horizontal impulse + 2-tile vertical lift
-5. 0.20 s (12 frames) complete input lock
-6. Sprite blinks at 10 Hz for the remainder of the 1.5 s iFrame window
-
-**Death sequence (HP reaches 0):**
-
-1. 1.5 s fade-to-black with pixel-collapse animation
-2. Orbital Cloning Bay menu overlay appears
-3. Backpack contents drop at the death point as a **corpse marker**
-4. First re-print per planet visit is free; subsequent re-prints cost Scrap
-
-**Corpse marker lifecycle:**
-- **Single-instance rule:** a second death deletes the first marker; all its items are permanently lost.
-- Pickup radius: 1.5 tiles. HUD shows a neon-green edge beacon when the marker is >10 tiles away.
-- **Partial pickup:** if the backpack cannot hold everything, the marker persists with the remaining items.
-- **Auto-nudge:** if an enemy overlaps the marker, it shifts 2 tiles horizontally.
-- Persists across re-prints within the same pod window; vanishes when the pod launches to orbit.
-
-**Shield Bubble visual states:** Ready (blue ring) · Popped (ripple + camera shake) · Charging (meter above clone's head). No passive recharge — standing still accumulates no charge.
+- **No clone death, no corpse run, no re-print economy.** Those retire with the platformer
+  (ADR 011).
+- **The shot budget is the pressure:** waste shots into Bloom Growths or whiff the field and
+  you bank less. The cost of a bad drop is *opportunity* (lost yield), not a death.
+- **Bloom interference** (§6.5) can eat banked yield if ignored — a soft fail state that
+  rewards reading the field, not reflexes.
+- **Ship destroyed (space combat):** still immediate Game Over. Space is where you lose the
+  run; the planet is where you lose only a good haul.
 
 ---
 
