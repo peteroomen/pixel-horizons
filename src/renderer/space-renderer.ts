@@ -22,6 +22,16 @@ const PLAYER_X = 150;
 const ENEMY_X = VIRTUAL_WIDTH - 170;
 const CENTER_Y = VIRTUAL_HEIGHT / 2 + 24; // sit the ships below the top HUD plates
 
+// Shield-bubble half-extents per hull, in composite px (the 72×40 ship frame, ×PX on
+// screen) so the bubble tracks the sprite scale. Shaped to each silhouette: Gunship wide,
+// Scout a thin dart, Freighter boxy. Tactical reuses the Gunship hull art (placeholder).
+const HULL_SHIELD: Record<string, { rx: number; ry: number }> = {
+  'hull-gunship': { rx: 26, ry: 17 },
+  'hull-scout': { rx: 27, ry: 13 },
+  'hull-freighter': { rx: 28, ry: 16 },
+  'hull-tactical': { rx: 26, ry: 17 },
+};
+
 // Floating damage numbers — they pop over the struck ship and climb as they fade, sharing
 // the world layer with the future weapon effects (lasers/explosions) rather than the HUD.
 const FLOATER_MS = 800;
@@ -84,9 +94,21 @@ export function createSpaceRenderer(app: Application): SpaceRenderer {
   lane.position.set(-OVERSCAN_TILES * PX, -OVERSCAN_TILES * PX);
   scene.addChild(lane);
 
-  const shieldRing = new Graphics().ellipse(0, 0, 70, 46).stroke({ width: 2, color: 0x6ad1e3 });
+  const shieldRing = new Graphics();
   shieldRing.position.set(PLAYER_X, CENTER_Y);
   scene.addChild(shieldRing);
+  // The shield bubble hugs the hull silhouette: each hull's composite reads at a
+  // different size/shape (wide Gunship, thin Scout dart, boxy Freighter), so the
+  // ellipse is re-shaped per hull (half-extents in composite px, ×PX on screen)
+  // rather than one fixed oval that floated wrong on the slimmer/boxier hulls.
+  const setShieldShape = (hullId: string): void => {
+    const s = HULL_SHIELD[hullId] ?? HULL_SHIELD['hull-gunship'];
+    shieldRing
+      .clear()
+      .ellipse(0, 0, s.rx * PX, s.ry * PX)
+      .stroke({ width: 2, color: 0x6ad1e3 });
+  };
+  setShieldShape('hull-gunship'); // re-shaped on the first sync once the hull is known
 
   // Player ship + muzzle share the composite frame, so the same anchor/scale aligns them.
   const playerShip = new Sprite();
@@ -174,6 +196,7 @@ export function createSpaceRenderer(app: Application): SpaceRenderer {
     };
     if (kindsKey !== null) playerShip.texture.destroy(true); // not the initial EMPTY
     playerShip.texture = nearestTexture(compositeShipForHull(hullId, slotCounts));
+    setShieldShape(hullId); // keep the bubble matched to the current hull silhouette
   };
 
   const setEnemyShip = (boss: boolean): void => {
