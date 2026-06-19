@@ -154,8 +154,6 @@ export interface GameHandle {
   /** Hull innate ability; handIndex only for card-targeted innates (Slipstream). */
   useInnate(handIndex?: number): void;
   endTurn(): void;
-  /** Pays the anchor enemy's Scrap toll — the blockade lets you pass (GDD §5.7). */
-  payToll(): void;
   /**
    * After victory or escape: commits the result to the run, carries malfunctions
    * and travel progress into the lane, and travels on — next encounter, or
@@ -621,9 +619,6 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     },
     endTurn(): void {
       combatMode?.endTurn();
-    },
-    payToll(): void {
-      combatMode?.payToll();
     },
     continueTravel(): void {
       combatMode?.continueTravel();

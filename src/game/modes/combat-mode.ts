@@ -9,7 +9,6 @@ import type { EnemyId } from '../data';
 import {
   activateInnate,
   applyCombatResult,
-  canPayToll,
   canUseInnate,
   cardDiscardCost,
   cardPlayCost,
@@ -19,7 +18,6 @@ import {
   isCardPlayable,
   jettisonCard,
   malfunctioningModules,
-  payToll,
   playCard,
   rollVictoryScrap,
   selectTarget,
@@ -61,7 +59,6 @@ export interface CombatMode {
   selectTarget(target: number | null): void;
   useInnate(handIndex?: number): void;
   endTurn(): void;
-  payToll(): void;
   continueTravel(): void;
   destroy(): void;
 }
@@ -151,11 +148,6 @@ export function startCombatMode(
     endTurn(): void {
       if (combat === null || combat.outcome !== 'ongoing') return;
       endTurn(combat);
-      emit();
-    },
-    payToll(): void {
-      if (combat === null || !canPayToll(combat)) return;
-      payToll(combat);
       emit();
     },
     continueTravel(): void {

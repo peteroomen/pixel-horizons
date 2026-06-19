@@ -12,18 +12,10 @@ interface HUDProps {
   onEndTurn: () => void;
   onInnate: () => void;
   innateArmed: boolean;
-  onPayToll: () => void;
   onSelectTarget: (target: number | null) => void;
 }
 
-export default function HUD({
-  view,
-  onEndTurn,
-  onInnate,
-  innateArmed,
-  onPayToll,
-  onSelectTarget,
-}: HUDProps) {
+export default function HUD({ view, onEndTurn, onInnate, innateArmed, onSelectTarget }: HUDProps) {
   return (
     <InfoChipProvider>
       {/* Top: hero plates — content-sized at the screen edges, not full-width columns */}
@@ -41,7 +33,6 @@ export default function HUD({
           onEndTurn={onEndTurn}
           onInnate={onInnate}
           innateArmed={innateArmed}
-          onPayToll={onPayToll}
         />
       </div>
     </InfoChipProvider>

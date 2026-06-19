@@ -261,10 +261,10 @@ export interface EnemyDef {
   phases?: EnemyPhase[];
   /**
    * Blockade archetypes (GDD §5.7): a trait, not an intent — the latch is permanent
-   * encounter state. Travel progress is halted while this enemy lives; paying the
-   * Scrap toll ends the encounter without victory rewards.
+   * encounter state. Travel progress is halted while this enemy lives; the only way past
+   * is to kill it (Scrap toll removed — 4.13 playtest, see GDD §5.1).
    */
-  anchor?: { tollScrap: number };
+  anchor?: true;
   /**
    * Bulwark archetypes (GDD §5.7): a damage pool absorbing non-piercing hits before
    * HP, regrowing `regen` (capped at `amount`) at the end of each enemy phase —

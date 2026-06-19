@@ -11,7 +11,6 @@ import type {
 import type { Status } from './sim/status';
 import type { CombatOutcome, CombatState } from './sim/combat';
 import {
-  canPayToll,
   canUseInnate,
   cardDiscardCost,
   cardPlayCost,
@@ -147,8 +146,9 @@ export interface CombatView {
   /**
    * Non-null while an anchor enemy holds the lane (GDD §5.7). Always visible — the
    * latch is archetype state, not intent info; a halt you can't see is a stat drain.
+   * The only way past is to kill it (Scrap toll removed — 4.13).
    */
-  anchor: { tollScrap: number; payable: boolean } | null;
+  anchor: { blocked: true } | null;
   /** Run scrap as of right now (start-of-fight stock plus this fight's gains). */
   scrap: number;
   scrapGained: number;
@@ -270,10 +270,7 @@ export function buildCombatView(state: CombatState): CombatView {
             ),
             distance: state.lane.distance,
           },
-    anchor:
-      enemy.anchor !== undefined && state.enemyHp > 0
-        ? { tollScrap: enemy.anchor.tollScrap, payable: canPayToll(state) }
-        : null,
+    anchor: enemy.anchor === true && state.enemyHp > 0 ? { blocked: true } : null,
     scrap: state.scrapAtStart + state.scrapGained,
     scrapGained: state.scrapGained,
     outcome: state.outcome,

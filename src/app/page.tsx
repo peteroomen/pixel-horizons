@@ -33,8 +33,7 @@ const OUTCOME_COLOR: Record<string, string> = {
 
 function outcomeLabel(view: CombatView): string {
   if (view.outcome === 'victory') return 'VICTORY';
-  const arrived = view.travel !== null && view.travel.progress >= view.travel.distance;
-  return arrived ? 'ARRIVED' : 'TOLL PAID';
+  return 'ARRIVED';
 }
 
 const RESOURCE_LABELS: ReadonlyArray<[keyof SurfaceView['backpack'], string]> = [
@@ -383,7 +382,6 @@ export default function Home() {
             onEndTurn={() => handleRef.current?.endTurn()}
             onInnate={onInnate}
             innateArmed={innateArmed}
-            onPayToll={() => handleRef.current?.payToll()}
             onSelectTarget={(target) => handleRef.current?.selectTarget(target)}
           />
           <div className="absolute inset-x-0 bottom-2 flex justify-center sm:bottom-4">

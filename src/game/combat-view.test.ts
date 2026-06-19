@@ -236,20 +236,14 @@ describe('lane and anchor projection', () => {
     expect(view.travel).toEqual({ progress: 3, distance: 9 });
   });
 
-  it('surfaces the anchor with toll cost and affordability', () => {
+  it('surfaces a blocked latch while an anchor enemy lives; clears on kill (4.13)', () => {
     const run = createRunState('anchor-view', 'hull-gunship');
     const state = createCombat(run, 'enemy-anchormaw', {
       distance: 9,
       progressAtStart: 0,
       malfunctioning: [],
     });
-    const broke = buildCombatView(state);
-    expect(broke.anchor).toEqual({ tollScrap: 5, payable: false });
-
-    state.scrapGained = 6;
-    const funded = buildCombatView(state);
-    expect(funded.anchor).toEqual({ tollScrap: 5, payable: true });
-    expect(funded.scrap).toBe(6);
+    expect(buildCombatView(state).anchor).toEqual({ blocked: true });
 
     state.enemyHp = 0;
     expect(buildCombatView(state).anchor).toBeNull();

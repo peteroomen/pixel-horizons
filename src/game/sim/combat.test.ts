@@ -11,7 +11,6 @@ import {
 import type { CombatState } from './combat';
 import {
   applyCombatResult,
-  canPayToll,
   canUseInnate,
   cardDiscardCost,
   cardPlayCost,
@@ -24,7 +23,6 @@ import {
   isTravelAnchored,
   jettisonCard,
   malfunctioningModules,
-  payToll,
   playCard,
   activateInnate,
   rollVictoryScrap,
@@ -979,36 +977,7 @@ describe('lanes and travel', () => {
     expect(isTravelAnchored(state)).toBe(false);
   });
 
-  it('paying the toll escapes and lands as a negative scrap delta', () => {
-    const run = gunshipRun();
-    run.resources.scrap = 7;
-    const state = createCombat(run, ANCHORMAW, laneCtx(9));
-    expect(state.scrapAtStart).toBe(7);
-    expect(canPayToll(state)).toBe(true);
-    payToll(state);
-    expect(state.outcome).toBe('escaped');
-    expect(state.scrapGained).toBe(-5);
-    applyCombatResult(run, state);
-    expect(run.resources.scrap).toBe(2);
-  });
-
-  it('toll affordability counts scrap gained during the fight', () => {
-    const run = gunshipRun();
-    run.resources.scrap = 4;
-    const state = createCombat(run, ANCHORMAW, laneCtx(9));
-    expect(canPayToll(state)).toBe(false);
-    expect(() => payToll(state)).toThrow('cannot afford');
-    state.scrapGained = 1;
-    expect(canPayToll(state)).toBe(true);
-  });
-
-  it('payToll throws against an enemy that does not anchor the lane', () => {
-    const state = createCombat(gunshipRun(), LAMPREY, laneCtx(9));
-    expect(canPayToll(state)).toBe(false);
-    expect(() => payToll(state)).toThrow('does not anchor');
-  });
-
-  it('escape grants no victory rewards — Salvage Rig stays silent', () => {
+  it('escape (arrival) grants no victory rewards — Salvage Rig stays silent', () => {
     const run = createRunState('escape-no-reward', 'hull-freighter');
     const state = createCombat(run, LAMPREY, laneCtx(1));
     endTurn(state);
@@ -1213,16 +1182,13 @@ describe('boss phases (GDD §7.5)', () => {
     expect(state.enemyArmor).toBe(0);
   });
 
-  it('Gatemaw is an anchor with toll=999 (effectively unpayable)', () => {
-    const run = gunshipRun();
-    run.resources.scrap = 50;
-    const state = createCombat(run, GATEMAW, {
+  it('Gatemaw is an anchor — must be killed, no toll escape', () => {
+    const state = createCombat(gunshipRun(), GATEMAW, {
       distance: 10,
       progressAtStart: 0,
       malfunctioning: [],
     });
     expect(isTravelAnchored(state)).toBe(true);
-    expect(canPayToll(state)).toBe(false);
   });
 
   it('no-lane boss fight has no escape-by-arrival', () => {
