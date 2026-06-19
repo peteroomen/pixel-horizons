@@ -32,6 +32,8 @@ export interface SurfaceModeOptions {
   loadout: SurfaceLoadout;
   /** Planet terrain ramp (6.1 slice 2) — recolours the rock tiles to match the orbit planet. */
   terrainRamp: Ramp;
+  /** Planet sky ramp (6.1 slice 3) — recolours the sky gradient + horizon mesas. */
+  skyRamp: Ramp;
 }
 
 export interface SurfaceModeCallbacks {
@@ -61,7 +63,11 @@ export function startSurfaceMode(
     podWindowMs: options.podWindowMs,
     loadout: options.loadout,
   });
-  const renderer: SurfaceRenderer = createSurfaceRenderer(app, options.terrainRamp);
+  const renderer: SurfaceRenderer = createSurfaceRenderer(
+    app,
+    options.terrainRamp,
+    options.skyRamp,
+  );
 
   // Held-key snapshot owned by the mode; rising-edge detection is in clone.ts
   const input: InputState = { left: false, right: false, jump: false, attack: false, dash: false };

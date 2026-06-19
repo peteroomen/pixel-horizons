@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { RESURRECT_64, planetRamps, rampToFloats, snapToPalette, surfaceRampFor } from './palette';
+import {
+  RESURRECT_64,
+  planetRamps,
+  rampToFloats,
+  skyRampFor,
+  snapToPalette,
+  surfaceRampFor,
+} from './palette';
 
 describe('Resurrect 64 palette', () => {
   it('has 64 unique colours, all 6-digit hex', () => {
@@ -69,6 +76,41 @@ describe('surfaceRampFor', () => {
       // index 0 is the lightest, index 5 the darkest — a meaningful spread
       expect(lum(ramp[0])).toBeGreaterThan(lum(ramp[5]) + 120);
     }
+  });
+});
+
+describe('skyRampFor', () => {
+  const lum = (hex: string): number => {
+    const n = Number.parseInt(hex.slice(1), 16);
+    return ((n >> 16) & 0xff) + ((n >> 8) & 0xff) + (n & 0xff);
+  };
+
+  it('is deterministic — same descriptor gives the same sky ramp', () => {
+    const d = { seed: 7, type: 'terran' } as const;
+    expect(skyRampFor(d)).toEqual(skyRampFor(d));
+  });
+
+  it('returns a 6-step ramp, every step palette-locked', () => {
+    const ramp = skyRampFor({ seed: 13, type: 'terran' });
+    expect(ramp).toHaveLength(6);
+    for (const hex of ramp) expect(RESURRECT_64).toContain(hex);
+  });
+
+  it('sky index 0 is lighter (higher luminance) than land ramp index 0', () => {
+    // The sky brightest step must be brighter than the terrain brightest step so that
+    // platform silhouettes stay legible.
+    for (let seed = 0; seed < 20; seed++) {
+      const skyRamp = skyRampFor({ seed, type: 'terran' });
+      const landRamp = surfaceRampFor({ seed, type: 'terran' });
+      expect(lum(skyRamp[0])).toBeGreaterThanOrEqual(lum(landRamp[0]));
+    }
+  });
+
+  it('produces distinct sky ramp families across different planet seeds', () => {
+    const families = new Set(
+      Array.from({ length: 40 }, (_, i) => JSON.stringify(skyRampFor({ seed: i, type: 'terran' }))),
+    );
+    expect(families.size).toBeGreaterThan(1);
   });
 });
 

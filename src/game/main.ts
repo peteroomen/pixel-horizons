@@ -2,7 +2,7 @@ import { Application, TextureSource } from 'pixi.js';
 
 import { ROCKY_TEST_LEVEL } from '@/game/data/levels';
 import { POD_WINDOW_MS } from '@/game/data/surface';
-import { surfaceRampFor } from '@/renderer/palette';
+import { skyRampFor, surfaceRampFor } from '@/renderer/palette';
 import { computeScale, VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from '@/renderer/pixel-scale';
 import type { CombatView } from './combat-view';
 import { getEnemy, getHull, getModule } from './data';
@@ -459,6 +459,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
         podWindowMs,
         loadout: projectLoadout(run.modules, run.reactorLevel),
         terrainRamp: surfaceRampFor(descriptor),
+        skyRamp: skyRampFor(descriptor),
       },
       { onUpdate: (view) => callbacks.onSurfaceUpdate?.(enrichSurfaceView(view)) },
     );

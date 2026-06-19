@@ -21,6 +21,10 @@ export const ROCKY = ['#fbb954', '#e6904e', '#cd683d', '#9e4539', '#7a3045', '#4
 export const VOLCANIC = ['#fbff86', '#f9c22b', '#f57d4a', '#ea4f36', '#b33831', '#6e2727'];
 export const ICE = ['#c7dcd0', '#8fd3ff', '#4d9be6', '#4d65b4', '#484a77', '#323353'];
 
+// Default sky ramp (warm peach — matches the rust desert land ramp, preserving the
+// existing look when no planet sky ramp is available).
+export const ROCKY_SKY = ['#fdcbb0', '#fca790', '#e6904e', '#cd683d', '#9e4539', '#7a3045'];
+
 type Ramp = readonly string[];
 
 // ─── Terrain tiles (16×16, autotile-friendly: no directional banding on fill) ──
@@ -574,12 +578,17 @@ export const fxDustSprite = (P: Ramp = ROCKY): HTMLCanvasElement =>
 
 // ─── Parallax cave-mouth backdrop (three depth layers, recolor-dimmed) ───────
 
-const skyLayer = (g: Ctx, W: number, H: number): void => {
-  for (let y = 0; y < H; y++) R(g, 0, y, W, 1, mix('#fdcbb0', '#cd683d', y / H));
+// skyLayer uses index 0 (brightest) → index 5 (near-horizon) for the gradient,
+// and the land ramp's lighter steps (indexes 1–2) for the distant mesas (atmospheric
+// perspective: distant hills read lighter/desaturated). Sun stays a fixed warm disc.
+const skyLayer = (g: Ctx, W: number, H: number, S: Ramp = ROCKY_SKY, P: Ramp = ROCKY): void => {
+  for (let y = 0; y < H; y++) R(g, 0, y, W, 1, mix(S[0], S[2], y / H));
+  // Sun — fixed warm disc; tinting by star colour is a later slice (star/space-bg generator).
   blob(g, W * 0.62, H * 0.3, 10, 7, mix('#fbff86', '#fbb954', 0.3), 3, 1);
+  // Horizon mesas — use land ramp's lighter steps for atmospheric perspective.
   const mesa = (x: number, w: number, top: number): void => {
-    R(g, x, top, w, H - top, mix('#ab947a', '#cd683d', 0.4));
-    R(g, x, top, w, 1, '#c7dcd0');
+    R(g, x, top, w, H - top, mix(P[1], P[2], 0.4));
+    R(g, x, top, w, 1, S[1]);
   };
   const s = W / 220;
   mesa(8 * s, 34 * s, H * 0.55);
@@ -644,12 +653,18 @@ const nearLayer = (g: Ctx, W: number, H: number, P: Ramp): void => {
 
 /**
  * The full cave-mouth backdrop (sky + mid columns + near wall frame), composed at W×H.
- * `P` (the planet terrain ramp) recolours the rock layers (mid columns + near cave frame) to
- * match the planet from orbit; the sky + sun + horizon stay fixed (atmosphere — later slice).
+ * `P` (the planet terrain ramp) recolours the rock layers (mid columns + near cave frame).
+ * `S` (the sky ramp, from `skyRampFor`) recolours the sky gradient + horizon mesa lit tops;
+ * the sun stays a fixed warm disc. Pass `ROCKY_SKY` / `ROCKY` for the warm-orange default.
  */
-export const surfaceBackdrop = (W: number, H: number, P: Ramp = ROCKY): HTMLCanvasElement =>
+export const surfaceBackdrop = (
+  W: number,
+  H: number,
+  P: Ramp = ROCKY,
+  S: Ramp = ROCKY_SKY,
+): HTMLCanvasElement =>
   make(W, H, (g) => {
-    skyLayer(g, W, H);
+    skyLayer(g, W, H, S, P);
     midLayer(g, W, H, P);
     nearLayer(g, W, H, P);
   });
