@@ -471,7 +471,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     const descriptor = planetForNode(run.seed, nodeId);
     currentPlanet = descriptor;
     const shipModules = run.modules.map((m) => getModule(m.id).name);
-    orbitMode = startOrbitMode(app, descriptor, shipModules);
+    orbitMode = startOrbitMode(app, descriptor, run.hullId, shipModules);
     callbacks.onOrbitUpdate?.({ name: PLANET_TYPES[descriptor.type].name, type: descriptor.type });
     setPhase('orbit');
   };

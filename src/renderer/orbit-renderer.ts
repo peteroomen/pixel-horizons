@@ -3,7 +3,7 @@ import { Application, Container, Graphics, Sprite, type Ticker } from 'pixi.js';
 import type { PlanetDescriptor } from '@/game/sim/planet';
 import { type AnimatedPlanet, createAnimatedPlanet } from './planet';
 import { VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from './pixel-scale';
-import { type ShipModuleKind, compositeShip, shipModuleKind } from './sprites';
+import { compositeShipFromModules } from './sprites';
 import { nearestTexture } from './textures';
 
 /**
@@ -25,6 +25,7 @@ const SHIP_Y = VIRTUAL_HEIGHT - 86;
 export function createOrbitRenderer(
   app: Application,
   descriptor: PlanetDescriptor,
+  hullId: string,
   shipModules: readonly string[],
 ): OrbitRenderer {
   const scene = new Container();
@@ -53,10 +54,8 @@ export function createOrbitRenderer(
   planetSprite.position.set(VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT / 2);
   scene.addChild(planetSprite);
 
-  // The player's ship, composited from its installed modules, foreground lower-left.
-  const kinds = new Set<ShipModuleKind>();
-  for (const name of shipModules) kinds.add(shipModuleKind(name));
-  const ship = new Sprite(nearestTexture(compositeShip([...kinds])));
+  // The player's ship — real hull + components, the same composite combat uses — foreground.
+  const ship = new Sprite(nearestTexture(compositeShipFromModules(hullId, shipModules)));
   ship.anchor.set(0.5);
   ship.scale.set(SHIP_PX);
   ship.position.set(SHIP_X, SHIP_Y);
