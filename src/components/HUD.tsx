@@ -22,7 +22,7 @@ function LaneProgressBar({ travel }: { travel: NonNullable<CombatView['travel']>
       {Array.from({ length: distance }, (_, i) => (
         <div
           key={i}
-          className={`h-[3px] flex-1 sm:h-[4px] ${
+          className={`h-[6px] flex-1 sm:h-[8px] ${
             i < progress ? 'bg-fd-orange' : 'bg-fd-steel/40'
           }`}
         />

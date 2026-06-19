@@ -86,8 +86,9 @@ export default function CombatCard({ card, state, disabled, onClick }: CombatCar
     tags.push({ label: keyword, color: 'text-fd-muted' });
   }
 
-  // Uniform card width: w-[88px] mobile, w-[128px] desktop (4.13 legibility pass).
-  // Previously used w-full which caused width to vary with hand size.
+  // Card width: fills its hand slot (uniform within the row). On mobile the hand makes
+  // every slot an equal flex share capped at 88px so any hand size fits a phone width;
+  // on desktop the slot is a fixed 128px (4.13 legibility pass — quick mobile-fit fix).
   return (
     <motion.button
       type="button"
@@ -96,7 +97,7 @@ export default function CombatCard({ card, state, disabled, onClick }: CombatCar
       whileHover={interactive ? { y: -8 } : undefined}
       whileTap={interactive ? { y: -4, scale: 0.96 } : undefined}
       transition={{ type: 'spring', stiffness: 600, damping: 30 }}
-      className={`chamfer chamfer-5 sm:chamfer-8 ${s.frame} p-[2px] w-[88px] sm:w-[128px] shrink-0 h-[142px] sm:h-[210px] ${
+      className={`chamfer chamfer-5 sm:chamfer-8 ${s.frame} p-[2px] w-full h-[142px] sm:h-[210px] ${
         selectable ? 'cursor-pointer' : ''
       } ${!card.affordable && state !== 'discard' ? 'opacity-40' : ''}`}
     >
