@@ -439,9 +439,9 @@ describe('card effects', () => {
   it('draw pulls from the draw pile', () => {
     const state = fresh(['card-telemetry-sync']);
     const pileBefore = state.drawPile.length;
-    playCard(state, 0);
-    expect(state.hand.length).toBe(1);
-    expect(state.drawPile.length).toBe(pileBefore - 1);
+    playCard(state, 0); // Telemetry Sync draws 2
+    expect(state.hand.length).toBe(2);
+    expect(state.drawPile.length).toBe(pileBefore - 2);
   });
 
   it('gain-scrap accumulates in the combat state', () => {
@@ -1153,9 +1153,10 @@ describe('Infestations (GDD §5.6)', () => {
 
   it('Spore Cluster drops a shield layer as it is drawn — mid-card draws included', () => {
     const state = createCombat(gunshipRun(), SPORECASTER);
-    state.drawPile.unshift(sporeCard());
+    // Spore is the only card in the pile, so Telemetry's draw-2 pulls just it.
+    state.drawPile = [sporeCard()];
     state.hand = hand('card-telemetry-sync');
-    playCard(state, 0); // draw 1 → the spore enters the hand
+    playCard(state, 0); // draw → the spore enters the hand, firing its on-draw
     expect(ids(state.hand)).toEqual([SPORE]);
     expect(state.shields.filter((layer) => layer.turnsUntilUp > 0).length).toBe(1);
   });
