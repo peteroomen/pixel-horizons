@@ -101,8 +101,14 @@ function itemKindFor(item: WorldItem): ItemKind {
  * @param terrainRamp The planet's terrain ramp (6.1 slice 2) — recolours the rock tiles + rock
  * debris so the surface matches the planet seen from orbit. Signal/grammar tiles (bedrock,
  * biomineral, scrap, scanned, core) stay fixed regardless of biome.
+ * @param skyRamp The planet's sky ramp (6.1 slice 3) — recolours the sky gradient + horizon
+ * mesas in the cave-mouth backdrop. Sun stays a fixed warm disc.
  */
-export function createSurfaceRenderer(app: Application, terrainRamp: Ramp): SurfaceRenderer {
+export function createSurfaceRenderer(
+  app: Application,
+  terrainRamp: Ramp,
+  skyRamp: Ramp,
+): SurfaceRenderer {
   // ── Static textures, built once (client-side) and shared across all sprites ──
   const TILE_TEX = {
     fill: tex(rockFillTile(terrainRamp)),
@@ -142,7 +148,9 @@ export function createSurfaceRenderer(app: Application, terrainRamp: Ramp): Surf
   // ── Layer 0: cave-mouth backdrop (screen-fixed) + drifting spore motes ──────
   const bg = new Container();
   app.stage.addChildAt(bg, 0);
-  const backdrop = new Sprite(tex(surfaceBackdrop(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, terrainRamp)));
+  const backdrop = new Sprite(
+    tex(surfaceBackdrop(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, terrainRamp, skyRamp)),
+  );
   bg.addChild(backdrop);
   const motes = moteField(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, 44);
   const moteGfx = new Graphics();

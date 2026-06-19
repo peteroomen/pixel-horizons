@@ -171,3 +171,41 @@ export function surfaceRampFor(descriptor: PlanetDescriptor): Ramp {
       return planetRamps(descriptor.seed).land;
   }
 }
+
+// Sky ramps: light, desaturated atmospheric gradients (index 0 = brightest zenith,
+// index 5 = deepest near-horizon glow). Deliberately lighter than the land ramps so
+// platform silhouettes stay legible. One sky ramp per land-ramp hue family.
+//
+// Mapping: land ramp index → sky ramp family used for that planet seed.
+// Keys match the first step of each LAND_RAMPS entry (deterministic lookup via seed).
+const SKY_RAMPS: readonly Ramp[] = [
+  // verdant green land → soft teal/cyan sky
+  ['#8ff8e2', '#30e1b9', '#0eaf9b', '#0b8a8f', '#0b5e65', '#374e4a'],
+  // grey-green tundra land → cool grey-blue sky
+  ['#c7dcd0', '#9babb2', '#7f708a', '#484a77', '#323353', '#2e222f'],
+  // rust desert land → warm peach sky (preserves the existing look)
+  ['#fdcbb0', '#fca790', '#e6904e', '#cd683d', '#9e4539', '#7a3045'],
+];
+
+/**
+ * The sky ramp for a planet's surface backdrop (6.1 slice 3) — a light, desaturated
+ * atmospheric gradient palette-locked to Resurrect 64. Distinct from the terrain ramp
+ * (which reads muddy as a sky). The hue family follows the land ramp so the sky and
+ * ground belong to the same planet without being identical. Terran is the only type today;
+ * 5.3 may extend this per type.
+ */
+export function skyRampFor(descriptor: PlanetDescriptor): Ramp {
+  switch (descriptor.type) {
+    case 'terran':
+    default: {
+      const landRamps: readonly Ramp[] = [
+        ['#cddf6c', '#91db69', '#1ebc73', '#239063', '#165a4c', '#0b5e65'], // verdant green
+        ['#b2ba90', '#92a984', '#547e64', '#374e4a', '#313638', '#2e222f'], // grey-green tundra
+        ['#fbb954', '#e6904e', '#cd683d', '#9e4539', '#7a3045', '#45293f'], // rust desert
+      ];
+      // Same hash01 + modular pick as planetRamps — deterministic per seed.
+      const landIdx = Math.floor(hash01(descriptor.seed + 1) * landRamps.length) % landRamps.length;
+      return SKY_RAMPS[landIdx];
+    }
+  }
+}
