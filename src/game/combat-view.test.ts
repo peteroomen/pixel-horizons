@@ -323,3 +323,37 @@ describe('status projection (GDD §5.10)', () => {
     expect(buildCombatView(state).hand[0].text).toContain('Mark target: +2 damage taken');
   });
 });
+
+describe('cardType derivation (4.13 legibility pass)', () => {
+  it('damage cards are ATTACK', () => {
+    const state = gunshipCombat();
+    state.hand = hand('card-cannon-burst', 'card-flak-volley', 'card-missile-salvo');
+    const types = buildCombatView(state).hand.map((c) => c.cardType);
+    expect(types).toEqual(['ATTACK', 'ATTACK', 'ATTACK']);
+  });
+
+  it('status-applying cards are POWER', () => {
+    const state = gunshipCombat();
+    state.hand = hand('card-tracer-lock'); // apply-status to target
+    expect(buildCombatView(state).hand[0].cardType).toBe('POWER');
+  });
+
+  it('shield / travel / draw cards are SKILL', () => {
+    const state = gunshipCombat();
+    // Emergency Barrier = temp-shield-layer; Thruster Burn = travel; Auxiliary Scan = draw
+    state.hand = hand('card-emergency-barrier');
+    expect(buildCombatView(state).hand[0].cardType).toBe('SKILL');
+  });
+
+  it('malfunction cards use SKILL as a neutral fallback', () => {
+    const state = gunshipCombat();
+    state.hand = [{ cardId: 'card-flak-volley', moduleIndex: 0, malfunctioning: true }];
+    expect(buildCombatView(state).hand[0].cardType).toBe('SKILL');
+  });
+
+  it('unplayable infestation cards use SKILL', () => {
+    const state = createCombat(createRunState('view-test', 'hull-gunship'), SPORECASTER);
+    state.hand = [{ cardId: 'card-spore-cluster', moduleIndex: null, malfunctioning: false }];
+    expect(buildCombatView(state).hand[0].cardType).toBe('SKILL');
+  });
+});

@@ -74,6 +74,7 @@ import { REPRINT_SCRAP_COST } from './data/surface';
  */
 
 export type {
+  CardType,
   CardView,
   CombatView,
   EnemyPartView,
