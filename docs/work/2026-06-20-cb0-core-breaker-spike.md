@@ -133,19 +133,60 @@ power, wall-bounce on/off, shots-per-drop (start 8–10).
 
 ## What actually happened
 
-(decisions made, approaches changed, surprises — incl. the feel-checkpoint answers + the
-G/e/density numbers that sing)
+Built exactly to plan. Split the spike into a **pure physics module** + a **Pixi page** even
+though it's throwaway — it kept the solver readable and mirrors the sim/renderer split CB.1 will
+formalise:
+
+- `core-breaker-spike.ts` — pure (no Pixi/React): `Knobs`, `Peg`, `Ball`, `buildField`,
+  `spawnBall`, `stepPhysics`. `Math.random()` used **here only** (field layout) per the handoff;
+  a `// THROWAWAY` header points at the real seeded CB.1 core.
+- `page.tsx` — clones the `planet-spike` Pixi/integer-scale harness, draws the field/ball/aim/HUD
+  with `Graphics`, handles pointer aim-fire + on-screen ball buttons + keyboard knob tuning.
+
+Decisions worth carrying to CB.1:
+- **240 Hz fixed-timestep accumulator** with a 0.05 s clamp (anti-tunneling + anti-spiral), exactly
+  as the handoff prescribed. Drawing is separated from the sub-step (`stepPhysics` mutates,
+  `draw*` reads).
+- **Per-peg hit cooldown** (0.08 s) so one overlap = one hit — this is what makes pierce
+  (passes through, no reflection) and multi-hit pegs (ore=3, hardrock=2) behave without
+  double-counting on consecutive sub-steps. Bouncy/homing use positional correction + restitution
+  reflect (`v -= (1+e)·(v·n)·n`); pierce uses velocity drag (0.86/peg) and skips correction.
+- **Three ball roles** wired to the §6.4 identities: pierce (Mining Laser), bouncy (Missile —
+  on-rest AoE shatter), homing (Tractor Beam — steers toward nearest ore peg below it).
+- **Direct drag-aim with drag-distance power** (clamped), plus a down-bias so you can't fire
+  straight up out of the field. Gravity-projected aim-guide dots. Pointer events only;
+  `touchAction: 'none'` on the host so a phone drag doesn't scroll the page.
+- Live knobs: `Q/A` gravity, `W/S` restitution, `E/D` power, `R` reset, `1/2/3`/buttons ball
+  type. Starting numbers (the CB.1 inheritance candidates, **pre-human-tuning**): G≈900,
+  e≈0.72, ballR=6, pegR=7, ~46 pegs, shots=9.
+
+**Verification done by me (machine):** `eslint src/app/core-breaker-spike` clean,
+`pnpm type-check` clean, `pnpm build` compiles + statically generates `/core-breaker-spike`,
+dev server serves the route 200 with no SSR error.
+
+**The feel checkpoint itself is NOT done** — judging carom satisfaction, ball-type distinctness,
+and 375px touch needs a human with a real browser/GPU (this environment has none). That hand-play
+is the actual gate for the pivot; see below.
 
 ## Files created / modified
 
-(list key files)
+- `src/app/core-breaker-spike/core-breaker-spike.ts` (new — pure physics)
+- `src/app/core-breaker-spike/page.tsx` (new — Pixi harness + input/HUD)
+- `docs/work/2026-06-20-cb0-core-breaker-spike.md` (this plan)
+- `CLAUDE.md` (Current State)
 
 ## Deferred to next session
 
-(anything punted — be specific so CB.1 picks it up cleanly)
+- **HUMAN FEEL CHECKPOINT (blocking the pivot):** `pnpm dev` → `localhost:3000/core-breaker-spike`,
+  play on desktop **and** a 375px phone. Answer in writing: is the carom satisfying? do the three
+  balls feel different? what G/e/density sing? does drag-aim work on glass without scroll-fight?
+  **is it more fun than the platformer?** If no → stop and re-judge the pivot before CB.1.
+- Record the tuned G/e/density numbers — CB.1's deterministic core inherits them.
+- (Only if feel demands) try slingshot drag-back aiming vs. the current direct-aim, and AoE/curve
+  strength tuning.
 
 ## Status
 
 - [ ] In progress
 - [ ] Complete
-- [ ] Partial — see deferred
+- [x] Partial — code complete + machine-verified; **human feel checkpoint pending** (the gate)
