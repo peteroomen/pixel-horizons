@@ -359,6 +359,27 @@ export const compositeShipForHull = (
   return canvas;
 };
 
+/** Map an installed module's display name to its renderable hull-slot family. */
+export function moduleSlotType(name: string): HullSlot {
+  const n = name.toLowerCase();
+  if (/flak|cannon|missile|laser|railgun|gun/.test(n)) return 'weapon';
+  if (/thruster|engine|hauler|drive/.test(n)) return 'engine';
+  return 'utility';
+}
+
+/**
+ * Composite a ship from a hull id + the names of its installed modules — the shared
+ * path so combat and orbit render the *same* ship (real hull + components), not a default.
+ */
+export const compositeShipFromModules = (
+  hullId: string,
+  moduleNames: readonly string[],
+): HTMLCanvasElement => {
+  const counts: Record<HullSlot, number> = { weapon: 0, engine: 0, utility: 0 };
+  for (const name of moduleNames) counts[moduleSlotType(name)] += 1;
+  return compositeShipForHull(hullId, counts);
+};
+
 // ─── Module overlays (Collective: mechanical, ruler-drawn) ──────────────────
 // Legacy overlay system — kept for reference; superseded by compositeShipForHull above.
 

@@ -4,6 +4,9 @@ import { ROCKY_TEST_LEVEL } from '@/game/data/levels';
 import { POD_WINDOW_MS } from '@/game/data/surface';
 import { skyRampFor, surfaceRampFor } from '@/renderer/palette';
 import { computeScale, VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from '@/renderer/pixel-scale';
+import { playTransition } from '@/renderer/transition';
+import type { Transition, TransitionAssets, TransitionKind } from '@/renderer/transition';
+import { compositeShipFromModules } from '@/renderer/sprites';
 import type { CombatView } from './combat-view';
 import { getEnemy, getHull, getModule } from './data';
 import type { EnemyId, EventDef, ModuleInstance } from './data';
@@ -106,6 +109,7 @@ export type GamePhase =
   | 'title'
   | 'map'
   | 'lane'
+  | 'transition'
   | 'orbit'
   | 'surface'
   | 'shop'
@@ -303,6 +307,15 @@ function resolveDevOrbit(): boolean {
 }
 
 /**
+ * Dev/test knob: `?transition=lane-drop` (or `lane-launch`) loops that scene transition
+ * in isolation so its feel can be checked/tuned without traversing a lane (6.9).
+ */
+function resolveDevTransition(): TransitionKind | null {
+  const v = new URLSearchParams(window.location.search).get('transition');
+  return v === 'lane-drop' || v === 'lane-launch' ? v : null;
+}
+
+/**
  * Dev/test knob: `?pod=20` sets the base launch window in seconds — manual
  * testing shouldn't take 5 real minutes. Engine bonuses still apply on top.
  * Invalid values fall back to POD_WINDOW_MS.
@@ -351,6 +364,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const podWindowMs = resolvePodWindowMs();
   const devSurface = resolveDevSurface();
   const devOrbit = resolveDevOrbit();
+  const devTransition = resolveDevTransition();
   const moduleOverride = resolveModuleOverride();
   const reactorOverride = resolveReactorOverride();
 
@@ -403,6 +417,8 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   let combatMode: CombatMode | null = null;
   let surfaceMode: SurfaceMode | null = null;
   let orbitMode: OrbitMode | null = null;
+  /** A hyperspace transition in flight (6.9) — held so teardown can cancel it cleanly. */
+  let activeTransition: Transition | null = null;
   /** Node the active lane travels toward. */
   let laneDestination: string | null = null;
   // The planet most recently shown in orbit — carried into the surface drop so the ground
@@ -416,6 +432,27 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const setPhase = (next: GamePhase): void => {
     phase = next;
     callbacks.onPhaseChange?.(next);
+  };
+
+  /** The player's composited ship (hull + components) — kept in frame during transitions. */
+  const shipCanvas = (): HTMLCanvasElement =>
+    compositeShipFromModules(
+      run.hullId,
+      run.modules.map((m) => getModule(m.id).name),
+    );
+
+  // Play a hyperspace transition (6.9) over the canvas with no DOM overlay, then run the
+  // continuation that swaps to the real phase. The 'transition' phase shows the canvas only.
+  const runTransition = (
+    kind: TransitionKind,
+    assets: TransitionAssets,
+    onComplete: () => void,
+  ): void => {
+    setPhase('transition');
+    activeTransition = playTransition(app, kind, assets, () => {
+      activeTransition = null;
+      onComplete();
+    });
   };
 
   const emitMap = (): void => {
@@ -471,7 +508,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     const descriptor = planetForNode(run.seed, nodeId);
     currentPlanet = descriptor;
     const shipModules = run.modules.map((m) => getModule(m.id).name);
-    orbitMode = startOrbitMode(app, descriptor, shipModules);
+    orbitMode = startOrbitMode(app, descriptor, run.hullId, shipModules);
     callbacks.onOrbitUpdate?.({ name: PLANET_TYPES[descriptor.type].name, type: descriptor.type });
     setPhase('orbit');
   };
@@ -564,7 +601,12 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       run.resources.scrap += node.cacheScrap ?? 0;
     }
     if (node.type === 'planet') {
-      enterOrbit(node.id);
+      // Lane Drop (6.9): decelerate out of hyperspace as the planet rises in, then orbit.
+      runTransition(
+        'lane-drop',
+        { ship: shipCanvas(), planet: planetForNode(run.seed, node.id) },
+        () => enterOrbit(node.id),
+      );
       return;
     }
     if (node.type === 'shop') {
@@ -587,7 +629,17 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   };
 
   // ── Boot ────────────────────────────────────────────────────────────────
-  if (devSurface) {
+  if (devTransition !== null) {
+    // Loop the transition in isolation for feel-tuning (6.9 dev knob).
+    const loop = (): void => {
+      const assets =
+        devTransition === 'lane-drop'
+          ? { ship: shipCanvas(), planet: planetForNode(run.seed, 'dev-transition') }
+          : { ship: shipCanvas() };
+      runTransition(devTransition, assets, loop);
+    };
+    loop();
+  } else if (devSurface) {
     enterSurface();
   } else if (devOrbit) {
     enterOrbit('dev-orbit');
@@ -630,7 +682,9 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       const edge = edgesFrom(map, run.position.nodeId).find((e) => e.to === nodeId);
       if (edge === undefined) return;
       laneDestination = nodeId;
-      startLane(edge.lane);
+      // Lane Launch (6.9): spool up and punch into hyperspace, then the lane begins.
+      const { lane } = edge;
+      runTransition('lane-launch', { ship: shipCanvas() }, () => startLane(lane));
     },
     dropToSurface(): void {
       if (phase !== 'orbit') return;
@@ -824,6 +878,8 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       setPhase('sector-complete');
     },
     destroy(): void {
+      activeTransition?.cancel();
+      activeTransition = null;
       destroyModes();
       observer.disconnect();
       app.destroy(true, { children: true, texture: true });

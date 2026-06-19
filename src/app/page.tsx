@@ -192,7 +192,7 @@ export default function Home() {
       {/* World framing (World Art Direction §6): the canvas runs full-bleed under the
           FOUNDRY plates; a vignette sinks it into the void and a 1px scanline lives on
           the world only. Both are pointer-events-none and paint under every overlay. */}
-      {(phase === 'lane' || phase === 'orbit' || phase === 'surface') && (
+      {(phase === 'lane' || phase === 'transition' || phase === 'orbit' || phase === 'surface') && (
         <>
           <div
             aria-hidden

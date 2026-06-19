@@ -8,6 +8,7 @@ import {
   bloomGrunt,
   compositeShipForHull,
   laneBackdrop,
+  moduleSlotType,
   muzzleFlash,
 } from './sprites';
 import type { HullSlot } from './sprites';
@@ -55,13 +56,6 @@ function resolveNumberFont(): string {
 export interface SpaceRenderer {
   sync(view: CombatView): void;
   destroy(): void;
-}
-
-function moduleSlotType(name: string): HullSlot {
-  const n = name.toLowerCase();
-  if (/flak|cannon|missile|laser|railgun|gun/.test(n)) return 'weapon';
-  if (/thruster|engine|hauler|drive/.test(n)) return 'engine';
-  return 'utility';
 }
 
 function shipCompositeKey(view: CombatView): string {
