@@ -551,14 +551,20 @@ export const bloomGrunt = (): HTMLCanvasElement =>
       blob(g, 13, 11, 4, 4, '#a884f3', 11, 1);
       blob(g, 15, 16, 4, 4, '#6b3e75', 13, 1);
       R(g, 9, 6, 8, 1, '#eaaded');
-      // maw (left)
-      R(g, 4, 11, 7, 6, '#831c5d');
-      R(g, 5, 12, 5, 4, '#c32454');
-      R(g, 5, 11, 1, 1, '#fca790');
-      R(g, 7, 11, 1, 1, '#fca790');
-      R(g, 9, 11, 1, 1, '#fca790');
-      R(g, 6, 16, 1, 1, '#fca790');
-      R(g, 8, 16, 1, 1, '#fca790');
+      // maw (left) — rounded fleshy mouth, same grammar as the boss at grunt scale
+      blob(g, 7, 14, 5, 4, '#a24b6f', 61, 1); // lip flesh
+      blob(g, 7, 14, 4, 3, '#831c5d', 63, 1); // cavity
+      blob(g, 7, 14, 2, 2, '#c32454', 65, 1); // throat glow
+      // lip wet-rim — curved lighter band
+      R(g, 5, 10, 5, 1, '#eaaded');
+      R(g, 5, 18, 5, 1, '#a884f3');
+      R(g, 3, 14, 1, 1, '#fca790');
+      // curved lattice teeth — staggered to follow the opening
+      R(g, 5, 11, 1, 1, '#fdcbb0');
+      R(g, 7, 10, 1, 1, '#fdcbb0');
+      R(g, 9, 11, 1, 1, '#fdcbb0');
+      R(g, 6, 17, 1, 1, '#fdcbb0');
+      R(g, 8, 17, 1, 1, '#fdcbb0');
       // eye
       R(g, 17, 9, 3, 3, '#165a4c');
       R(g, 18, 9, 2, 2, '#91db69');
@@ -596,15 +602,30 @@ export const anchormawBoss = (): HTMLCanvasElement =>
       // wet rim
       R(g, 22, 8, 14, 1, '#eaaded');
       R(g, 20, 9, 3, 1, '#a884f3');
-      // maw (center-left)
-      R(g, 8, 22, 16, 12, '#831c5d');
-      R(g, 10, 24, 12, 8, '#45293f');
-      R(g, 12, 26, 8, 4, '#c32454');
-      // teeth
-      for (const tx of [9, 12, 15, 18, 21]) R(g, tx, 21, 1, 2, '#fdcbb0');
-      for (const tx of [10, 13, 16, 19]) R(g, tx, 33, 1, 2, '#fdcbb0');
-      R(g, 7, 25, 2, 1, '#fca790');
-      R(g, 7, 30, 2, 1, '#fca790');
+      // maw (center-left) — a fleshy rounded mouth fused into the blob.
+      // Lip (wet-rim band) sits just proud of the opening; cavity + throat are
+      // rounded blobs so the mouth follows the body's curve, not a stamped box.
+      blob(g, 16, 28, 10, 8, '#a24b6f', 51, 1); // outer lip flesh
+      blob(g, 16, 28, 9, 7, '#831c5d', 53, 1); // mouth cavity
+      blob(g, 16, 28, 7, 5, '#45293f', 55, 1); // inner shadow
+      blob(g, 17, 28, 4, 3, '#c32454', 57, 1); // throat glow
+      // lip wet-rim selout — lighter band hugging the upper/lower curve
+      R(g, 12, 21, 9, 1, '#eaaded');
+      R(g, 10, 22, 2, 1, '#a884f3');
+      R(g, 21, 22, 2, 1, '#a884f3');
+      R(g, 12, 34, 8, 1, '#a884f3');
+      R(g, 9, 28, 1, 2, '#fca790');
+      // curved lattice teeth — staggered to follow the rounded opening
+      R(g, 11, 23, 1, 2, '#fdcbb0');
+      R(g, 14, 22, 1, 2, '#fdcbb0');
+      R(g, 17, 22, 1, 2, '#fdcbb0');
+      R(g, 20, 23, 1, 2, '#fdcbb0');
+      R(g, 22, 25, 1, 2, '#fdcbb0');
+      R(g, 12, 33, 1, 2, '#fdcbb0');
+      R(g, 15, 34, 1, 2, '#fdcbb0');
+      R(g, 18, 33, 1, 2, '#fdcbb0');
+      R(g, 21, 31, 1, 2, '#fdcbb0');
+      R(g, 10, 26, 1, 2, '#fdcbb0');
       // SPORE-SAC (upper right) — flat green core = targetable
       blob(g, 46, 16, 9, 8, '#165a4c', 41, 1);
       blob(g, 46, 16, 7, 6, '#1ebc73', 43, 1);
