@@ -137,7 +137,23 @@ let _nextMineralId = 0;
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
+/** Landscape 640×360 config — used by the main game (`enterMining()` in main.ts). */
 export function defaultConfig(): CoreBreakerConfig {
+  return {
+    gravity: 900,
+    restitution: 0.72,
+    width: 640,
+    height: 360,
+    floorY: 348,
+    step: 1 / 240,
+    launch: { x: 320, y: 22 },
+    maxSteps: 10_000,
+    podY: 22,
+  };
+}
+
+/** Portrait 360×640 config — used by the standalone /core-breaker route. */
+export function portraitConfig(): CoreBreakerConfig {
   return {
     gravity: 900,
     restitution: 0.72,

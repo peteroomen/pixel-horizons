@@ -8,7 +8,7 @@ import { getModule } from '@/game/data';
 import type { ModuleInstance } from '@/game/data';
 import { planetForNode } from '@/game/sim/planet';
 import { projectMiningRoster } from '@/game/surface/ball-projection';
-import { defaultConfig } from '@/game/surface/core-breaker';
+import { portraitConfig } from '@/game/surface/core-breaker';
 import { generateField } from '@/game/surface/field-gen';
 import { createCoreBreakerRenderer } from '@/renderer/core-breaker-renderer';
 import { surfaceRampFor } from '@/renderer/palette';
@@ -40,7 +40,7 @@ export default function CoreBreakerPage() {
     const modules = parseModules(params.get('modules'));
 
     const planet = planetForNode(seed, 'cb');
-    const cfg = defaultConfig();
+    const cfg = portraitConfig();
     const pegs = generateField(seed, cfg, { difficulty });
     const roster = projectMiningRoster(modules);
     const landRamp = surfaceRampFor(planet);
