@@ -1,11 +1,12 @@
 /**
  * Mining Run v2 field generation (ADR-003 / GDD §6.7).
  *
- * Dense staggered 8×9 grid of mineral/hard/rock pegs, plus hardcoded ore bars, Bloom hazards
+ * Dense staggered 6×11 grid of mineral/hard/rock pegs, plus hardcoded ore bars, Bloom hazards
  * (threatening the central lanes toward the crystal), and a Core Crystal funnelled by inert-rock
- * wedges at the bottom. Deterministic from a string seed via the project's seeded RNG.
+ * wedges near the floor. Deterministic from a string seed via the project's seeded RNG.
  *
- * No reachability filter — positions are designed in, not randomised to the point of unreachability.
+ * Portrait layout: 360×640 virtual pixels. Pod embedded at top (y≈30); field runs y=90→490;
+ * crystal sits near the floor at y≈520. No reachability filter — positions are designed in.
  * Pure sim: no React, Pixi, or DOM.
  */
 
@@ -19,13 +20,13 @@ export interface FieldGenOptions {
   difficulty?: number;
 }
 
-// Grid parameters in 640×360 virtual pixels (matching defaultConfig).
-const COLS = 8;
-const ROWS = 9;
-const GRID_X0 = 60;
-const GRID_X1 = 580;
-const GRID_Y0 = 65;
-const GRID_Y1 = 275;
+// Grid parameters in 360×640 virtual pixels (portrait, matching defaultConfig).
+const COLS = 6;
+const ROWS = 11;
+const GRID_X0 = 35;
+const GRID_X1 = 325;
+const GRID_Y0 = 90;
+const GRID_Y1 = 490;
 const SKIP_CHANCE = 0.08;
 
 export function generateField(
@@ -59,8 +60,8 @@ export function generateField(
   }
 
   // ── Ore bars (long horizontal bars spanning lanes) ───────────────────────
-  const oreY = [105, 170, 230];
-  const oreX = [cx - 130, cx + 90, cx - 30];
+  const oreY = [160, 270, 380];
+  const oreX = [120, 230, 160];
   for (let i = 0; i < 3; i++) {
     // Use 'ore' kind; the renderer draws it as a wide bar via PEG_ABAR.
     pegs.push(createPeg(id++, oreX[i], oreY[i], 'ore', PEG_RADIUS.ore));
@@ -68,23 +69,23 @@ export function generateField(
 
   // ── Bloom hazards (guard the tempting central lanes) ─────────────────────
   const bloomPos: [number, number][] = [
-    [cx - 130, 134],
-    [cx + 154, 119],
-    [cx + 13, 193],
+    [120, 200],
+    [250, 160],
+    [190, 320],
   ];
   for (const [bx, by] of bloomPos) {
     pegs.push(createPeg(id++, bx, by, 'bloom', PEG_RADIUS.bloom));
   }
 
   // ── Core Crystal + inert-rock funnel ─────────────────────────────────────
-  const crystalY = 258;
+  const crystalY = 520;
   pegs.push(createPeg(id++, cx, crystalY, 'crystal', PEG_RADIUS.crystal));
   // Rock wedges funnel the ball toward the crystal.
   const rocks: [number, number][] = [
-    [cx - 68, crystalY - 12],
-    [cx + 68, crystalY - 10],
-    [cx - 30, crystalY + 18],
-    [cx + 30, crystalY + 18],
+    [cx - 60, crystalY - 20],
+    [cx + 60, crystalY - 18],
+    [cx - 28, crystalY + 20],
+    [cx + 28, crystalY + 20],
   ];
   for (const [rx, ry] of rocks) {
     pegs.push(createPeg(id++, rx, ry, 'rock', PEG_RADIUS.rock));

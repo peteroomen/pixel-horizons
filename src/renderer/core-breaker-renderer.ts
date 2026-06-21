@@ -1,11 +1,11 @@
 /**
- * Mining Run v2 renderer (ADR-003). PixiJS-powered implementation of the carrom-breakout
- * surface loop: balls fire from a ceiling rig, ricochet through mineral formations, and must
- * be caught by the pod before they fall past it to advance your haul.
+ * Mining Run v2 renderer (ADR-003). PixiJS-powered portrait physics loop:
+ * the pod is embedded at the top of the planet surface and fires balls downward.
+ * Mineral drops auto-magnet back up to the pod — no player input during flight.
  *
  * Phases:
- *  'aim'  — drag from the rig to set trajectory; pod sits stationary at bottom.
- *  'play' — balls in flight; drag pod left/right to catch them and free minerals.
+ *  'aim'  — drag down from the pod rig to set trajectory.
+ *  'play' — ball in flight; minerals floating up; no player input.
  *  'complete' — run ended; onComplete is fired with the banked haul.
  *
  * Physics lives entirely in core-breaker.ts; this file drives the accumulator,
@@ -77,17 +77,15 @@ export function createCoreBreakerRenderer(
   let minerals: MineralDrop[] = [];
   let rosterIdx = 0;
   let phase: 'aim' | 'play' | 'complete' = 'aim';
-  let caughtThisTurn = false;
-  let podX = cfg.width / 2;
   let haul: Resources = { scrap: 0, biominerals: 0, coreCrystals: 0, blueprints: 0 };
   let timer = RUN_DURATION;
   let acc = 0;
   let completed = false;
 
-  // Aim state.
+  // Aim state — player drags downward from the pod to set angle.
   let aiming = false;
   let aimDragging = false;
-  const aimPt = { x: cfg.launch.x, y: cfg.height / 2 };
+  const aimPt = { x: cfg.launch.x, y: cfg.launch.y + 80 };
 
   // ── Scene ──────────────────────────────────────────────────────────────────
   const scene = new Container();
@@ -134,8 +132,6 @@ export function createCoreBreakerRenderer(
       aiming = aimDragging = true;
       aimPt.x = p.x;
       aimPt.y = p.y;
-    } else if (phase === 'play') {
-      podX = Math.max(cfg.bayWidth, Math.min(cfg.width - cfg.bayWidth, p.x));
     }
   };
 
@@ -144,8 +140,6 @@ export function createCoreBreakerRenderer(
     if (aimDragging) {
       aimPt.x = p.x;
       aimPt.y = p.y;
-    } else if (phase === 'play') {
-      podX = Math.max(cfg.bayWidth, Math.min(cfg.width - cfg.bayWidth, p.x));
     }
   };
 
@@ -157,7 +151,6 @@ export function createCoreBreakerRenderer(
     const aim = computeAim(aimPt, cfg);
     const ball = spawnBall({ type, angleRad: aim.angle, power: aim.power }, cfg);
     balls.push(ball);
-    caughtThisTurn = false;
     phase = 'play';
     aimGfx.clear();
   };
@@ -174,14 +167,6 @@ export function createCoreBreakerRenderer(
   }
 
   function advanceTurn(): void {
-    if (caughtThisTurn) {
-      // Ball was caught — re-arm same ball type.
-      caughtThisTurn = false;
-      phase = 'aim';
-      setFlash('CAUGHT — RE-AIM');
-      return;
-    }
-    // Ball lost — advance roster.
     rosterIdx++;
     if (rosterIdx >= roster.length) {
       endRun();
@@ -207,9 +192,7 @@ export function createCoreBreakerRenderer(
     rosterIdx = 0;
     haul = { scrap: 0, biominerals: 0, coreCrystals: 0, blueprints: 0 };
     timer = RUN_DURATION;
-    podX = cfg.width / 2;
     phase = 'aim';
-    caughtThisTurn = false;
     completed = false;
     acc = 0;
     flash.alpha = 0;
@@ -235,8 +218,12 @@ export function createCoreBreakerRenderer(
 
   function drawBg(): void {
     bgGfx.clear();
-    bgGfx.rect(0, 0, cfg.width, cfg.height).fill(crust);
-    bgGfx.rect(0, cfg.podY + 8, cfg.width, cfg.height - cfg.podY - 8).fill(ramp[4]);
+    // Underground rock fill.
+    bgGfx.rect(0, 0, cfg.width, cfg.height).fill(ramp[4]);
+    // Planet surface band at the top (where the pod is embedded).
+    bgGfx.rect(0, 0, cfg.width, cfg.podY + 14).fill(crust);
+    // Surface edge line.
+    bgGfx.rect(0, cfg.podY + 14, cfg.width, 2).fill(ramp[3]);
   }
 
   function drawField(): void {
@@ -307,40 +294,25 @@ export function createCoreBreakerRenderer(
     }
   }
 
-  function drawPod(): void {
-    podGfx.clear();
-    const py = cfg.podY;
-    const bw = cfg.bayWidth;
-    // Main chassis.
-    podGfx.rect(podX - bw - 8, py - 4, (bw + 8) * 2, 8).fill(0x3a3e48);
-    // Bay interior.
-    podGfx.rect(podX - bw, py - 5, bw * 2, 7).fill(0x16181d);
-    // Scoop teeth.
-    for (let i = -1; i <= 1; i++) {
-      podGfx.rect(podX + i * (bw * 0.55) - 1, py - 7, 2, 4).fill(0x92a984);
-    }
-    // Legs.
-    podGfx.rect(podX - bw - 10, py + 4, 4, 7).fill(0x2e2c38);
-    podGfx.rect(podX + bw + 6, py + 4, 4, 7).fill(0x2e2c38);
-  }
-
   function drawRig(): void {
+    // Pod is embedded in the planet surface at the top, launching downward.
+    podGfx.clear();
     rigGfx.clear();
-    const lx = cfg.launch.x,
-      ly = cfg.launch.y;
-    rigGfx.rect(lx - 14, ly - 8, 28, 6).fill(0x3a3e48);
-    rigGfx.rect(lx - 12, ly - 12, 24, 4).fill(0x547e64);
+    const lx = cfg.launch.x;
+    const ly = cfg.launch.y;
+    // Surface housing (wider band).
+    podGfx.rect(lx - 22, 0, 44, ly + 10).fill(crust);
+    podGfx.rect(lx - 18, ly - 2, 36, 12).fill(0x3a3e48);
+    // Launch tube pointing downward.
+    rigGfx.rect(lx - 5, ly, 10, 18).fill(0x2e2c38);
+    // Barrel tip + aim glow.
     if (phase === 'aim' && aiming) {
       const aim = computeAim(aimPt, cfg);
-      const tx = lx + Math.cos(aim.angle) * 9;
-      const ty = ly + 4 + Math.sin(aim.angle) * 7;
-      rigGfx.circle(tx, ty, 2).fill(0x6ad1e3);
-    } else {
-      rigGfx.circle(lx, ly + 4, 2).fill(0x16181d);
-    }
-    // Loaded pulse.
-    if (phase === 'aim') {
-      rigGfx.rect(lx - 3, ly - 5, 6, 3).fill({ color: 0x6ad1e3, alpha: 0.75 });
+      const tx = lx + Math.cos(aim.angle) * 10;
+      const ty = ly + 18 + Math.sin(aim.angle) * 6;
+      rigGfx.circle(tx, ty, 2.5).fill(0x6ad1e3);
+    } else if (phase === 'aim') {
+      rigGfx.circle(lx, ly + 20, 2.5).fill({ color: 0x6ad1e3, alpha: 0.65 });
     }
   }
 
@@ -372,18 +344,17 @@ export function createCoreBreakerRenderer(
         const toAdd: Ball[] = [];
         for (const b of balls) {
           if (!b.live) continue;
-          const ev = step(b, pegs, cfg, podX);
+          const ev = step(b, pegs, cfg);
           for (const d of ev.drops) {
             haul[d.resource] += Math.round(d.amount * (roster[rosterIdx]?.yieldMultiplier ?? 1));
           }
           for (const m of ev.newMinerals) minerals.push(m);
           for (const s of ev.spawned) toAdd.push(s);
-          if (ev.caught) caughtThisTurn = true;
         }
         for (const b of toAdd) balls.push(b);
 
-        // Step minerals.
-        const mr = stepMinerals(minerals, podX, cfg);
+        // Step minerals — magnet target is the fixed pod center.
+        const mr = stepMinerals(minerals, cfg.launch.x, cfg);
         for (const d of mr.caught) haul[d.resource] += d.amount;
 
         acc -= cfg.step;
@@ -407,7 +378,6 @@ export function createCoreBreakerRenderer(
     drawMinerals();
     drawAim();
     drawBalls();
-    drawPod();
     drawRig();
     drawHUD();
   };
