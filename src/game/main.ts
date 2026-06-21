@@ -7,6 +7,7 @@ import { computeScale, VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from '@/renderer/pixel-sc
 import { playTransition } from '@/renderer/transition';
 import type { Transition, TransitionAssets, TransitionKind } from '@/renderer/transition';
 import { compositeShipFromModules } from '@/renderer/sprites';
+import { podLaunchSprite } from '@/renderer/surface-sprites';
 import type { CombatView } from './combat-view';
 import { getEnemy, getHull, getModule } from './data';
 import type { EnemyId, EventDef, ModuleInstance } from './data';
@@ -312,7 +313,7 @@ function resolveDevOrbit(): boolean {
  */
 function resolveDevTransition(): TransitionKind | null {
   const v = new URLSearchParams(window.location.search).get('transition');
-  return v === 'lane-drop' || v === 'lane-launch' ? v : null;
+  return v === 'lane-drop' || v === 'lane-launch' || v === 'pod-deploy' ? v : null;
 }
 
 /**
@@ -632,10 +633,12 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   if (devTransition !== null) {
     // Loop the transition in isolation for feel-tuning (6.9 dev knob).
     const loop = (): void => {
-      const assets =
-        devTransition === 'lane-drop'
-          ? { ship: shipCanvas(), planet: planetForNode(run.seed, 'dev-transition') }
-          : { ship: shipCanvas() };
+      const hasPlanet = devTransition === 'lane-drop' || devTransition === 'pod-deploy';
+      const assets: TransitionAssets = {
+        ship: shipCanvas(),
+        planet: hasPlanet ? planetForNode(run.seed, 'dev-transition') : undefined,
+        pod: devTransition === 'pod-deploy' ? podLaunchSprite() : undefined,
+      };
       runTransition(devTransition, assets, loop);
     };
     loop();
@@ -690,7 +693,16 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       if (phase !== 'orbit') return;
       orbitMode?.destroy();
       orbitMode = null;
-      enterSurface();
+      // Pod Deploy (6.9 Slice B): amber atmosphere wipe → surface.
+      runTransition(
+        'pod-deploy',
+        {
+          ship: shipCanvas(),
+          planet: currentPlanet ?? undefined,
+          pod: podLaunchSprite(),
+        },
+        () => enterSurface(),
+      );
     },
     launchPod(): void {
       surfaceMode?.launchPod();
