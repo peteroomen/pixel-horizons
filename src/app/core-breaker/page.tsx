@@ -7,7 +7,7 @@ import { Application, TextureSource } from 'pixi.js';
 import { getModule } from '@/game/data';
 import type { ModuleInstance } from '@/game/data';
 import { planetForNode } from '@/game/sim/planet';
-import { projectSurfaceBag } from '@/game/surface/ball-projection';
+import { projectMiningRoster } from '@/game/surface/ball-projection';
 import { defaultConfig } from '@/game/surface/core-breaker';
 import { generateField } from '@/game/surface/field-gen';
 import { createCoreBreakerRenderer } from '@/renderer/core-breaker-renderer';
@@ -15,11 +15,10 @@ import { surfaceRampFor } from '@/renderer/palette';
 import { VIRTUAL_HEIGHT, VIRTUAL_WIDTH, computeScale } from '@/renderer/pixel-scale';
 
 /**
- * Playable Core Breaker (CB.4) — composes the real deterministic pieces: a runtime planet
- * (`planetForNode`, recoloured via `surfaceRampFor`), a seeded field (`generateField`), and a bag
- * projected from the loadout (`projectSurfaceBag`). Deterministic from `?seed=`. Dev knobs:
- * `?seed=`, `?modules=mining-laser,missile-pod`, `?reactor=2`, `?difficulty=3`. The orbit DROP →
- * Core Breaker wiring lands with the CB.7 platformer cleanup; this route is the playtest surface.
+ * Playable Core Breaker dev route — composes the real deterministic pieces: a runtime planet
+ * (`planetForNode`, recoloured via `surfaceRampFor`), a seeded field (`generateField`), and a roster
+ * projected from the loadout (`projectMiningRoster`). Deterministic from `?seed=`. Dev knobs:
+ * `?seed=`, `?modules=mining-laser,missile-pod`, `?difficulty=3`.
  */
 
 const DEFAULT_MODULES = [
@@ -38,14 +37,13 @@ export default function CoreBreakerPage() {
 
     const params = new URLSearchParams(window.location.search);
     const seed = params.get('seed') ?? 'cb-demo';
-    const reactor = clampInt(params.get('reactor'), 1, 0, 8);
     const difficulty = clampInt(params.get('difficulty'), 0, 0, 4);
     const modules = parseModules(params.get('modules'));
 
     const planet = planetForNode(seed, 'cb');
     const cfg = defaultConfig();
-    const pegs = generateField(planet, cfg, { difficulty });
-    const bag = projectSurfaceBag(modules, reactor);
+    const pegs = generateField(seed, cfg, { difficulty });
+    const roster = projectMiningRoster(modules);
     const landRamp = surfaceRampFor(planet);
 
     let cancelled = false;
@@ -87,8 +85,7 @@ export default function CoreBreakerPage() {
 
       handle = createCoreBreakerRenderer(created, {
         pegs,
-        bag: bag.balls,
-        shotsPerDrop: bag.shotsPerDrop,
+        roster: roster.balls,
         landRamp,
         cfg,
       });

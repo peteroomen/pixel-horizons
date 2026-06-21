@@ -2,6 +2,8 @@ import { Application, TextureSource } from 'pixi.js';
 
 import { ROCKY_TEST_LEVEL } from '@/game/data/levels';
 import { POD_WINDOW_MS } from '@/game/data/surface';
+import { createCoreBreakerRenderer } from '@/renderer/core-breaker-renderer';
+import type { CoreBreakerHandle } from '@/renderer/core-breaker-renderer';
 import { skyRampFor, surfaceRampFor } from '@/renderer/palette';
 import { computeScale, VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from '@/renderer/pixel-scale';
 import { playTransition } from '@/renderer/transition';
@@ -48,6 +50,9 @@ import type { ShipView } from './ship-view';
 import { buildMerchantView, buildEngineerView } from './station-view';
 import type { StationView } from './station-view';
 import { projectLoadout } from './surface/items';
+import { projectMiningRoster } from './surface/ball-projection';
+import { generateField } from './surface/field-gen';
+import { defaultConfig as miningDefaultConfig } from './surface/core-breaker';
 import type { SurfaceView } from './surface-view';
 import { REPRINT_SCRAP_COST } from './data/surface';
 
@@ -113,6 +118,7 @@ export type GamePhase =
   | 'transition'
   | 'orbit'
   | 'surface'
+  | 'mining'
   | 'shop'
   | 'engineer'
   | 'event'
@@ -418,6 +424,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   let combatMode: CombatMode | null = null;
   let surfaceMode: SurfaceMode | null = null;
   let orbitMode: OrbitMode | null = null;
+  let miningHandle: CoreBreakerHandle | null = null;
   /** A hyperspace transition in flight (6.9) — held so teardown can cancel it cleanly. */
   let activeTransition: Transition | null = null;
   /** Node the active lane travels toward. */
@@ -467,6 +474,8 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     surfaceMode = null;
     orbitMode?.destroy();
     orbitMode = null;
+    miningHandle?.destroy();
+    miningHandle = null;
   };
 
   /** Node arrival is the save point (ADR 003) — including the run's first node. */
@@ -501,6 +510,31 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       { onUpdate: (view) => callbacks.onSurfaceUpdate?.(enrichSurfaceView(view)) },
     );
     setPhase('surface');
+  };
+
+  const enterMining = (): void => {
+    const descriptor =
+      currentPlanet ?? planetForNode(run.seed, run.position.nodeId ?? 'dev-mining');
+    const cfg = miningDefaultConfig();
+    const pegs = generateField(`${run.seed}:${run.position.nodeId ?? 'dev'}`, cfg, {
+      difficulty: Math.min(run.position.sector, 4),
+    });
+    const roster = projectMiningRoster(run.modules);
+    const landRamp = surfaceRampFor(descriptor);
+    miningHandle = createCoreBreakerRenderer(app, {
+      pegs,
+      roster: roster.balls,
+      landRamp,
+      cfg,
+      onComplete: (banked) => {
+        addResources(run.resources, banked);
+        miningHandle?.destroy();
+        miningHandle = null;
+        store.save(run);
+        enterMap();
+      },
+    });
+    setPhase('mining');
   };
 
   // Planet arrival shows the generated planet in orbit before the drop (6.1). The descriptor
@@ -693,7 +727,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       if (phase !== 'orbit') return;
       orbitMode?.destroy();
       orbitMode = null;
-      // Pod Deploy (6.9 Slice B): amber atmosphere wipe → surface.
+      // Pod Deploy (6.9 Slice B): amber atmosphere wipe → mining run.
       runTransition(
         'pod-deploy',
         {
@@ -701,7 +735,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
           planet: currentPlanet ?? undefined,
           pod: podLaunchSprite(),
         },
-        () => enterSurface(),
+        () => enterMining(),
       );
     },
     launchPod(): void {

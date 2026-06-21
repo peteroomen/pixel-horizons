@@ -1,31 +1,26 @@
 /**
- * Core Breaker — the deterministic surface physics core (CB.1, ADR 011).
+ * Mining Run v2 — ball physics core (ADR-003 / GDD §6).
  *
- * A seeded-elsewhere, fixed-timestep, circle-vs-peg simulation: a ball is fired into a field of
- * deposit pegs, caroms off them, shatters them, and emits an ordered stream of resource drops.
- * This is the sim half of the Peglin-style extraction loop that replaced the platformer.
+ * Fixed-timestep circle-vs-formation sim. Determinism contract: same field + same shots ⇒
+ * identical break/drop streams. No bounce budget — a ball runs until it falls past the floor
+ * (fellOut) or is consumed by a Bloom (consumed). The settle path acts as a safety valve only.
+ * Mineral drops are first-class physics objects that must be caught by the pod.
  *
- * Determinism contract (ADR 003): the solver is RNG-free and is driven purely by the fixed
- * `cfg.step` — never wall-clock or frame time. Same field + same shot inputs ⇒ identical
- * break/drop streams. The renderer (CB.4) owns the accumulator that turns real frame time into
- * fixed steps; field layout (the only randomness) is seeded in field-gen (CB.2). Pure sim: no
- * React, Pixi, or DOM imports here.
+ * Pure sim: no React, Pixi, or DOM.
  */
 
-import type { Resources } from '@/game/sim/run-state';
+export type BallType = 'standard' | 'heavy' | 'split' | 'drill' | 'ghost';
+export type PegKind = 'mineral' | 'ore' | 'hard' | 'crystal' | 'rock' | 'bloom';
 
-export type BallType = 'pierce' | 'bouncy' | 'homing' | 'phase';
-export type PegKind = 'mineral' | 'ore' | 'hardrock' | 'bloom' | 'crystal';
-
-type ResourceKind = keyof Resources;
+type ResourceKind = 'scrap' | 'biominerals' | 'coreCrystals';
 
 export interface Peg {
   id: number;
   x: number;
   y: number;
+  /** Collision radius (circular for all kinds except ore, which uses box). */
   r: number;
   kind: PegKind;
-  /** Remaining hits before it shatters. */
   hits: number;
   maxHits: number;
 }
@@ -37,41 +32,46 @@ export interface Ball {
   vy: number;
   r: number;
   type: BallType;
-  /** True while the shot is in flight. */
   live: boolean;
-  /** Why the shot ended (undefined while live). */
   end?: ShotEnd;
-  /** Seconds spent below the rest speed threshold (settle detection). */
+  /** Safety-valve: seconds spent below REST_SPEED. */
   lowSpeedTime: number;
-  /** A `phase` ball has already passed through one Bloom growth. */
-  phaseUsed: boolean;
-  /** Per-peg re-hit cooldown (peg id → seconds remaining) so one overlap counts as one hit. */
+  /** True once a split ball has already forked — prevents infinite splitting. */
+  didSplit: boolean;
+  /** Per-peg re-hit cooldown (id → seconds remaining). */
   cooldown: Map<number, number>;
 }
 
-/** A resolved shot — angle (radians, y-down screen space) + launch speed. Input is RNG-free. */
+export interface MineralDrop {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  resource: ResourceKind;
+  amount: number;
+  live: boolean;
+}
+
 export interface ShotInput {
   type: BallType;
-  /** Radians, y-down: ~π/2 fires straight down, 0 right, π left. */
   angleRad: number;
-  /** Initial speed, px/s. */
   power: number;
 }
 
 export interface CoreBreakerConfig {
   gravity: number;
   restitution: number;
-  ballRadius: number;
   width: number;
   height: number;
-  /** Y below which the shot ends (ball fell out the bottom into the hopper). */
   floorY: number;
-  /** Fixed sub-step seconds — small enough to avoid fast-ball tunneling. */
   step: number;
-  /** Where balls spawn. */
   launch: { x: number; y: number };
-  /** Hard cap on sub-steps per shot so a pathological shot can't loop forever. */
   maxSteps: number;
+  /** Y coordinate of the pod (catcher). */
+  podY: number;
+  /** Half-width of the pod catch bay. */
+  bayWidth: number;
 }
 
 export interface Drop {
@@ -82,57 +82,74 @@ export interface Drop {
 }
 
 export interface StepEvents {
-  /** Peg ids that shattered this step, in resolution order. */
   broken: number[];
   drops: Drop[];
+  /** New balls to add to the sim (spawned by split fork). */
+  spawned: Ball[];
+  /** True if the ball entered the pod bay this step (ball.live is now false). */
+  caught: boolean;
+  /** New mineral drops emitted by shattering formations this step. */
+  newMinerals: MineralDrop[];
 }
 
-export type ShotEnd = 'settled' | 'fellOut' | 'consumed' | 'maxSteps';
+export interface MineralStepResult {
+  caught: Drop[];
+  lost: number[];
+}
+
+export type ShotEnd = 'settled' | 'fellOut' | 'consumed' | 'maxSteps' | 'caught';
 
 export interface ShotResult {
-  /** All peg ids shattered over the shot, in break order. */
   brokenPegIds: number[];
-  /** Drop stream in break order — banking to RunState is wired in CB.4. */
   drops: Drop[];
-  /** Sub-steps the shot ran. */
   steps: number;
   end: ShotEnd;
 }
 
+// ─── Formation definitions ────────────────────────────────────────────────────
+
 interface PegDef {
   maxHits: number;
-  resource: ResourceKind;
+  resource: ResourceKind | null;
   amount: number;
+  /** If true, drop resource on every hit, not just on shatter. */
+  dropPerHit: boolean;
 }
 
-/** Peg behaviour table (GDD §6.7, Sector 1). Data, not logic. */
 const PEG_DEFS: Record<PegKind, PegDef> = {
-  mineral: { maxHits: 1, resource: 'scrap', amount: 1 },
-  ore: { maxHits: 3, resource: 'biominerals', amount: 2 },
-  hardrock: { maxHits: 2, resource: 'scrap', amount: 1 },
-  bloom: { maxHits: 1, resource: 'scrap', amount: 1 },
-  crystal: { maxHits: 4, resource: 'coreCrystals', amount: 1 },
+  mineral: { maxHits: 1, resource: 'biominerals', amount: 1, dropPerHit: false },
+  hard: { maxHits: 1, resource: 'scrap', amount: 1, dropPerHit: false },
+  ore: { maxHits: 3, resource: 'biominerals', amount: 2, dropPerHit: true },
+  crystal: { maxHits: 4, resource: 'coreCrystals', amount: 1, dropPerHit: false },
+  rock: { maxHits: 2, resource: null, amount: 0, dropPerHit: false },
+  bloom: { maxHits: 99, resource: null, amount: 0, dropPerHit: false },
 };
 
-// Feel constants — inherited from the CB.0 spike; tuned numbers, not gameplay data.
-const REST_SPEED = 26; // px/s — below this the ball is "settling"
-const REST_TIME = 0.5; // s of continuous low speed before the shot settles
-const HIT_COOLDOWN = 0.08; // s before the same peg can be hit again
-const PIERCE_DRAG = 0.86; // velocity retained per peg a pierce ball punches through
-const HOMING_STEER = 1350; // px/s² steering accel toward the nearest ore peg
-const BOUNCY_AOE = 34; // px radius of the bouncy ball's on-rest shatter
+// Ore bar box collision half-extents (matches data/mining-run.ts PEG_ABAR).
+const ORE_HW = 26;
+const ORE_HH = 7;
+
+// Safety-valve constants — not gameplay limits, just prevent stuck-ball loops.
+const REST_SPEED = 20; // px/s
+const REST_TIME = 1.5; // seconds of continuous low speed before settling
+const HIT_COOLDOWN = 0.08; // seconds before the same peg counts as hit again
+
+let _nextMineralId = 0;
+
+// ─── Public API ──────────────────────────────────────────────────────────────
 
 export function defaultConfig(): CoreBreakerConfig {
   return {
     gravity: 900,
     restitution: 0.72,
-    ballRadius: 6,
     width: 640,
     height: 360,
     floorY: 348,
     step: 1 / 240,
     launch: { x: 320, y: 22 },
     maxSteps: 10_000,
+    podY: 325,
+    bayWidth: 40,
   };
 }
 
@@ -140,64 +157,58 @@ export function pegDef(kind: PegKind): PegDef {
   return PEG_DEFS[kind];
 }
 
-/** A peg at full health for its kind. */
 export function createPeg(id: number, x: number, y: number, kind: PegKind, r: number): Peg {
   const { maxHits } = PEG_DEFS[kind];
   return { id, x, y, r, kind, hits: maxHits, maxHits };
 }
 
-/** Fire a ball from the config launch point along `shot`. */
 export function spawnBall(shot: ShotInput, cfg: CoreBreakerConfig): Ball {
   return {
     x: cfg.launch.x,
     y: cfg.launch.y,
     vx: Math.cos(shot.angleRad) * shot.power,
     vy: Math.sin(shot.angleRad) * shot.power,
-    r: cfg.ballRadius,
+    r: ballRadius(shot.type),
     type: shot.type,
     live: true,
     lowSpeedTime: 0,
-    phaseUsed: false,
+    didSplit: false,
     cooldown: new Map(),
   };
 }
 
 /**
- * Advance the ball by exactly one fixed sub-step against `pegs`. Mutates both and returns the
- * pegs shattered this step. Sets `ball.live = false` (+ `ball.end`) when the shot ends. This is
- * the renderer-facing entry point; `simulateShot` wraps it for pure, headless resolution.
+ * Advance one fixed sub-step. Mutates ball and pegs; returns events for this step.
+ * `podX` is the current pod position — pass NaN to disable pod-catch (headless sim).
  */
-export function step(ball: Ball, pegs: Peg[], cfg: CoreBreakerConfig): StepEvents {
-  const events: StepEvents = { broken: [], drops: [] };
+export function step(
+  ball: Ball,
+  pegs: Peg[],
+  cfg: CoreBreakerConfig,
+  podX: number = NaN,
+): StepEvents {
+  const events: StepEvents = {
+    broken: [],
+    drops: [],
+    spawned: [],
+    caught: false,
+    newMinerals: [],
+  };
   if (!ball.live) return events;
 
   // Decay per-peg cooldowns.
-  for (const [pid, t] of ball.cooldown) {
+  for (const [id, t] of ball.cooldown) {
     const next = t - cfg.step;
-    if (next <= 0) ball.cooldown.delete(pid);
-    else ball.cooldown.set(pid, next);
+    if (next <= 0) ball.cooldown.delete(id);
+    else ball.cooldown.set(id, next);
   }
 
-  // Homing steers toward the nearest alive ore peg at/below it.
-  if (ball.type === 'homing') {
-    const target = nearestOre(ball, pegs);
-    if (target !== null) {
-      let sx = target.x - ball.x;
-      let sy = target.y - ball.y;
-      const sl = Math.hypot(sx, sy) || 1;
-      sx /= sl;
-      sy /= sl;
-      ball.vx += sx * HOMING_STEER * cfg.step;
-      ball.vy += sy * HOMING_STEER * cfg.step;
-    }
-  }
-
-  // Gravity + integrate.
+  // Integrate.
   ball.vy += cfg.gravity * cfg.step;
   ball.x += ball.vx * cfg.step;
   ball.y += ball.vy * cfg.step;
 
-  // Walls — always reflect (the field is bounded; floor is the only exit).
+  // Walls.
   if (ball.x < ball.r) {
     ball.x = ball.r;
     ball.vx = Math.abs(ball.vx) * cfg.restitution;
@@ -206,89 +217,168 @@ export function step(ball: Ball, pegs: Peg[], cfg: CoreBreakerConfig): StepEvent
     ball.vx = -Math.abs(ball.vx) * cfg.restitution;
   }
 
-  // Peg collisions — stable array order for determinism.
+  // Pod catch — before floor check so the pod at podY doesn't instantly lose balls.
+  if (!Number.isNaN(podX) && ball.vy > 0 && ball.y + ball.r >= cfg.podY) {
+    if (Math.abs(ball.x - podX) <= cfg.bayWidth) {
+      ball.live = false;
+      ball.end = 'caught';
+      events.caught = true;
+      return events;
+    }
+  }
+
+  // Floor / fell out.
+  if (ball.y - ball.r > cfg.floorY) {
+    ball.live = false;
+    ball.end = 'fellOut';
+    return events;
+  }
+
+  // Formation collisions.
   for (const peg of pegs) {
     if (peg.hits <= 0) continue;
-    const dx = ball.x - peg.x;
-    const dy = ball.y - peg.y;
-    const minDist = ball.r + peg.r;
-    const d2 = dx * dx + dy * dy;
-    if (d2 >= minDist * minDist) continue;
 
-    const d = Math.sqrt(d2) || 0.0001;
-    const nx = dx / d;
-    const ny = dy / d;
-    const onCooldown = ball.cooldown.has(peg.id);
-
+    // ── Bloom: consumes all non-ghost balls; ghost passes through harmlessly ──
     if (peg.kind === 'bloom') {
-      const passes = ball.type === 'pierce' || (ball.type === 'phase' && !ball.phaseUsed);
-      if (ball.type === 'phase' && passes) ball.phaseUsed = true;
-      if (passes) {
-        // Punch/phase through: clear the growth, no reflection.
-        if (!onCooldown) {
-          registerHit(ball, peg, events);
-          if (ball.type === 'pierce') applyPierceDrag(ball);
+      if (ball.type !== 'ghost') {
+        const pr = peg.r;
+        const dx = ball.x - peg.x;
+        const dy = ball.y - peg.y;
+        if (dx * dx + dy * dy < (ball.r + pr) * (ball.r + pr)) {
+          ball.live = false;
+          ball.end = 'consumed';
+          return events;
         }
-      } else {
-        // Consumed — the shot is wasted (the growth is NOT cleared).
-        ball.live = false;
-        ball.end = 'consumed';
-        return events;
       }
+      // Ghost passes through bloom without deflecting or damaging it.
       continue;
     }
 
-    if (ball.type === 'pierce') {
-      // Straight shot punches through; bleed speed once per peg, no reflection / correction.
-      if (!onCooldown) {
-        registerHit(ball, peg, events);
-        applyPierceDrag(ball);
-      }
+    // ── Ore bar: box collision ─────────────────────────────────────────────
+    let nx: number, ny: number, overlap: number, overlapping: boolean;
+    if (peg.kind === 'ore') {
+      const qx = Math.max(peg.x - ORE_HW, Math.min(ball.x, peg.x + ORE_HW));
+      const qy = Math.max(peg.y - ORE_HH, Math.min(ball.y, peg.y + ORE_HH));
+      const ddx = ball.x - qx;
+      const ddy = ball.y - qy;
+      const dd = Math.hypot(ddx, ddy) || 0.001;
+      overlapping = dd < ball.r;
+      nx = ddx / dd;
+      ny = ddy / dd;
+      overlap = ball.r - dd;
     } else {
-      // Push out to exactly touching, then reflect with restitution.
-      const overlap = minDist - d;
-      ball.x += nx * overlap;
-      ball.y += ny * overlap;
+      // ── Circular collision ───────────────────────────────────────────────
+      const dx = ball.x - peg.x;
+      const dy = ball.y - peg.y;
+      const min = ball.r + peg.r;
+      const d2 = dx * dx + dy * dy;
+      overlapping = d2 < min * min;
+      if (overlapping) {
+        const d = Math.sqrt(d2) || 0.001;
+        nx = dx / d;
+        ny = dy / d;
+        overlap = min - d;
+      } else {
+        nx = 0;
+        ny = 0;
+        overlap = 0;
+      }
+    }
+
+    if (!overlapping) {
+      ball.cooldown.delete(peg.id);
+      continue;
+    }
+
+    const onCooldown = ball.cooldown.has(peg.id);
+
+    // Ghost deflects off nothing (it passes through all formations).
+    // Drill deflects only off rock.
+    const deflect = ball.type !== 'ghost' && !(ball.type === 'drill' && peg.kind !== 'rock');
+
+    if (deflect) {
+      ball.x += nx * (overlap + 0.5);
+      ball.y += ny * (overlap + 0.5);
       const vDotN = ball.vx * nx + ball.vy * ny;
       if (vDotN < 0) {
         const j = (1 + cfg.restitution) * vDotN;
         ball.vx -= j * nx;
         ball.vy -= j * ny;
       }
-      if (!onCooldown) registerHit(ball, peg, events);
+    }
+
+    if (!onCooldown) {
+      ball.cooldown.set(peg.id, HIT_COOLDOWN);
+      const damage = ball.type === 'heavy' ? 2 : 1;
+      registerHit(ball, peg, damage, events);
+
+      // Split fork: spawn a sibling on the first formation contact.
+      if (ball.type === 'split' && !ball.didSplit) {
+        ball.didSplit = true;
+        const forkAngle = Math.atan2(ball.vy, ball.vx) + 0.45;
+        const speed = Math.hypot(ball.vx, ball.vy);
+        events.spawned.push({
+          x: ball.x,
+          y: ball.y,
+          vx: Math.cos(forkAngle) * speed,
+          vy: Math.sin(forkAngle) * speed,
+          r: ball.r,
+          type: 'split',
+          live: true,
+          lowSpeedTime: 0,
+          didSplit: true,
+          cooldown: new Map(),
+        });
+      }
     }
   }
 
-  // Settle / fall-out.
+  // Safety-valve settle detection.
   const speed = Math.hypot(ball.vx, ball.vy);
   if (speed < REST_SPEED) ball.lowSpeedTime += cfg.step;
   else ball.lowSpeedTime = 0;
 
-  if (ball.y - ball.r > cfg.floorY) {
-    ball.live = false;
-    ball.end = 'fellOut';
-  } else if (ball.lowSpeedTime >= REST_TIME) {
+  if (ball.lowSpeedTime >= REST_TIME) {
     ball.live = false;
     ball.end = 'settled';
-    if (ball.type === 'bouncy') {
-      // On-rest AoE shatter — the missile's payoff.
-      for (const peg of pegs) {
-        if (peg.hits <= 0) continue;
-        if (Math.hypot(peg.x - ball.x, peg.y - ball.y) <= BOUNCY_AOE) {
-          peg.hits = 0;
-          emitDrop(peg, events);
-        }
-      }
-    }
   }
 
   return events;
 }
 
 /**
- * Resolve a whole shot headlessly: spawn the ball and loop `step` until it settles, falls out,
- * is consumed, or hits the step cap. Mutates `pegs` (the field degrades shot to shot, like a real
- * drop). Returns the ordered break/drop stream — this is the determinism-pinned surface.
+ * Advance mineral drops one sub-step.
+ * Minerals caught by the pod are returned as Drop events; minerals that fell past the
+ * floor are marked live=false.
+ */
+export function stepMinerals(
+  minerals: MineralDrop[],
+  podX: number,
+  cfg: CoreBreakerConfig,
+): MineralStepResult {
+  const result: MineralStepResult = { caught: [], lost: [] };
+  for (const m of minerals) {
+    if (!m.live) continue;
+    m.vy += cfg.gravity * cfg.step;
+    m.x += m.vx * cfg.step;
+    m.y += m.vy * cfg.step;
+
+    if (m.vy > 0 && m.y >= cfg.podY && Math.abs(m.x - podX) <= cfg.bayWidth) {
+      m.live = false;
+      result.caught.push({ pegId: -1, kind: 'mineral', resource: m.resource, amount: m.amount });
+      continue;
+    }
+    if (m.y > cfg.floorY + 12) {
+      m.live = false;
+      result.lost.push(m.id);
+    }
+  }
+  return result;
+}
+
+/**
+ * Headless full-shot resolver — runs `step` until the ball settles/falls/is caught/maxSteps.
+ * `podX = NaN` disables pod-catch so the deterministic surface is reproducible.
  */
 export function simulateShot(pegs: Peg[], shot: ShotInput, cfg: CoreBreakerConfig): ShotResult {
   const ball = spawnBall(shot, cfg);
@@ -297,7 +387,7 @@ export function simulateShot(pegs: Peg[], shot: ShotInput, cfg: CoreBreakerConfi
   let steps = 0;
 
   while (ball.live && steps < cfg.maxSteps) {
-    const ev = step(ball, pegs, cfg);
+    const ev = step(ball, pegs, cfg, NaN);
     for (const id of ev.broken) brokenPegIds.push(id);
     for (const d of ev.drops) drops.push(d);
     steps++;
@@ -307,35 +397,62 @@ export function simulateShot(pegs: Peg[], shot: ShotInput, cfg: CoreBreakerConfi
   return { brokenPegIds, drops, steps, end };
 }
 
-function registerHit(ball: Ball, peg: Peg, events: StepEvents): void {
-  ball.cooldown.set(peg.id, HIT_COOLDOWN);
-  peg.hits -= 1;
-  if (peg.hits <= 0) emitDrop(peg, events);
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function ballRadius(type: BallType): number {
+  const R: Record<BallType, number> = {
+    standard: 6,
+    heavy: 8,
+    split: 6,
+    drill: 5,
+    ghost: 6,
+  };
+  return R[type];
 }
 
-function emitDrop(peg: Peg, events: StepEvents): void {
-  peg.hits = 0;
+function registerHit(ball: Ball, peg: Peg, damage: number, events: StepEvents): void {
+  const was = peg.hits;
+  peg.hits = Math.max(0, peg.hits - damage);
   const def = PEG_DEFS[peg.kind];
-  events.broken.push(peg.id);
-  events.drops.push({ pegId: peg.id, kind: peg.kind, resource: def.resource, amount: def.amount });
-}
 
-function applyPierceDrag(ball: Ball): void {
-  ball.vx *= PIERCE_DRAG;
-  ball.vy *= PIERCE_DRAG;
-}
+  // Ore drops a mineral on every hit (the "rich vein" mechanic).
+  if (def.dropPerHit && def.resource !== null && peg.hits < was) {
+    const drop: Drop = {
+      pegId: peg.id,
+      kind: peg.kind,
+      resource: def.resource,
+      amount: def.amount,
+    };
+    events.drops.push(drop);
+    events.newMinerals.push(spawnMineral(peg, drop));
+  }
 
-function nearestOre(ball: Ball, pegs: Peg[]): Peg | null {
-  let best: Peg | null = null;
-  let bestD = Infinity;
-  for (const peg of pegs) {
-    if (peg.hits <= 0 || peg.kind !== 'ore') continue;
-    if (peg.y < ball.y - 8) continue; // only steer toward ore at/below the ball
-    const d = (peg.x - ball.x) ** 2 + (peg.y - ball.y) ** 2;
-    if (d < bestD) {
-      bestD = d;
-      best = peg;
+  if (peg.hits <= 0) {
+    events.broken.push(peg.id);
+    if (!def.dropPerHit && def.resource !== null) {
+      const drop: Drop = {
+        pegId: peg.id,
+        kind: peg.kind,
+        resource: def.resource,
+        amount: def.amount,
+      };
+      events.drops.push(drop);
+      events.newMinerals.push(spawnMineral(peg, drop));
     }
   }
-  return best;
+
+  void ball; // ball param reserved for future use (e.g. crystal scatter)
+}
+
+function spawnMineral(peg: Peg, drop: Drop): MineralDrop {
+  return {
+    id: _nextMineralId++,
+    x: peg.x + (Math.random() - 0.5) * 8,
+    y: peg.y,
+    vx: (Math.random() - 0.5) * 30,
+    vy: -40 - Math.random() * 30,
+    resource: drop.resource,
+    amount: drop.amount,
+    live: true,
+  };
 }

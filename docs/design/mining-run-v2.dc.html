@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=VT323&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#05060c; }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; display:block; }
+  @keyframes blink50 { 0%,100%{opacity:1} 50%{opacity:.35} }
+  *::selection { background:#ff9e2c; }
+</style>
+</helmet>
+<div data-screen-label="Mining Run" style="position:relative; width:375px; height:812px; margin:0 auto; background:#05060c; overflow:hidden; font-family:'Silkscreen',monospace; color:#c9cdd6; user-select:none; -webkit-user-select:none;">
+  <span style="display:none;">{{ boot }}</span>
+
+  <!-- ============ HEADER HUD ============ -->
+  <div style="position:absolute; top:0; left:0; right:0; height:60px; padding:8px 8px 0; display:flex; gap:8px; align-items:flex-start; z-index:6; pointer-events:none;">
+    <!-- biome + timer -->
+    <div style="background:#3a3e48; padding:2px; clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);">
+      <div style="background:#11131c; padding:6px 10px; clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px); display:flex; flex-direction:column; gap:3px;">
+        <div style="font-size:7px; color:#6a6d76; letter-spacing:1px;">SURFACE · <span id="hud-biome">VERDANT</span></div>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <div style="width:8px; height:8px; background:#ff9e2c; clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);"></div>
+          <div style="font-family:'VT323',monospace; font-size:20px; color:#e8e6e0; line-height:.7;" id="hud-timer">3:00</div>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1;"></div>
+    <!-- haul -->
+    <div style="background:#3a3e48; padding:2px; clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);">
+      <div style="background:#11131c; padding:6px 11px; clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px); display:flex; flex-direction:column; gap:4px;">
+        <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;"><div style="font-family:'VT323',monospace; font-size:17px; color:#c9cdd6; line-height:.7;" id="hud-scrap">0</div><div style="width:9px; height:9px; background:#9aa0ad;"></div><div style="font-size:7px; color:#6a6d76; width:36px;">SCRAP</div></div>
+        <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;"><div style="font-family:'VT323',monospace; font-size:17px; color:#a9d65a; line-height:.7;" id="hud-bio">0</div><div style="width:9px; height:9px; background:#8ac926; clip-path:polygon(50% 0,100% 38%,82% 100%,18% 100%,0 38%);"></div><div style="font-size:7px; color:#6a6d76; width:36px;">BIOMIN</div></div>
+        <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;"><div style="font-family:'VT323',monospace; font-size:17px; color:#8ff8e2; line-height:.7;" id="hud-core">0</div><div style="width:9px; height:9px; background:#6ad1e3; clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);"></div><div style="font-size:7px; color:#6a6d76; width:36px;">CORE</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PLAY FIELD ============ -->
+  <div style="position:absolute; top:60px; left:0; width:375px; height:582px;">
+    <canvas id="cv-field" style="width:375px; height:582px;"></canvas>
+
+    <!-- status flash -->
+    <div id="fx-flash" style="position:absolute; top:46%; left:0; right:0; text-align:center; font-size:13px; letter-spacing:1px; color:#ff9e2c; opacity:0; pointer-events:none; text-shadow:0 2px 0 #000;">BALL LOST</div>
+    <!-- aim hint -->
+    <div id="fx-aim" style="position:absolute; bottom:10px; left:0; right:0; text-align:center; font-size:8px; letter-spacing:1px; color:#6ad1e3; opacity:.85; pointer-events:none; animation:blink50 1.4s infinite;">AIM THE DROP ▸ DRAG &amp; RELEASE TO FIRE</div>
+    <!-- skip intro -->
+    <button id="btn-skip" style="position:absolute; top:8px; right:8px; display:none; background:#16181d; color:#9aa0ad; border:1px solid #3a3e48; font-family:'Silkscreen',monospace; font-size:7px; padding:5px 8px; cursor:pointer; clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);">SKIP ▸</button>
+  </div>
+
+  <!-- ============ ROSTER TRAY ============ -->
+  <div style="position:absolute; bottom:0; left:0; right:0; height:170px; padding:8px; z-index:6;">
+    <div style="background:#3a3e48; padding:2px; height:100%; box-sizing:border-box; clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);">
+      <div style="background:#11131c; height:100%; box-sizing:border-box; padding:10px 12px; clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px); display:flex; flex-direction:column; gap:9px;">
+        <!-- top row: armed + queue -->
+        <div style="display:flex; align-items:center; gap:12px;">
+          <!-- armed -->
+          <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+            <div style="font-size:6px; color:#ff9e2c; letter-spacing:1px;">ARMED</div>
+            <div style="background:#2a1c10; padding:3px; clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);"><div style="background:#16181d; padding:3px;"><canvas id="rc-cur" style="width:48px; height:48px;"></canvas></div></div>
+            <div id="rc-name" style="font-size:7px; color:#e8e6e0;">STANDARD</div>
+            <div id="rc-pips" style="display:flex; gap:2px; align-items:center; height:7px;"></div>
+          </div>
+          <div style="width:2px; align-self:stretch; background:#23262d;"></div>
+          <!-- queue -->
+          <div style="flex:1; display:flex; flex-direction:column; gap:5px;">
+            <div style="font-size:6px; color:#6a6d76; letter-spacing:1px;">ROSTER ▸ <span id="rc-remain">5</span> PROBES</div>
+            <div style="display:flex; gap:7px;">
+              <div style="display:flex; flex-direction:column; align-items:center; gap:2px;"><div style="background:#16181d; padding:2px;"><canvas id="rc-0" style="width:30px; height:30px;"></canvas></div></div>
+              <div style="display:flex; flex-direction:column; align-items:center; gap:2px;"><div style="background:#16181d; padding:2px;"><canvas id="rc-1" style="width:30px; height:30px;"></canvas></div></div>
+              <div style="display:flex; flex-direction:column; align-items:center; gap:2px;"><div style="background:#16181d; padding:2px;"><canvas id="rc-2" style="width:30px; height:30px;"></canvas></div></div>
+              <div style="display:flex; align-items:center; font-family:'VT323',monospace; font-size:16px; color:#44464e;" id="rc-more">+0</div>
+            </div>
+          </div>
+        </div>
+        <!-- bottom row: actions -->
+        <div style="display:flex; gap:8px; align-items:stretch;">
+          <button id="btn-reprint" style="flex:1; background:#2a1c10; color:#e6904e; border:none; font-family:'Silkscreen',monospace; font-size:8px; letter-spacing:1px; padding:9px 6px; cursor:pointer; clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px); display:flex; flex-direction:column; gap:3px; align-items:center;">
+            <span>REPRINT PROBE</span><span id="rp-cost" style="font-size:7px; color:#9b6a3a;">2 SCRAP</span>
+          </button>
+          <button id="btn-return" style="flex:1; background:#16181d; color:#9aa0ad; border:1px solid #3a3e48; font-family:'Silkscreen',monospace; font-size:8px; letter-spacing:1px; padding:9px 6px; cursor:pointer; clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px); display:flex; flex-direction:column; gap:3px; align-items:center;">
+            <span>RETURN TO ORBIT</span><span style="font-size:7px; color:#5a5d66;">END RUN ▸ KEEP HAUL</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ COMPLETE OVERLAY ============ -->
+  <div id="ov-complete" style="position:absolute; inset:0; display:none; background:rgba(5,6,12,.86); z-index:20; align-items:center; justify-content:center;">
+    <div style="width:300px; background:#3a3e48; padding:2px; clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);">
+      <div style="background:#11131c; padding:20px 22px; clip-path:polygon(11px 0,100% 0,100% calc(100% - 11px),calc(100% - 11px) 100%,0 100%,0 11px); display:flex; flex-direction:column; gap:14px;">
+        <div style="font-size:12px; color:#ff9e2c; letter-spacing:1px;">MINING COMPLETE</div>
+        <div style="font-size:8px; color:#6a6d76; line-height:1.6;">Pod re-docks with the rig and burns back to orbit. Haul logged to the hold.</div>
+        <div style="display:flex; flex-direction:column; gap:8px; border-top:1px solid #23262d; border-bottom:1px solid #23262d; padding:12px 0;">
+          <div style="display:flex; align-items:center; gap:8px;"><div style="width:11px; height:11px; background:#9aa0ad;"></div><div style="flex:1; font-size:8px; color:#9aa0ad;">SCRAP</div><div style="font-family:'VT323',monospace; font-size:22px; color:#c9cdd6;" id="sum-scrap">0</div></div>
+          <div style="display:flex; align-items:center; gap:8px;"><div style="width:11px; height:11px; background:#8ac926; clip-path:polygon(50% 0,100% 38%,82% 100%,18% 100%,0 38%);"></div><div style="flex:1; font-size:8px; color:#a9d65a;">BIOMINERALS</div><div style="font-family:'VT323',monospace; font-size:22px; color:#a9d65a;" id="sum-bio">0</div></div>
+          <div style="display:flex; align-items:center; gap:8px;"><div style="width:11px; height:11px; background:#6ad1e3; clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);"></div><div style="flex:1; font-size:8px; color:#8ff8e2;">CORE CRYSTAL</div><div style="font-family:'VT323',monospace; font-size:22px; color:#8ff8e2;" id="sum-core">0</div></div>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:7px; color:#6a6d76;"><span>PROBES CAUGHT <span id="sum-caught" style="color:#8ac926;">0</span></span><span>MISSED <span id="sum-missed" style="color:#ff4757;">0</span></span></div>
+        <button id="btn-again" style="background:#2a1c10; color:#ff9e2c; border:none; font-family:'Silkscreen',monospace; font-size:9px; letter-spacing:1px; padding:12px; cursor:pointer; clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);">DROP ON NEXT PLANET ▸</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:375,&quot;height&quot;:812},&quot;biome&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;verdant&quot;,&quot;rust&quot;,&quot;tundra&quot;],&quot;default&quot;:&quot;verdant&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;trajectoryBounces&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:2,&quot;min&quot;:0,&quot;max&quot;:4,&quot;tsType&quot;:&quot;number&quot;},&quot;wideBay&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  renderVals(){ return { boot:'' }; }
+  componentDidMount(){ this._tries=0; this._raf=null; this._boot(); }
+  componentWillUnmount(){ if(this._raf) cancelAnimationFrame(this._raf); }
+
+  _boot(){
+    const cv=document.getElementById('cv-field');
+    if((!cv || !document.fonts) && this._tries<60){ this._tries++; return requestAnimationFrame(()=>this._boot()); }
+    try{
+      this._buildToolkit();
+      this.W=125; this.H=194; this.podY=178;
+      this.cv=cv; this.ctx=this.T.disp('cv-field', this.W, this.H);
+      this._buildBallSprites();
+      this._bindUI();
+      this._bindPointer();
+      this._startRun(this.props.biome||'verdant', true);
+      this._loop();
+    }catch(e){ console.error('mining boot', e); }
+  }
+
+  // =================================================== TOOLKIT
+  _buildToolkit(){
+    const R=(g,x,y,w,h,c)=>{ g.fillStyle=c; g.fillRect(x|0,y|0,w|0,h|0); };
+    const hx=(c)=>{ c=c.replace('#',''); return [parseInt(c.slice(0,2),16),parseInt(c.slice(2,4),16),parseInt(c.slice(4,6),16)]; };
+    const mix=(a,b,t)=>{ const A=hx(a),B=hx(b); return `rgb(${Math.round(A[0]+(B[0]-A[0])*t)},${Math.round(A[1]+(B[1]-A[1])*t)},${Math.round(A[2]+(B[2]-A[2])*t)})`; };
+    const rng=(s)=>()=>{ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; };
+    const blob=(g,cx,cy,rx,ry,c,seed,wob)=>{ const r=rng(seed); g.fillStyle=c;
+      for(let y=Math.floor(cy-ry-wob); y<=Math.ceil(cy+ry+wob); y++){ const t=(y-cy)/ry; if(Math.abs(t)>1) continue;
+        const half=rx*Math.sqrt(1-t*t); const wl=(r()-0.5)*2*wob, wr=(r()-0.5)*2*wob;
+        const x0=Math.round(cx-half+wl), x1=Math.round(cx+half+wr); g.fillRect(x0,y,Math.max(1,x1-x0),1); } };
+    const dither=(g,x,y,w,h,c,seed,dens)=>{ const r=rng(seed); g.fillStyle=c;
+      for(let yy=0;yy<h;yy++) for(let xx=0;xx<w;xx++){ if(r()<dens){ const a=g.getImageData(x+xx,y+yy,1,1).data; if(a[3]>0) g.fillRect(x+xx,y+yy,1,1); } } };
+    const outline=(g,w,h,col)=>{ const img=g.getImageData(0,0,w,h),d=img.data,op=(i)=>d[i*4+3]>0,add=[];
+      for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const i=y*w+x; if(op(i)) continue; let near=false;
+        if(x>0&&op(i-1)) near=true; else if(x<w-1&&op(i+1)) near=true; else if(y>0&&op(i-w)) near=true; else if(y<h-1&&op(i+w)) near=true;
+        if(near) add.push([x,y]); } g.fillStyle=col; for(const [x,y] of add) g.fillRect(x,y,1,1); };
+    const make=(w,h,fn,oc)=>{ const c=document.createElement('canvas'); c.width=w; c.height=h; const g=c.getContext('2d'); g.imageSmoothingEnabled=false; fn(g); if(oc) outline(g,w,h,oc); return c; };
+    const disp=(id,w,h)=>{ const c=document.getElementById(id); if(!c) return null; c.width=w; c.height=h; const g=c.getContext('2d'); g.imageSmoothingEnabled=false; return g; };
+    this.T={ R,hx,mix,rng,blob,dither,outline,make,disp, E:'#2e222f' };
+    this.RAMPS={
+      verdant:['#cddf6c','#91db69','#3aa06a','#239063','#1c5a4c','#123235'],
+      rust:   ['#fdcbb0','#fca790','#e6904e','#cd683d','#8a4034','#4a2330'],
+      tundra: ['#c7dcd0','#9babb2','#7f8a9c','#566080','#3a4256','#262a3a'],
+    };
+    // formation tables
+    this.HP={ mineral:1, hard:1, ore:3, crystal:4, rock:2, bloom:99 };
+    this.ST={ mineral:1, hard:2, ore:3, crystal:3, rock:2, bloom:1 };
+    this.RAD={ mineral:5, hard:5, ore:5, crystal:5.5, rock:5, bloom:6 };
+    this.ABAR={ ore:{hw:10, hh:3.5} };
+    this.DROP={ mineral:{res:'bio',col:'#91db69'}, ore:{res:'bio',col:'#a9d65a'}, hard:{res:'scrap',col:'#bcbfc7'}, crystal:{res:'core',col:'#8ff8e2'} };
+    this.BMETA={
+      standard:{ maxB:8, r:2.5, spd:2.0, dmg:1, label:'STANDARD' },
+      heavy:   { maxB:5, r:3.3, spd:1.6, dmg:2, label:'HEAVY' },
+      split:   { maxB:6, r:2.5, spd:2.0, dmg:1, label:'SPLIT' },
+      drill:   { maxB:4, r:2.4, spd:2.3, dmg:1, label:'DRILL' },
+      ghost:   { maxB:10, r:2.6, spd:1.9, dmg:1, label:'GHOST' },
+    };
+  }
+
+  // =================================================== FORMATION SPRITES
+  _makePeg(type, ramp, stage){
+    const T=this.T,{R,mix,blob}=T,E=T.E; const L0=ramp[0],L1=ramp[1],M=ramp[2],MD=ramp[3],DK=ramp[4],DD=ramp[5];
+    // BIOMINERAL — rounded slab, teal face, green neon edge
+    if(type==='mineral'){ return T.make(14,13,(g)=>{ const x=2,y=2,w=10,h=9;
+      R(g,x,y,w,h,M);
+      g.clearRect(x,y,1,1); g.clearRect(x+w-1,y,1,1); g.clearRect(x,y+h-1,1,1); g.clearRect(x+w-1,y+h-1,1,1);
+      R(g,x+1,y,w-2,1,L1); R(g,x,y+1,1,h-2,L1);
+      R(g,x+1,y+h-1,w-2,1,DK); R(g,x+w-1,y+1,1,h-2,DK);
+      R(g,x+2,y+2,3,2,L0); R(g,x+5,y+5,2,2,MD); R(g,x+2,y+6,2,1,'#cddf6c');
+    },'#8ac926'); }
+    // SCRAP — angular steel slab, rust rivets, steel neon edge
+    if(type==='hard'){ const S0='#c4cbd2',S1='#8b939c',S2='#5c636e',S3='#3a3f48'; return T.make(14,12,(g)=>{ const x=2,y=2,w=10,h=8;
+      R(g,x,y,w,h,S2); R(g,x,y,w,1,S0); R(g,x,y+1,1,h-1,S1); R(g,x,y+h-1,w,1,S3); R(g,x+w-1,y+1,1,h-1,S3);
+      R(g,x+1,y+2,w-2,1,mix(S2,S1,0.5));
+      R(g,x+2,y+2,1,1,'#ff9e2c'); R(g,x+w-3,y+2,1,1,'#ff9e2c'); R(g,x+2,y+h-3,1,1,'#cd683d'); R(g,x+w-3,y+h-3,1,1,'#cd683d');
+      if(stage>=1){ R(g,x+5,y+1,1,h-2,mix(S3,'#000',0.4)); R(g,x+2,y+4,w-4,1,mix(S3,'#000',0.3)); g.clearRect(x+w-2,y+1,1,1); } },'#9aa0ad'); }
+    // DENSE VEIN — long horizontal BAR, reinforced, amber neon, cracks per hit
+    if(type==='ore'){ return T.make(24,10,(g)=>{ const x=2,y=2,w=20,h=6;
+      R(g,x,y,w,h,MD); R(g,x,y,w,1,L1); R(g,x,y+1,1,h-1,mix(L1,M,0.5)); R(g,x,y+h-1,w,1,DK); R(g,x+w-1,y+1,1,h-1,DK);
+      for(let i=0;i<5;i++){ const fx=x+2+i*4; R(g,fx,y+1,1,2,L0); R(g,fx+1,y+3,1,2,M); }
+      if(stage<1){ R(g,x+5,y+1,1,1,'#fbff86'); R(g,x+13,y+2,1,1,'#fbff86'); }
+      if(stage>=1){ R(g,x+6,y,1,h,mix(DK,'#000',0.4)); }
+      if(stage>=2){ R(g,x+14,y,1,h,mix(DK,'#000',0.4)); R(g,x+3,y+3,w-6,1,mix(DK,'#000',0.3)); } },'#ffb454'); }
+    // CORE CRYSTAL — diamond, prismatic shell cracks to bright cyan core
+    if(type==='crystal'){ return T.make(16,16,(g)=>{ const bx=8,by=8;
+      if(stage<2){ for(let dy=-5;dy<=5;dy++){ const hw=5-Math.abs(dy); if(hw<0) continue; R(g,bx-hw,by+dy,hw*2+1,1, dy<0?mix(MD,L1,0.35):MD); } R(g,bx-3,by-3,2,1,L0); }
+      const cr=2+stage; for(let dy=-cr;dy<=cr;dy++){ const hw=cr-Math.abs(dy); R(g,bx-hw,by+dy,hw*2+1,1,'#0b8a8f'); }
+      for(let dy=-(cr-1);dy<=cr-1;dy++){ const hw=(cr-1)-Math.abs(dy); R(g,bx-hw,by+dy,hw*2+1,1,'#6ad1e3'); }
+      R(g,bx-1,by-1,2,2,'#8ff8e2');
+      if(stage>=1){ R(g,bx+2,by-2,1,1,'#0b0d18'); R(g,bx-3,by+1,1,1,'#0b0d18'); } },'#6ad1e3'); }
+    // INERT ROCK — triangle/wedge deflector, planet ramp, NO neon (it is dead rock)
+    if(type==='rock'){ return T.make(15,13,(g)=>{ const bx=7,top=2,base=10;
+      for(let y=top;y<=base;y++){ const t=(y-top)/(base-top); const hw=Math.round(t*6); R(g,bx-hw,y,hw*2+1,1, y<top+2?M:MD); R(g,bx-hw,y,1,1,L1); R(g,bx+hw,y,1,1,DK); }
+      R(g,bx-6,base,13,1,DD); R(g,bx,top,1,2,L0);
+      if(stage>=1){ R(g,bx,top+2,1,base-top-2,mix(DK,'#000',0.4)); g.clearRect(bx+3,base-1,2,1); } },E); }
+    // BLOOM — fleshy magenta sac HAZARD, pale rib flecks, dark maw. Touch = probe swallowed (Ghost phases through).
+    if(type==='bloom'){ return T.make(16,16,(g)=>{ const cx=8,cy=8;
+      blob(g,cx,cy,6,5.6,'#9c2f5e',201,1.0); blob(g,cx,cy,5,4.8,'#d6457a',203,0.8); blob(g,cx-1,cy-1,3,2.8,'#e85d8a',205,0.6);
+      R(g,cx-5,cy-2,1,1,'#e8dcc8'); R(g,cx+4,cy-3,1,1,'#e8dcc8'); R(g,cx+3,cy+3,1,1,'#e8dcc8'); R(g,cx-4,cy+2,1,1,'#e8dcc8'); R(g,cx+1,cy-5,1,1,'#e8dcc8');
+      blob(g,cx,cy+1,2.2,1.9,'#3a1228',207,0.4); R(g,cx-1,cy,2,1,'#160610');
+    },'#ff5ca0'); }
+  }
+
+  // =================================================== BALL SPRITES
+  _ballColors(type){ return ({
+    standard:{ body:'#e6904e', lite:'#fbb954', core:'#fbff86', acc:'#ff9e2c' },
+    heavy:   { body:'#cd683d', lite:'#e6904e', core:'#ffb454', acc:'#ff9e2c' },
+    split:   { body:'#9aa6c9', lite:'#dbe2f2', core:'#ffffff', acc:'#aab6e0' },
+    drill:   { body:'#239aa6', lite:'#6ad1e3', core:'#8ff8e2', acc:'#6ad1e3' },
+    ghost:   { body:'#1f5a52', lite:'#0b8a8f', core:'#8ff8e2', acc:'#30e1b9' },
+  })[type]; }
+  // Distinct SILHOUETTES (Brickwave recognition budget: shape reads before hue before detail).
+  _makeBall(type){ const T=this.T,{R,blob}=T; const c=this._ballColors(type);
+    // STANDARD — clean small round sphere
+    if(type==='standard') return T.make(10,10,(g)=>{ blob(g,5,5,3.2,3.2,c.body,61,0.3); blob(g,4.2,4.1,1.8,1.8,c.lite,63,0.3); R(g,4,4,1,1,c.core); },T.E);
+    // HEAVY — visibly BIGGER, rivet studs at cardinals, dense
+    if(type==='heavy') return T.make(13,13,(g)=>{ blob(g,6.5,6.5,5,5,c.body,71,0.4); blob(g,5.6,5.6,2.8,2.8,c.lite,73,0.3); R(g,6,6,2,2,c.core);
+      R(g,0,5,2,3,c.acc); R(g,11,5,2,3,c.acc); R(g,5,0,3,2,c.acc); R(g,5,11,3,2,c.acc);
+      R(g,0,6,1,1,'#fbe6c0'); R(g,12,6,1,1,'#fbe6c0'); R(g,6,0,1,1,'#fbe6c0'); R(g,6,12,1,1,'#fbe6c0'); },'#5a2f18');
+    // SPLIT — two half-spheres with a clear seam gap down the middle
+    if(type==='split') return T.make(11,10,(g)=>{ blob(g,3,5,2.5,3,c.body,81,0.3); blob(g,8,5,2.5,3,c.body,83,0.3);
+      blob(g,2.6,4.2,1.2,1.4,c.lite,85,0.3); blob(g,7.6,4.2,1.2,1.4,c.lite,87,0.3); R(g,2,4,1,1,c.core); R(g,7,4,1,1,c.core);
+      g.clearRect(5,1,1,8); R(g,5,2,1,6,c.acc); },T.E);
+    // DRILL — the only NON-circular ball: elongated vertical, pointed tip
+    if(type==='drill') return T.make(8,13,(g)=>{ R(g,3,0,2,1,c.lite); R(g,2,1,4,2,c.body); R(g,1,3,6,6,c.body); R(g,1,9,6,2,c.body); R(g,2,11,4,1,c.body);
+      R(g,3,1,2,9,c.lite); R(g,3,2,2,2,c.core); R(g,1,4,1,4,'#11525a'); R(g,6,4,1,4,'#11525a'); R(g,3,10,2,1,c.core); },T.E);
+    // GHOST — translucent, dashed outline (drawn at 50% in render), wisp tail
+    if(type==='ghost') return T.make(11,11,(g)=>{ blob(g,5.5,5,3.6,3.4,c.body,91,0.6); blob(g,5.5,4.6,2.2,2,c.lite,93,0.5);
+      g.clearRect(4,4,2,2); g.clearRect(7,3,1,1); g.clearRect(3,6,1,1);
+      R(g,4,2,1,1,c.core); R(g,8,7,1,1,c.core); R(g,3,9,1,1,c.body); R(g,6,9,1,1,c.body); R(g,8,9,1,1,c.body); },null);
+  }
+  _buildBallSprites(){ this.BALL={}; ['standard','heavy','split','drill','ghost'].forEach(t=>this.BALL[t]=this._makeBall(t)); }
+
+  _drawTrayIcon(id,type,w,h){ const g=this.T.disp(id,w,h); if(!g) return; const {R}=this.T;
+    R(g,0,0,w,h,'#11131c'); if(!type) return; const spr=this.BALL[type]; const s=Math.floor(Math.min(w,h)/12); const sw=spr.width*s, sh=spr.height*s;
+    g.drawImage(spr,(w-sw)/2|0,(h-sh)/2|0,sw,sh); }
+
+  // =================================================== BG HELPERS
+  _crustBG(g,W,H,ramp,seed,walls){ const T=this.T,{R,mix}=T;
+    for(let y=0;y<H;y++){ R(g,0,y,W,1,mix(ramp[4],ramp[5],y/H)); }
+    T.dither(g,0,0,W,H,mix(ramp[5],'#000000',0.15),seed,0.06);
+    T.dither(g,0,0,W,H,mix(ramp[3],ramp[4],0.5),seed+7,0.04);
+    if(walls){ R(g,0,0,4,H,ramp[5]); R(g,4,0,1,H,ramp[4]); R(g,W-4,0,4,H,ramp[5]); R(g,W-5,0,1,H,ramp[4]); } }
+  _drawCeiling(g,W,ramp){ const T=this.T,{R,mix}=T; const horizon=14;
+    for(let y=0;y<horizon;y++){ const t=y/horizon; R(g,0,y,W,1,mix(mix(ramp[0],ramp[2],0.4),ramp[4],t)); }
+    R(g,0,horizon-2,W,1,ramp[0]); R(g,0,horizon-1,W,1,ramp[1]); R(g,0,horizon,W,2,ramp[2]);
+    T.dither(g,0,2,W,horizon-3,ramp[1],88,0.05);
+    // the scar where the pod punched through
+    const cx=W/2; R(g,cx-9,horizon-1,18,3,ramp[3]); R(g,cx-7,horizon,14,4,ramp[4]); }
+
+  // =================================================== FIELD AUTHORING
+  // Peglin-style dense pegfield: ball drops from the top rig and ricochets through it.
+  _layout(){
+    const F=[]; const W=this.W; const r=this.T.rng(this._fieldSeed||4242);
+    const add=(x,y,type,hidden)=>F.push({x,y,type,hidden:!!hidden});
+    // dense staggered grid of shaped mineral pegs (Peglin-thick)
+    const cols=8, rows=9, x0=15, x1=W-15, y0=32, y1=150;
+    for(let ry=0; ry<rows; ry++){
+      const stagger=(ry%2)? (x1-x0)/(cols-1)/2 : 0;
+      for(let c=0; c<cols; c++){
+        if(r()<0.08) continue;
+        const x=x0 + c*(x1-x0)/(cols-1) + stagger + (r()-0.5)*2.5;
+        const y=y0 + ry*(y1-y0)/(rows-1) + (r()-0.5)*2.5;
+        if(x<x0-2 || x>x1+6) continue;
+        let type='mineral'; const rr=r();
+        if(rr<0.24) type='hard'; else if(rr<0.32) type='rock';
+        add(x,y,type, r()<0.05);
+      }
+    }
+    // a few long Dense-Vein BARS spanning lanes (the long-bar silhouette + tough banks)
+    add(W*0.36,56,'ore'); add(W*0.64,90,'ore'); add(W*0.42,122,'ore');
+    // BLOOM hazards — touch = probe swallowed. Placed to threaten the tempting central lanes toward the core.
+    add(W*0.24,72,'bloom'); add(W*0.74,64,'bloom'); add(W*0.52,104,'bloom');
+    // the prize: Core Crystal funnelled by inert-rock wedges
+    const cx=W/2, cyD=140;
+    add(cx,cyD,'crystal');
+    add(cx-15,cyD-4,'rock'); add(cx+15,cyD-3,'rock'); add(cx-8,cyD+8,'rock'); add(cx+8,cyD+8,'rock');
+    return F.map((f,i)=>({ ...f, id:i, hits:this.HP[f.type], maxHits:this.HP[f.type], dead:false, deadT:0, hitFlash:0, revealed:!f.hidden, revT:f.hidden?0:1 }));
+  }
+
+  _startRun(biomeKey, intro){
+    const ramp=this.RAMPS[biomeKey]||this.RAMPS.verdant;
+    this.biome=biomeKey; this.ramp=ramp;
+    // bg bake
+    const bg=document.createElement('canvas'); bg.width=this.W; bg.height=this.H; const bgg=bg.getContext('2d'); bgg.imageSmoothingEnabled=false;
+    this._crustBG(bgg,this.W,this.H,ramp,21,true); this._drawCeiling(bgg,this.W,ramp);
+    this.T.R(bgg,0,this.H-7,this.W,7,ramp[5]); this.T.R(bgg,0,this.H-7,this.W,1,ramp[4]);
+    this.bg=bg;
+    // peg sprite cache
+    this.pegSprite={}; for(const ty of ['mineral','ore','hard','crystal','rock','bloom']){ this.pegSprite[ty]=[]; for(let s=0;s<this.ST[ty];s++) this.pegSprite[ty].push(this._makePeg(ty,ramp,s)); }
+    // state
+    this.form=this._layout();
+    this.roster=[ mk('standard'), mk('heavy'), mk('split'), mk('drill'), mk('ghost') ].map(t=>t);
+    function mk(type){ return {type}; }
+    this.roster=this.roster.map(o=>({ type:o.type, bounces:this.BMETA[o.type].maxB, maxB:this.BMETA[o.type].maxB, spent:false }));
+    this.rIdx=0;
+    this.balls=[]; this.minerals=[]; this.sparks=[];
+    this.haul={scrap:0,bio:0,core:0}; this.caughtN=0; this.missedN=0;
+    this.podX=this.W/2; this.fill=0; this.catchFlash=0; this.catchCol='#ff9e2c'; this.shake=0;
+    this.launchX=this.W/2; this.launchY=13; this.GRAV=0.0085;
+    this.reprints=0; this.time=180;
+    this.aiming=false; this.aim={dx:0,dy:1,power:0.5}; this.dragPod=false;
+    this.flash={t:0,text:'',col:'#ff9e2c'};
+    document.getElementById('ov-complete').style.display='none';
+    document.getElementById('hud-biome').textContent=biomeKey.toUpperCase();
+    if(intro){ this.phase='intro'; this.introT=0; document.getElementById('btn-skip').style.display='block'; document.getElementById('fx-aim').style.opacity='0'; }
+    else { this.phase='aim'; document.getElementById('btn-skip').style.display='none'; }
+    this._syncHUD();
+  }
+
+  // =================================================== UI BIND
+  _bindUI(){
+    const rp=document.getElementById('btn-reprint'); if(rp) rp.onclick=()=>this._reprint();
+    const rt=document.getElementById('btn-return'); if(rt) rt.onclick=()=>this._complete();
+    const ag=document.getElementById('btn-again'); if(ag) ag.onclick=()=>{ const order=['verdant','rust','tundra']; const next=order[(order.indexOf(this.biome)+1)%order.length]; this._startRun(next,true); };
+    const sk=document.getElementById('btn-skip'); if(sk) sk.onclick=()=>{ this.introT=99; };
+  }
+  _reprint(){ const costs=[2,5,10]; if(this.reprints>=3) return; const cost=costs[this.reprints]; if(this.haul.scrap<cost) return;
+    this.haul.scrap-=cost; this.reprints++; this.roster.push({type:'standard',bounces:this.BMETA.standard.maxB,maxB:this.BMETA.standard.maxB,spent:false}); this._setFlash('PROBE REPRINTED','#e6904e'); this._syncHUD(); }
+
+  // =================================================== POINTER
+  _pt(e){ const r=this.cv.getBoundingClientRect(); const cx=(e.touches?e.touches[0].clientX:e.clientX); const cy=(e.touches?e.touches[0].clientY:e.clientY); return { x:(cx-r.left)/r.width*this.W, y:(cy-r.top)/r.height*this.H }; }
+  _bindPointer(){
+    const down=(e)=>{ if(this.phase==='aim'){ this.aiming=true; this._aimFrom(this._pt(e)); e.preventDefault(); }
+      else if(this.phase==='play'){ this.dragPod=true; const p=this._pt(e); this.podX=Math.max(13,Math.min(this.W-13,p.x)); e.preventDefault(); } };
+    const move=(e)=>{ if(this.aiming){ this._aimFrom(this._pt(e)); e.preventDefault(); }
+      else if(this.dragPod){ const p=this._pt(e); this.podX=Math.max(13,Math.min(this.W-13,p.x)); e.preventDefault(); } };
+    const up=(e)=>{ if(this.aiming){ this.aiming=false; this._fire(); } this.dragPod=false; };
+    this.cv.addEventListener('mousedown',down); window.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+    this.cv.addEventListener('touchstart',down,{passive:false}); window.addEventListener('touchmove',move,{passive:false}); window.addEventListener('touchend',up);
+  }
+  // aim DOWN from the top rig: point where you want the drop to go; drag distance = power (further pull → further travel)
+  _aimFrom(p){ const ox=this.launchX, oy=this.launchY; let dx=p.x-ox, dy=p.y-oy; const d=Math.hypot(dx,dy)||1;
+    dx/=d; dy/=d; if(dy<0.25){ dy=0.25; const k=Math.sqrt(1-dy*dy); dx=Math.sign(dx||1)*k; } // clamp into the field (downward)
+    this.aim.dx=dx; this.aim.dy=dy; this.aim.power=Math.max(0.22,Math.min(1,d/72)); }
+  _fire(){ const cur=this.roster[this.rIdx]; if(!cur) return; const m=this.BMETA[cur.type]; const spd=m.spd*(0.7+this.aim.power*1.05);
+    this.balls.push({ x:this.launchX, y:this.launchY+6, vx:this.aim.dx*spd, vy:this.aim.dy*spd, type:cur.type, r:m.r, bounces:cur.bounces, maxB:cur.maxB, spent:cur.bounces<=0, didSplit:false, hitset:new Set(), trail:[] });
+    this.phase='play'; this._catchBest=null; this._sawCatch=false; this._swSeen=false; document.getElementById('fx-aim').style.opacity='0';
+    this._spark(this.launchX,this.launchY+8,'#6ad1e3',6); this.catchFlash=0.18; this.catchCol='#6ad1e3'; }
+
+  // =================================================== LOOP
+  _loop(){ let last=performance.now();
+    const tick=(now)=>{ const dt=Math.min(0.05,(now-last)/1000); last=now;
+      try{ if(this.phase==='intro') this._stepIntro(dt); else if(this.phase==='play') this._stepPlay(dt); else this._render(); }catch(e){ console.error(e); }
+      try{ this._syncFlash(dt); }catch(e){}
+      this._raf=requestAnimationFrame(tick); };
+    this._raf=requestAnimationFrame(tick); }
+
+  // =================================================== PLAY STEP
+  _stepPlay(dt){ if(this._hitstop>0){ this._hitstop-=dt; this._render(); return; } const fr=Math.min(2.4,dt*60), W=this.W, H=this.H;
+    this.time=Math.max(0,this.time-dt); if(this.catchFlash>0) this.catchFlash-=dt; if(this.shake>0) this.shake-=dt;
+    for(const f of this.form){ if(f.dead) f.deadT+=dt; if(f.hitFlash>0) f.hitFlash-=dt; if(f.revealed && f.revT<1) f.revT=Math.min(1,f.revT+dt*4);
+      if(f.dent>0) f.dent=Math.max(0,f.dent-dt*5); if(f.jig>0) f.jig=Math.max(0,f.jig-dt*6); }
+    for(const s of this.sparks){ s.life-=dt; s.x+=s.vx*fr; s.y+=s.vy*fr; s.vy+=(s.grav||0.05)*fr; if(s.bounce && s.y>H-8){ s.y=H-8; s.vy*=-0.4; s.vx*=0.6; s.bounce=false; } }
+    this.sparks=this.sparks.filter(s=>s.life>0);
+
+    // minerals fall + catch
+    for(const r of this.minerals){ if(r.gone) continue; r.vy+=0.022*fr; r.x+=r.vx*fr; r.y+=r.vy*fr; r.life+=dt;
+      if(r.vy>0 && r.y>this.podY-6 && r.y<this.podY+2 && Math.abs(r.x-this.podX)<this._bay()){ r.gone=true; this.haul[r.res]++; this.fill=Math.min(1,this.fill+0.05); this._spark(r.x,this.podY-5,r.col,5); this.catchFlash=0.16; this.catchCol='#8ac926'; }
+      else if(r.y>H+4){ r.gone=true; this.missedN+=0; this.shake=0.12; this._spark(r.x,H-4,'#6a5d4a',4); } }
+    this.minerals=this.minerals.filter(r=>!r.gone && r.life<8);
+
+    // balls
+    const newBalls=[];
+    for(const b of this.balls){ const sub=3;
+      for(let it=0; it<sub; it++){
+        b.vy += (b.spent?this.GRAV*2.6:this.GRAV)*fr; b.x+=b.vx*fr; b.y+=b.vy*fr;
+        { const sp=Math.hypot(b.vx,b.vy); if(sp>2.9){ b.vx*=2.9/sp; b.vy*=2.9/sp; } }
+        // walls
+        if(b.x<5+b.r){ b.x=5+b.r; b.vx=Math.abs(b.vx)*0.94; this._wallTax(b); }
+        if(b.x>W-5-b.r){ b.x=W-5-b.r; b.vx=-Math.abs(b.vx)*0.94; this._wallTax(b); }
+        if(b.y<6+b.r){ b.y=6+b.r; b.vy=Math.abs(b.vy)*0.94; this._wallTax(b); }
+        // catch by pod
+        if(b.vy>0 && b.y>this.podY-6 && b.y<this.podY+2 && Math.abs(b.x-this.podX)<this._bay()){
+          if(!b.spent && b.bounces>0){ this._sawCatch=true; this._catchBest=Math.max(this._catchBest||0,b.bounces); this.caughtN++; this.haul.scrap+=2; this.catchFlash=0.22; this.catchCol='#ff9e2c'; this._spark(this.podX,this.podY-6,'#ffb454',8); }
+          else { this.haul.scrap+=1; this.catchFlash=0.16; this.catchCol='#9aa0ad'; this._spark(this.podX,this.podY-6,'#9aa0ad',4); }
+          b._remove=true; break;
+        }
+        if(b.y>H+6){ if(!b.spent && b.bounces>0){ this.missedN++; this.catchFlash=0.2; this.catchCol='#ff4757'; } b._remove=true; break; }
+        // pegs — ricochet ALWAYS (Peglin); break only while charged. Bars use box collision, the rest circular.
+        for(const f of this.form){ if(f.dead||!f.revealed) continue; if(b.spent && (b.age||0)>14) continue;
+          if(f.type==='bloom'){ const pr=this.RAD.bloom; if(b.type!=='ghost' && Math.hypot(b.x-f.x,b.y-f.y)<b.r+pr-1){ b._remove=true; b._swallowed=true; this._swSeen=true; f.hitFlash=0.25; this.shake=Math.max(this.shake,0.2); this._hitstop=Math.max(this._hitstop||0,0.06); this.catchFlash=0.2; this.catchCol='#ff5ca0'; this._spark(f.x,f.y,'#ff5ca0',14); break; } continue; }
+          let nx,ny,ov,push;
+          if(f.type==='ore'){ const ab=this.ABAR.ore; const qx=Math.max(f.x-ab.hw,Math.min(b.x,f.x+ab.hw)), qy=Math.max(f.y-ab.hh,Math.min(b.y,f.y+ab.hh)); let ddx=b.x-qx, ddy=b.y-qy; let dd=Math.hypot(ddx,ddy); if(dd<0.001){ ddy=(b.y<f.y?-1:1); ddx=0; dd=0.001; } ov=dd<b.r; nx=ddx/dd; ny=ddy/dd; push=b.r-dd+0.5; }
+          else { const pr=this.RAD[f.type]; const dx=b.x-f.x, dy=b.y-f.y, d=Math.hypot(dx,dy)||0.001; ov=d<b.r+pr; nx=dx/d; ny=dy/d; push=(b.r+pr)-d+0.4; }
+          if(ov && !b.hitset.has(f.id)){ b.hitset.add(f.id);
+            // ball ALWAYS damages pegs — the bounce budget governs catch-value & lifespan, not whether it can mine
+            let deflect=true; if(b.type==='ghost') deflect=false; if(b.type==='drill'&&f.type!=='rock') deflect=false;
+            this._hitForm(b,f); if(b.bounces>0) b.bounces--; if(b.bounces<=0) b.spent=true;
+            if(b.type==='split' && !b.didSplit){ b.didSplit=true; if(this.balls.length+newBalls.length<6){ const a=Math.atan2(b.vy,b.vx)+0.5; const sp=Math.hypot(b.vx,b.vy); newBalls.push({ x:b.x, y:b.y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, type:'split', r:b.r, bounces:b.bounces, maxB:b.maxB, spent:b.spent, didSplit:true, hitset:new Set(), trail:[] }); } }
+            if(deflect){ const dot=b.vx*nx+b.vy*ny; b.vx=(b.vx-2*dot*nx)*0.94; b.vy=(b.vy-2*dot*ny)*0.94; b.x+=nx*push; b.y+=ny*push; if(f.type==='crystal'){ b.vx+=(Math.random()-0.5)*0.5; } }
+          } else if(!ov && b.hitset.has(f.id)){ b.hitset.delete(f.id); }
+        }
+        // reveal hidden via proximity
+        for(const f of this.form){ if(!f.revealed && Math.hypot(b.x-f.x,b.y-f.y)<16){ f.revealed=true; this._spark(f.x,f.y,'#6ad1e3',6); } }
+        if(b._remove) break;
+      }
+      b.age=(b.age||0)+dt; if(b.age>13) b.spent=true;
+      b.trail.push({x:b.x,y:b.y}); if(b.trail.length>7) b.trail.shift();
+    }
+    this.balls=this.balls.filter(b=>!b._remove).concat(newBalls);
+
+    // resolve only once balls AND the falling minerals have settled (pod stays movable to catch the last drops)
+    if(this.balls.length===0 && this.minerals.length===0){
+      const cur=this.roster[this.rIdx];
+      if(this._sawCatch && this._catchBest>0){ cur.bounces=this._catchBest; this._setFlash('PROBE CAUGHT · RE-AIM','#ff9e2c'); this.phase='aim'; document.getElementById('fx-aim').style.opacity='0.85'; }
+      else { cur.spent=true; this._setFlash(this._swSeen?'SWALLOWED BY BLOOM':'PROBE LOST','#ff4757'); this.rIdx++;
+        if(this.rIdx>=this.roster.length){ this._complete(); } else { this.phase='aim'; document.getElementById('fx-aim').style.opacity='0.85'; } }
+      this._catchBest=null; this._sawCatch=false; this._swSeen=false;
+    }
+    if(this.time<=0 && this.phase!=='complete'){ this._complete(); }
+    this.fill=Math.max(0,this.fill-dt*0.04);
+    this._syncHUD(); this._render();
+  }
+  _bay(){ return (this.props.wideBay? 15:12); }
+  _wallTax(b){ this._spark(b.x,b.y,'#54607e',2); }
+  _hitForm(b,f){ const dmg=this.BMETA[b.type].dmg; f.hits-=dmg; f.hitFlash=0.14; f.dent=1; f.dentDx=b.vx; f.dentDy=b.vy; this._spark(b.x,b.y,'#ffb454',3);
+    if(f.type==='ore' && f.hits>0){ this._dropMineral(f); }
+    if(f.hits<=0){ f.dead=true; f.deadT=0; const dd=this.DROP[f.type]; const col=dd?dd.col:'#8a8f99';
+      this._shards(f.x,f.y,col,7); this.shake=Math.max(this.shake,0.14); this._hitstop=Math.max(this._hitstop||0,0.05);
+      // grid jiggle: nudge nearby living formations
+      for(const n of this.form){ if(n===f||n.dead||!n.revealed) continue; const d=Math.hypot(n.x-f.x,n.y-f.y); if(d<22){ n.jig=Math.min(1,(22-d)/22+0.2); n.jigDx=(n.x-f.x)/(d||1); n.jigDy=(n.y-f.y)/(d||1); } }
+      if(dd){ this._dropMineral(f); if(f.type==='crystal'){ this._spark(f.x,f.y,'#8ff8e2',12); this.shake=0.24; this._hitstop=0.09; } }
+      this._spark(f.x,f.y,'#fbff86',6); } }
+  _dropMineral(f){ const dd=this.DROP[f.type]; if(!dd) return; this.minerals.push({ x:f.x+(Math.random()-0.5)*3, y:f.y, vx:(Math.random()-0.5)*0.3, vy:-0.25-Math.random()*0.2, col:dd.col, res:dd.res, life:0 }); }
+  _spark(x,y,col,n){ for(let k=0;k<n;k++){ const a=Math.random()*Math.PI*2, s=0.2+Math.random()*0.5; this.sparks.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-0.2,life:0.32,col}); } }
+  _shards(x,y,col,n){ for(let k=0;k<n;k++){ const a=Math.random()*Math.PI*2, s=0.5+Math.random()*1.0; this.sparks.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-0.5,life:0.65,col,sz:2,grav:0.07,bounce:true}); } }
+
+  // =================================================== RENDER
+  _render(){ const g=this.ctx; if(!g) return; const T=this.T,{R}=T, W=this.W, H=this.H;
+    const sx=(this.shake>0)?(Math.random()-0.5)*2:0, sy=(this.shake>0)?(Math.random()-0.5)*2:0;
+    g.save(); g.clearRect(0,0,W,H); g.translate(sx|0,sy|0);
+    g.drawImage(this.bg,0,0);
+    // formations (paint back-to-front by y)
+    const order=[...this.form].sort((a,b)=>a.y-b.y);
+    for(const f of order){
+      if(!f.revealed){ const tk=Math.floor(performance.now()/120)%2; const s=4; g.globalAlpha=0.5;
+        R(g,(f.x-s)|0,(f.y-s)|0,s*2,1,'#6ad1e3'); R(g,(f.x-s)|0,(f.y+s-1)|0,s*2,1,'#6ad1e3'); R(g,(f.x-s)|0,(f.y-s)|0,1,s*2,'#6ad1e3'); R(g,(f.x+s-1)|0,(f.y-s)|0,1,s*2,'#6ad1e3');
+        if(tk){ R(g,(f.x-1)|0,(f.y-1)|0,2,2,'#8ff8e2'); } g.globalAlpha=1; continue; }
+      if(f.dead){ if(f.deadT<0.18){ const s=3*(1-f.deadT/0.18); R(g,(f.x-s)|0,(f.y-s)|0,(s*2)|0,(s*2)|0,'#fbff86'); } continue; }
+      const stages=this.pegSprite[f.type]; const st=Math.max(0,Math.min(stages.length-1,f.maxHits-f.hits)); const spr=stages[st];
+      const a=f.revT<1?f.revT:1; if(a<1) g.globalAlpha=a;
+      // squash-dent (compress along impact dir) + grid-jiggle offset
+      let ox=0, oy=0, sw=spr.width, sh=spr.height;
+      if(f.jig>0){ ox+=(f.jigDx||0)*f.jig*1.6; oy+=(f.jigDy||0)*f.jig*1.6; }
+      if(f.dent>0){ const k=f.dent; const dl=Math.hypot(f.dentDx||0,f.dentDy||0)||1; const nx=(f.dentDx||0)/dl, ny=(f.dentDy||1)/dl;
+        sw=Math.max(2, spr.width*(1-Math.abs(nx)*0.22*k)); sh=Math.max(2, spr.height*(1-Math.abs(ny)*0.22*k)); ox+=nx*k*1.2; oy+=ny*k*1.2; }
+      if(f.type==='bloom'){ const pb=1+0.1*Math.sin(performance.now()/260+f.id); sw*=pb; sh*=pb; }
+      g.drawImage(spr,(f.x-sw*0.5+ox)|0,(f.y-sh*0.5+oy)|0,sw|0,sh|0); g.globalAlpha=1;
+      if(f.type==='bloom'){ const gl=0.3+0.3*Math.sin(performance.now()/200+f.id); g.globalAlpha=gl; R(g,(f.x-1)|0,(f.y)|0,2,2,'#ff5ca0'); g.globalAlpha=1; }
+      if(f.hitFlash>0){ g.globalAlpha=f.hitFlash*4; R(g,(f.x-sw*0.5+ox)|0,(f.y-sh*0.5+oy)|0,sw|0,sh|0,'#fff'); g.globalAlpha=1; } }
+    // aim preview
+    if(this.phase==='aim'){ this._drawAim(g); }
+    // pod (bottom catcher) + rig (top launcher)
+    this._drawPod(g);
+    this._drawRig(g);
+    // minerals
+    for(const r of this.minerals){ if(r.gone) continue; R(g,(r.x-1)|0,(r.y-1)|0,2,2,r.col); R(g,(r.x)|0,(r.y-1)|0,1,1,'#fff'); }
+    // balls + trails
+    for(const b of this.balls){ const c=this._ballColors(b.type);
+      for(let i=0;i<b.trail.length;i++){ const tp=b.trail[i]; g.globalAlpha=(i/b.trail.length)*(b.bounces<=2?0.2:0.4); R(g,tp.x|0,tp.y|0,1,1,c.acc); } g.globalAlpha=1;
+      const spr=this.BALL[b.type];
+      // dramatic bounce-countdown: last 2 charges → fast pulse full→40%, plus a warning ring
+      let alpha=1; const warn=(b.bounces<=2 && b.bounces>0 && !b.spent);
+      if(warn){ const ph=(Math.sin(performance.now()/70)*0.5+0.5); alpha=0.4+0.6*ph;
+        if(ph>0.6){ g.globalAlpha=(ph-0.6)*1.4; const rr=spr.width/2+2; R(g,(b.x-rr)|0,(b.y)|0,1,1,c.acc); R(g,(b.x+rr-1)|0,(b.y)|0,1,1,c.acc); R(g,(b.x)|0,(b.y-rr)|0,1,1,c.acc); R(g,(b.x)|0,(b.y+rr-1)|0,1,1,c.acc); g.globalAlpha=1; } }
+      if(b.spent) alpha=0.45; if(b.type==='ghost') alpha*=0.55;
+      g.globalAlpha=alpha;
+      g.drawImage(spr,(b.x-spr.width/2)|0,(b.y-spr.height/2)|0,spr.width,spr.height); g.globalAlpha=1; }
+    // sparks
+    for(const s of this.sparks){ g.globalAlpha=Math.max(0,Math.min(1,s.life*3)); const z=s.sz||1; R(g,(s.x-(z>1?1:0))|0,(s.y-(z>1?1:0))|0,z,z,s.col); g.globalAlpha=1; }
+    g.restore();
+  }
+
+  _drawAim(g){ const {R}=this.T; const ox=this.launchX, oy=this.launchY+6; const m=this.BMETA[this.roster[this.rIdx].type]; const spd=m.spd*(0.7+this.aim.power*1.05);
+    let x=ox,y=oy,vx=this.aim.dx*spd,vy=this.aim.dy*spd; const maxB=(this.props.trajectoryBounces!=null?this.props.trajectoryBounces:2); let wb=0, step=0;
+    while(step<240 && wb<=maxB){ vy+=this.GRAV; x+=vx*0.6; y+=vy*0.6; step++;
+      if(x<5+m.r){ x=5+m.r; vx=Math.abs(vx); wb++; } if(x>this.W-5-m.r){ x=this.W-5-m.r; vx=-Math.abs(vx); wb++; }
+      let hit=false; for(const f of this.form){ if(f.dead||!f.revealed) continue; if(Math.hypot(x-f.x,y-f.y)<m.r+this.RAD[f.type]){ hit=true; break; } } if(hit){ R(g,(x-1)|0,(y-1)|0,3,3,'#fbff86'); break; }
+      if(y>this.H-6) break;
+      if(step%4===0){ g.globalAlpha=0.6; R(g,x|0,y|0,1,1,'#8ff8e2'); g.globalAlpha=1; } }
+  }
+
+  _drawPod(g){ const {R}=this.T; const px=this.podX|0, py=this.podY|0; const loaded=(this.phase==='aim'); const aiming=this.aiming;
+    // legs
+    R(g,px-10,py+3,2,4,'#2e2c38'); R(g,px+8,py+3,2,4,'#2e2c38');
+    // bay side walls (open top, cargo-green)
+    R(g,px-11,py-6,3,7,'#547e64'); R(g,px+8,py-6,3,7,'#547e64'); R(g,px-11,py-6,3,1,'#92a984'); R(g,px+8,py-6,3,1,'#92a984');
+    // chassis
+    R(g,px-11,py-1,22,6,'#3a3e48'); R(g,px-11,py-1,22,1,'#54607e'); R(g,px-11,py+4,22,1,'#2a2c34');
+    // bay interior
+    R(g,px-8,py-5,16,6,'#16181d');
+    // fill (caught minerals)
+    const fh=Math.round(this.fill*5); if(fh>0) R(g,px-8,py+1-fh,16,fh,'#3aa06a');
+    // scoop teeth on the open bay rim — reads as a catcher, not a cannon
+    R(g,px-7,py-6,1,2,'#92a984'); R(g,px-3,py-6,1,2,'#92a984'); R(g,px+2,py-6,1,2,'#92a984'); R(g,px+6,py-6,1,2,'#92a984');
+    // catch flash ring
+    if(this.catchFlash>0){ g.globalAlpha=Math.min(1,this.catchFlash*4); R(g,px-12,py-7,24,1,this.catchCol); R(g,px-12,py-7,1,9,this.catchCol); R(g,px+11,py-7,1,9,this.catchCol); g.globalAlpha=1; }
+  }
+
+  _drawRig(g){ const {R}=this.T; const px=this.launchX|0, py=this.launchY|0; const loaded=(this.phase==='aim'); const aiming=this.aiming;
+    // launcher head mounted at the ceiling breach, aperture pointing DOWN into the cavern
+    R(g,px-7,py-4,14,5,'#3a3e48'); R(g,px-7,py-4,14,1,'#54607e');
+    R(g,px-6,py-6,12,2,'#547e64'); R(g,px-6,py-6,12,1,'#92a984');
+    R(g,px-8,py+1,2,3,'#2e2c38'); R(g,px+6,py+1,2,3,'#2e2c38');
+    if(aiming){ const ang=Math.atan2(this.aim.dy,this.aim.dx); const tx=px+Math.cos(ang)*5, ty=(py+5)+Math.sin(ang)*4; R(g,px-2,py+1,4,4,'#23262d'); R(g,(tx-1)|0,(ty-1)|0,2,2,'#6ad1e3'); }
+    else { R(g,px-2,py+1,4,4,'#23262d'); R(g,px-1,py+3,2,2,'#16181d'); }
+    if(loaded){ const pulse=0.6+0.4*Math.sin(performance.now()/220); g.globalAlpha=pulse; R(g,px-2,py-2,4,2,'#6ad1e3'); R(g,px-1,py-2,2,1,'#8ff8e2'); g.globalAlpha=1; }
+  }
+
+  // =================================================== INTRO CINEMATIC
+  _stepIntro(dt){ this.introT+=dt; const g=this.ctx,T=this.T,{R,mix}=T, W=this.W, H=this.H, ramp=this.ramp; const p=this.introT;
+    const S={ orbit:1.0, fall:2.0, burn:2.4, reveal:3.7 };
+    g.save(); g.clearRect(0,0,W,H);
+    if(p<S.burn){
+      // ----- orbit -----
+      R(g,0,0,W,H,'#070912'); const r=T.rng(3); for(let i=0;i<60;i++){ R(g,(r()*W)|0,(r()*H)|0,1,1, r()<0.5?'#3e3546':'#625565'); }
+      // planet from same ramp, lower
+      const rad=90, cx=W/2, cy=H+34; for(let y=-rad;y<=4;y++) for(let x=-rad;x<=rad;x++){ const d=Math.hypot(x,y); if(d>rad) continue; const sh=(x*0.7+y*0.7)/rad; const c=sh<-0.4?ramp[2]:sh<0.1?ramp[1]:sh<0.6?ramp[3]:ramp[4]; R(g,cx+x,cy+y,1,1,c); }
+      for(let a=180;a<360;a+=2){ R(g,(cx+Math.cos(a*Math.PI/180)*(rad+1))|0,(cy+Math.sin(a*Math.PI/180)*(rad+1))|0,1,1,ramp[0]); }
+      // mother ship
+      R(g,cx-15,24,30,8,'#547e64'); R(g,cx-15,24,30,1,'#92a984'); R(g,cx+13,26,4,4,'#6ad1e3'); R(g,cx-19,26,5,3,'#30e1b9');
+      // pod
+      let podY=34, podX=cx;
+      if(p<S.orbit){ podY=34; }
+      else if(p<S.fall){ const k=(p-S.orbit)/(S.fall-S.orbit); podY=34+k*(H-86); R(g,podX-1,podY-6,2,4,'#ffb454'); }
+      else { const k=(p-S.fall)/(S.burn-S.fall); podY=(H-52)+k*40; }
+      R(g,podX-4,podY-4,8,6,'#3a3e48'); R(g,podX-3,podY-5,6,2,'#547e64'); R(g,podX-2,podY-2,4,2,'#6ad1e3');
+      if(p>S.fall){ const k=(p-S.fall)/(S.burn-S.fall); for(let i=0;i<20;i++){ const yy=podY+2+i; const wob=i*0.6; R(g,(podX-wob)|0,yy|0,1,1,'#ffb454'); R(g,(podX+wob)|0,yy|0,1,1, i<9?'#ff9e2c':'#ff4757'); } g.globalAlpha=k; R(g,0,0,W,H,'#ffb454'); g.globalAlpha=1; }
+      this._setIntroLabel(p<S.orbit?'ORBIT — POD DOCKED':p<S.fall?'DROP — POD FALLS TO SURFACE':'ATMOSPHERE BURN');
+    } else {
+      // ----- reveal: cavern fades up, pod embedded at floor, scan sweep -----
+      const k=Math.min(1,(p-S.burn)/(S.reveal-S.burn));
+      g.drawImage(this.bg,0,0);
+      // scan sweep line reveals formations top->bottom
+      const scanY=k*H;
+      for(const f of this.form){ if(f.hidden) continue; if(f.y<scanY){ const stages=this.pegSprite[f.type]; const spr=stages[0]; g.drawImage(spr,(f.x-spr.width*0.5)|0,(f.y-spr.height*0.5)|0,spr.width|0,spr.height|0); } }
+      // sweep glow
+      g.globalAlpha=0.5; R(g,0,scanY|0,W,1,'#6ad1e3'); g.globalAlpha=0.18; R(g,0,(scanY-6)|0,W,6,'#6ad1e3'); g.globalAlpha=1;
+      this._drawPodIntro(g,k); if(k>0.4) this._drawRig(g);
+      // residual heat
+      g.globalAlpha=(1-k)*0.7; R(g,0,0,W,H,'#ffb454'); g.globalAlpha=1;
+      this._setIntroLabel('RIG EMBEDDED — SCANNING SEAM');
+    }
+    g.restore();
+    if(p>=S.reveal){ // commit revealed (non-hidden) and go to aim
+      for(const f of this.form){ if(!f.hidden){ f.revealed=true; f.revT=1; } }
+      this.phase='aim'; document.getElementById('btn-skip').style.display='none'; document.getElementById('fx-aim').style.opacity='0.85'; this._setIntroLabel(''); this._syncHUD();
+    }
+  }
+  _drawPodIntro(g,k){ const {R}=this.T; const px=this.W/2|0, py=this.podY|0;
+    R(g,px-10,py+3,2,4,'#2e2c38'); R(g,px+8,py+3,2,4,'#2e2c38');
+    R(g,px-11,py-6,3,7,'#547e64'); R(g,px+8,py-6,3,7,'#547e64'); R(g,px-11,py-6,3,1,'#92a984'); R(g,px+8,py-6,3,1,'#92a984');
+    R(g,px-11,py-1,22,6,'#3a3e48'); R(g,px-11,py-1,22,1,'#54607e'); R(g,px-8,py-5,16,6,'#16181d');
+    R(g,px-2,py-8,4,4,'#23262d');
+    const pulse=0.5+0.5*Math.sin(performance.now()/180); g.globalAlpha=pulse*k; R(g,px-2,py-4,4,2,'#6ad1e3'); g.globalAlpha=1; }
+  _setIntroLabel(t){ const e=document.getElementById('fx-flash'); if(!e) return; if(t){ e.textContent=t; e.style.color='#6ad1e3'; e.style.opacity='0.9'; } else { e.style.opacity='0'; } }
+
+  // =================================================== COMPLETE
+  _complete(){ this.phase='complete'; const set=(id,v)=>{ const e=document.getElementById(id); if(e) e.textContent=v; };
+    set('sum-scrap',this.haul.scrap); set('sum-bio',this.haul.bio); set('sum-core',this.haul.core); set('sum-caught',this.caughtN); set('sum-missed',this.missedN);
+    document.getElementById('ov-complete').style.display='flex'; document.getElementById('fx-aim').style.opacity='0'; this._render(); }
+
+  // =================================================== HUD
+  _setFlash(text,col){ this.flash={t:1.1,text,col}; }
+  _syncFlash(dt){ const e=document.getElementById('fx-flash'); if(!e||this.phase==='intro') return; if(this.flash.t>0){ this.flash.t-=dt; e.textContent=this.flash.text; e.style.color=this.flash.col; e.style.opacity=Math.min(0.95,this.flash.t*1.4); } else if(this.phase!=='intro'){ e.style.opacity='0'; } }
+  _syncHUD(){ const set=(id,v)=>{ const e=document.getElementById(id); if(e) e.textContent=v; };
+    set('hud-scrap',this.haul.scrap); set('hud-bio',this.haul.bio); set('hud-core',this.haul.core);
+    const mm=Math.floor(this.time/60), ss=Math.floor(this.time%60); set('hud-timer',mm+':'+(ss<10?'0':'')+ss);
+    // roster
+    const cur=this.roster[this.rIdx]; if(cur){ this._drawTrayIcon('rc-cur',cur.type,48,48); set('rc-name',this.BMETA[cur.type].label);
+      const pips=document.getElementById('rc-pips'); if(pips){ pips.innerHTML=''; const max=cur.maxB; for(let i=0;i<max;i++){ const d=document.createElement('div'); d.style.cssText='width:4px;height:7px;background:'+(i<cur.bounces?'#ff9e2c':'#3a2c14')+';'; pips.appendChild(d); } } }
+    const upcoming=[]; for(let i=this.rIdx+1;i<this.roster.length;i++) upcoming.push(this.roster[i]);
+    for(let i=0;i<3;i++){ this._drawTrayIcon('rc-'+i, upcoming[i]?upcoming[i].type:null, 30,30); }
+    set('rc-more', '+'+Math.max(0,upcoming.length-3));
+    set('rc-remain', Math.max(0,this.roster.length-this.rIdx));
+    // reprint button
+    const costs=[2,5,10]; const rp=document.getElementById('btn-reprint'); const rc=document.getElementById('rp-cost');
+    if(this.reprints>=3){ if(rc) rc.textContent='MAX REACHED'; if(rp){ rp.style.opacity='0.4'; rp.disabled=true; } }
+    else { const cost=costs[this.reprints]; if(rc) rc.textContent=cost+' SCRAP'; if(rp){ const ok=this.haul.scrap>=cost; rp.style.opacity=ok?'1':'0.5'; rp.disabled=!ok; } }
+  }
+}
+</script>
+</body>
+</html>
