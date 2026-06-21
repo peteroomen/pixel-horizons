@@ -32,7 +32,7 @@ for this space.  Main-game `enterMining()` keeps landscape canvas for now (CB.7 
   - Remove `caught` from `StepEvents`, `ShotEnd`
   - Remove pod-catch block from `step()`; `step()` no longer takes `podX`
   - `stepMinerals()`: magnet pull (700 px/s²) toward pod at top, collect at `m.y <= cfg.podY + 15`
-  - `defaultConfig()`: portrait 360×640, `podY=30`, `launch={x:180,y:30}`, `floorY=628`
+  - `defaultConfig()`: **kept at landscape 640×360** (main game backward-compat); added new `portraitConfig()` for the standalone route
   - Remove `bayWidth` from config
 - [x] `src/game/surface/field-gen.ts`
   - Portrait grid: 6 cols × 11 rows, GRID_Y0=90, GRID_Y1=490 within 360×640
@@ -69,21 +69,33 @@ for this space.  Main-game `enterMining()` keeps landscape canvas for now (CB.7 
 
 ## What actually happened
 
-Implemented as planned. Key detail: the `stepMinerals` magnet removes gravity entirely for drops
-(replaces it with a 700 px/s² pull toward the pod at the top). The 1/60 coarse-step tunneling
-test needed a peg y-shift (164→130) because the portrait launch origin (y=30) places coarse
-steps at different positions than the old landscape origin (y=22).
+Implemented as planned with one critical design correction caught during browser testing:
+
+**Bug: `defaultConfig()` must stay landscape.** The initial implementation changed `defaultConfig()`
+to return 360×640. This caused two bugs: (1) the main game's `enterMining()` drew a 640px-tall
+mining background over the landscape 640×360 viewport, leaving a faded ghost of the mining screen
+visible on the map; (2) the `/core-breaker` route was using portrait dimensions but the original
+field-gen constants were still targeted at portrait, so the two happened to produce correct-looking
+but misaligned results. Fix: `defaultConfig()` reverted to landscape (640×360, `launch.x=320,
+podY=22`); a new `portraitConfig()` export added for the standalone route only. `field-gen.ts`
+now detects orientation via `cfg.height > cfg.width` and branches on landscape vs portrait
+layout constants (LS_* vs PT_*).
+
+Key mechanics: the `stepMinerals` magnet replaces gravity entirely for drops (700 px/s² pull
+toward the pod at the top). The 1/60 coarse-step tunneling test peg stayed at y=164 (landscape
+launch at y=22 — no shift needed once defaultConfig reverted). Tests reverted to landscape peg
+positions (x=320) and `step(ball, pegs, cfg)` without the stray NaN fourth argument.
 
 `drawPod()` was merged into `drawRig()` (single function draws both the surface housing and the
 downward launch tube); `podGfx` and `rigGfx` containers kept separate for layering.
 
 ## Files created / modified
 
-- `src/game/surface/core-breaker.ts` — portrait config, no pod-catch, magnet drops
-- `src/game/surface/field-gen.ts` — portrait 6×11 grid, new ore/bloom/crystal positions
+- `src/game/surface/core-breaker.ts` — added `portraitConfig()`, kept `defaultConfig()` landscape, no pod-catch, magnet drops
+- `src/game/surface/field-gen.ts` — dual landscape/portrait layout (LS_*/PT_* constants), orientation detected from cfg
 - `src/renderer/core-breaker-renderer.ts` — pod-drag removed, surface-at-top background, merged rig draw
-- `src/app/core-breaker/page.tsx` — portrait Pixi init + inline scale computation
-- `src/game/surface/core-breaker.test.ts` — peg positions updated for portrait launch coords
+- `src/app/core-breaker/page.tsx` — uses `portraitConfig()`, inline portrait scale computation
+- `src/game/surface/core-breaker.test.ts` — landscape peg positions (x=320), no NaN arg to step()
 - `docs/work/2026-06-22-mining-portrait-redesign.md` — this file
 
 ## Deferred to next session

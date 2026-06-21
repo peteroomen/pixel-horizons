@@ -18,14 +18,14 @@ function clonePegs(pegs: Peg[]): Peg[] {
   return pegs.map((p) => ({ ...p }));
 }
 
-/** Hand-authored field in portrait space — pegs sit in the launch-down corridor (x≈170). */
+/** Hand-authored field in landscape space — pegs sit in the launch-down corridor (x≈320). */
 function field(): Peg[] {
   return [
-    createPeg(0, 172, 120, 'mineral', 10),
-    createPeg(1, 168, 165, 'ore', 10),
-    createPeg(2, 175, 210, 'hard', 10),
-    createPeg(3, 170, 260, 'mineral', 10),
-    createPeg(4, 173, 315, 'crystal', 11),
+    createPeg(0, 300, 120, 'mineral', 10),
+    createPeg(1, 340, 140, 'ore', 10),
+    createPeg(2, 320, 180, 'hard', 10),
+    createPeg(3, 360, 220, 'mineral', 10),
+    createPeg(4, 290, 240, 'crystal', 11),
   ];
 }
 
@@ -75,14 +75,14 @@ describe('core-breaker peg behaviour', () => {
   it('ghost ball registers exactly one hit per pass (cooldown blocks re-hit)', () => {
     const cfg = defaultConfig();
     // Ghost doesn't deflect, so it passes straight through without bouncing back.
-    const ore = [createPeg(0, 180, 120, 'ore', 10)];
+    const ore = [createPeg(0, 320, 120, 'ore', 10)];
     simulateShot(ore, { type: 'ghost', angleRad: DOWN, power: 600 }, cfg);
     expect(ore[0].hits).toBe(2); // 3 → 2, single pass
   });
 
   it('a mineral peg breaks in one hit and drops biominerals', () => {
     const cfg = defaultConfig();
-    const pegs = [createPeg(0, 180, 120, 'mineral', 10)];
+    const pegs = [createPeg(0, 320, 120, 'mineral', 10)];
     const res = simulateShot(pegs, { type: 'standard', angleRad: DOWN, power: 400 }, cfg);
     expect(res.brokenPegIds).toContain(0);
     expect(res.drops).toEqual([{ pegId: 0, kind: 'mineral', resource: 'biominerals', amount: 1 }]);
@@ -90,7 +90,7 @@ describe('core-breaker peg behaviour', () => {
 
   it('an ore peg drops biominerals on every hit and breaks on the third', () => {
     const cfg = defaultConfig();
-    const ore = [createPeg(0, 180, 120, 'ore', 10)];
+    const ore = [createPeg(0, 320, 120, 'ore', 10)];
     const shot: ShotInput = { type: 'ghost', angleRad: DOWN, power: 600 };
 
     const r1 = simulateShot(ore, shot, cfg);
@@ -111,7 +111,7 @@ describe('core-breaker peg behaviour', () => {
   it('a heavy ball deals 2× damage (breaks a rock in one hit)', () => {
     const cfg = defaultConfig();
     // Rock has maxHits=2; heavy ball deals 2 damage.
-    const pegs = [createPeg(0, 180, 120, 'rock', 10)];
+    const pegs = [createPeg(0, 320, 120, 'rock', 10)];
     const res = simulateShot(pegs, { type: 'heavy', angleRad: DOWN, power: 400 }, cfg);
     expect(res.brokenPegIds).toContain(0);
   });
@@ -120,7 +120,7 @@ describe('core-breaker peg behaviour', () => {
 describe('core-breaker ball-type behaviours', () => {
   it('a ghost ball passes through bloom without being consumed', () => {
     const cfg = defaultConfig();
-    const bloom = [createPeg(0, 180, 120, 'bloom', 12)];
+    const bloom = [createPeg(0, 320, 120, 'bloom', 12)];
     const res = simulateShot(bloom, { type: 'ghost', angleRad: DOWN, power: 400 }, cfg);
     expect(res.end).not.toBe('consumed');
     expect(bloom[0].hits).toBe(99); // ghost does not damage bloom
@@ -129,7 +129,7 @@ describe('core-breaker ball-type behaviours', () => {
   it('every non-ghost ball type is consumed by bloom', () => {
     const cfg = defaultConfig();
     for (const type of ['standard', 'heavy', 'split', 'drill'] as const) {
-      const bloom = [createPeg(0, 180, 120, 'bloom', 12)];
+      const bloom = [createPeg(0, 320, 120, 'bloom', 12)];
       const res = simulateShot(bloom, { type, angleRad: DOWN, power: 400 }, cfg);
       expect(res.end).toBe('consumed');
     }
@@ -138,7 +138,7 @@ describe('core-breaker ball-type behaviours', () => {
   it('drill ball damages non-rock pegs without deflecting (passes through both)', () => {
     const cfg = defaultConfig();
     // Two minerals stacked vertically — drill bores through both.
-    const pegs = [createPeg(0, 180, 100, 'mineral', 10), createPeg(1, 180, 160, 'mineral', 10)];
+    const pegs = [createPeg(0, 320, 100, 'mineral', 10), createPeg(1, 320, 160, 'mineral', 10)];
     const res = simulateShot(pegs, { type: 'drill', angleRad: DOWN, power: 500 }, cfg);
     expect(res.brokenPegIds).toContain(0);
     expect(res.brokenPegIds).toContain(1);
@@ -146,7 +146,7 @@ describe('core-breaker ball-type behaviours', () => {
 
   it('split ball spawns exactly one sibling on first hit; sibling will not fork again', () => {
     const cfg = defaultConfig();
-    const pegs = [createPeg(0, 180, 80, 'mineral', 10)];
+    const pegs = [createPeg(0, 320, 80, 'mineral', 10)];
     const ball = spawnBall({ type: 'split', angleRad: DOWN, power: 300 }, cfg);
     const spawned: Ball[] = [];
     for (let i = 0; i < cfg.maxSteps && ball.live; i++) {
@@ -183,14 +183,14 @@ describe('core-breaker shot termination', () => {
 describe('core-breaker fixed-step solver', () => {
   it('does not tunnel a fast ball through a peg at the default sub-step', () => {
     const cfg = defaultConfig();
-    const pegs = [createPeg(0, 180, 130, 'mineral', 10)];
+    const pegs = [createPeg(0, 320, 164, 'mineral', 10)];
     const res = simulateShot(pegs, { type: 'standard', angleRad: DOWN, power: 2400 }, cfg);
     expect(res.brokenPegIds).toContain(0);
   });
 
   it('demonstrates why sub-stepping matters: a coarse step tunnels the same shot', () => {
     const cfg = { ...defaultConfig(), step: 1 / 60 };
-    const pegs = [createPeg(0, 180, 130, 'mineral', 10)];
+    const pegs = [createPeg(0, 320, 164, 'mineral', 10)];
     const res = simulateShot(pegs, { type: 'standard', angleRad: DOWN, power: 2400 }, cfg);
     expect(res.brokenPegIds).not.toContain(0);
   });
