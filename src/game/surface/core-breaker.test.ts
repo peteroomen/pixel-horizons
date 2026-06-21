@@ -18,7 +18,7 @@ function clonePegs(pegs: Peg[]): Peg[] {
   return pegs.map((p) => ({ ...p }));
 }
 
-/** Hand-authored field below the launch point — RNG-free. */
+/** Hand-authored field in landscape space — pegs sit in the launch-down corridor (x≈320). */
 function field(): Peg[] {
   return [
     createPeg(0, 300, 120, 'mineral', 10),
@@ -150,7 +150,7 @@ describe('core-breaker ball-type behaviours', () => {
     const ball = spawnBall({ type: 'split', angleRad: DOWN, power: 300 }, cfg);
     const spawned: Ball[] = [];
     for (let i = 0; i < cfg.maxSteps && ball.live; i++) {
-      const ev = step(ball, pegs, cfg, NaN);
+      const ev = step(ball, pegs, cfg);
       spawned.push(...ev.spawned);
       if (spawned.length > 0) break;
     }

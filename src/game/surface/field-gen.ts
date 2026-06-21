@@ -1,12 +1,15 @@
 /**
  * Mining Run v2 field generation (ADR-003 / GDD §6.7).
  *
- * Dense staggered 8×9 grid of mineral/hard/rock pegs, plus hardcoded ore bars, Bloom hazards
+ * Dense staggered grid of mineral/hard/rock pegs, plus hardcoded ore bars, Bloom hazards
  * (threatening the central lanes toward the crystal), and a Core Crystal funnelled by inert-rock
- * wedges at the bottom. Deterministic from a string seed via the project's seeded RNG.
+ * wedges. Deterministic from a string seed via the project's seeded RNG.
  *
- * No reachability filter — positions are designed in, not randomised to the point of unreachability.
- * Pure sim: no React, Pixi, or DOM.
+ * Supports two layouts selected automatically from cfg dimensions:
+ *   Landscape 640×360 — 8×9 grid, used by the main game (enterMining).
+ *   Portrait  360×640 — 6×11 grid, used by the standalone /core-breaker route.
+ *
+ * No reachability filter — positions are designed in. Pure sim: no React, Pixi, or DOM.
  */
 
 import { createRng } from '@/game/sim/rng';
@@ -19,13 +22,22 @@ export interface FieldGenOptions {
   difficulty?: number;
 }
 
-// Grid parameters in 640×360 virtual pixels (matching defaultConfig).
-const COLS = 8;
-const ROWS = 9;
-const GRID_X0 = 60;
-const GRID_X1 = 580;
-const GRID_Y0 = 65;
-const GRID_Y1 = 275;
+// ── Landscape layout constants (640×360) ────────────────────────────────────
+const LS_COLS = 8;
+const LS_ROWS = 9;
+const LS_GRID_X0 = 60;
+const LS_GRID_X1 = 580;
+const LS_GRID_Y0 = 65;
+const LS_GRID_Y1 = 275;
+
+// ── Portrait layout constants (360×640) ─────────────────────────────────────
+const PT_COLS = 6;
+const PT_ROWS = 11;
+const PT_GRID_X0 = 35;
+const PT_GRID_X1 = 325;
+const PT_GRID_Y0 = 90;
+const PT_GRID_Y1 = 490;
+
 const SKIP_CHANCE = 0.08;
 
 export function generateField(
@@ -36,6 +48,14 @@ export function generateField(
   const rng = createRng(`mining-field:${seed}:${opts.difficulty ?? 0}`);
   const difficulty = Math.max(0, opts.difficulty ?? 0);
   const cx = cfg.width / 2;
+  const portrait = cfg.height > cfg.width;
+
+  const COLS = portrait ? PT_COLS : LS_COLS;
+  const ROWS = portrait ? PT_ROWS : LS_ROWS;
+  const GRID_X0 = portrait ? PT_GRID_X0 : LS_GRID_X0;
+  const GRID_X1 = portrait ? PT_GRID_X1 : LS_GRID_X1;
+  const GRID_Y0 = portrait ? PT_GRID_Y0 : LS_GRID_Y0;
+  const GRID_Y1 = portrait ? PT_GRID_Y1 : LS_GRID_Y1;
 
   const pegs: Peg[] = [];
   let id = 0;
@@ -58,34 +78,45 @@ export function generateField(
     }
   }
 
-  // ── Ore bars (long horizontal bars spanning lanes) ───────────────────────
-  const oreY = [105, 170, 230];
-  const oreX = [cx - 130, cx + 90, cx - 30];
+  // ── Ore bars ─────────────────────────────────────────────────────────────
+  const oreY = portrait ? [160, 270, 380] : [105, 170, 230];
+  const oreX = portrait ? [120, 230, 160] : [cx - 130, cx + 90, cx - 30];
   for (let i = 0; i < 3; i++) {
-    // Use 'ore' kind; the renderer draws it as a wide bar via PEG_ABAR.
     pegs.push(createPeg(id++, oreX[i], oreY[i], 'ore', PEG_RADIUS.ore));
   }
 
-  // ── Bloom hazards (guard the tempting central lanes) ─────────────────────
-  const bloomPos: [number, number][] = [
-    [cx - 130, 134],
-    [cx + 154, 119],
-    [cx + 13, 193],
-  ];
+  // ── Bloom hazards ─────────────────────────────────────────────────────────
+  const bloomPos: [number, number][] = portrait
+    ? [
+        [120, 200],
+        [250, 160],
+        [190, 320],
+      ]
+    : [
+        [cx - 130, 134],
+        [cx + 154, 119],
+        [cx + 13, 193],
+      ];
   for (const [bx, by] of bloomPos) {
     pegs.push(createPeg(id++, bx, by, 'bloom', PEG_RADIUS.bloom));
   }
 
   // ── Core Crystal + inert-rock funnel ─────────────────────────────────────
-  const crystalY = 258;
+  const crystalY = portrait ? 520 : 258;
   pegs.push(createPeg(id++, cx, crystalY, 'crystal', PEG_RADIUS.crystal));
-  // Rock wedges funnel the ball toward the crystal.
-  const rocks: [number, number][] = [
-    [cx - 68, crystalY - 12],
-    [cx + 68, crystalY - 10],
-    [cx - 30, crystalY + 18],
-    [cx + 30, crystalY + 18],
-  ];
+  const rocks: [number, number][] = portrait
+    ? [
+        [cx - 60, crystalY - 20],
+        [cx + 60, crystalY - 18],
+        [cx - 28, crystalY + 20],
+        [cx + 28, crystalY + 20],
+      ]
+    : [
+        [cx - 68, crystalY - 12],
+        [cx + 68, crystalY - 10],
+        [cx - 30, crystalY + 18],
+        [cx + 30, crystalY + 18],
+      ];
   for (const [rx, ry] of rocks) {
     pegs.push(createPeg(id++, rx, ry, 'rock', PEG_RADIUS.rock));
   }
@@ -103,7 +134,6 @@ function rollGridKind(
   rng: ReturnType<typeof createRng>,
   difficulty: number,
 ): 'mineral' | 'hard' | 'rock' {
-  // Increase hard-rock density slightly at higher difficulty.
   const hardChance = 0.22 + difficulty * 0.03;
   const rockChance = 0.1;
   const r = rng.next();
