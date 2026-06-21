@@ -12,7 +12,6 @@ import { defaultConfig } from '@/game/surface/core-breaker';
 import { generateField } from '@/game/surface/field-gen';
 import { createCoreBreakerRenderer } from '@/renderer/core-breaker-renderer';
 import { surfaceRampFor } from '@/renderer/palette';
-import { VIRTUAL_HEIGHT, VIRTUAL_WIDTH, computeScale } from '@/renderer/pixel-scale';
 
 /**
  * Playable Core Breaker dev route — composes the real deterministic pieces: a runtime planet
@@ -55,8 +54,8 @@ export default function CoreBreakerPage() {
       TextureSource.defaultOptions.scaleMode = 'nearest';
       const created = new Application();
       await created.init({
-        width: VIRTUAL_WIDTH,
-        height: VIRTUAL_HEIGHT,
+        width: cfg.width,
+        height: cfg.height,
         background: 0x06060c,
         antialias: false,
         roundPixels: true,
@@ -73,11 +72,15 @@ export default function CoreBreakerPage() {
 
       const applyScale = (): void => {
         const dpr = window.devicePixelRatio || 1;
-        const scale = computeScale(window.innerWidth, window.innerHeight, dpr);
-        created.renderer.resize(scale.backingWidth, scale.backingHeight);
-        created.stage.scale.set(scale.zoom);
-        created.canvas.style.width = `${scale.cssWidth}px`;
-        created.canvas.style.height = `${scale.cssHeight}px`;
+        const availW = window.innerWidth * dpr;
+        const availH = window.innerHeight * dpr;
+        const zoom = Math.max(Math.min(availW / cfg.width, availH / cfg.height), 0.1);
+        const backingWidth = Math.round(cfg.width * zoom);
+        const backingHeight = Math.round(cfg.height * zoom);
+        created.renderer.resize(backingWidth, backingHeight);
+        created.stage.scale.set(zoom);
+        created.canvas.style.width = `${backingWidth / dpr}px`;
+        created.canvas.style.height = `${backingHeight / dpr}px`;
       };
       applyScale();
       window.addEventListener('resize', applyScale);
