@@ -6,18 +6,15 @@ import { Application, TextureSource } from 'pixi.js';
 
 import { getModule } from '@/game/data';
 import type { ModuleInstance } from '@/game/data';
-import { PLANET_TYPES } from '@/game/data/planets';
 import { planetForNode } from '@/game/sim/planet';
-import { projectMiningRoster } from '@/game/surface/ball-projection';
 import { portraitConfig } from '@/game/surface/core-breaker';
-import { generateField } from '@/game/surface/field-gen';
-import { createCoreBreakerRenderer } from '@/renderer/core-breaker-renderer';
-import { surfaceRampFor } from '@/renderer/palette';
+import { coreBreakerViewport } from '@/renderer/core-breaker/layout';
+import { startCoreBreaker } from '@/renderer/core-breaker/session';
 
 /**
- * Playable Core Breaker dev route — composes the real deterministic pieces: a runtime planet
- * (`planetForNode`, recoloured via `surfaceRampFor`), a seeded field (`generateField`), and a roster
- * projected from the loadout (`projectMiningRoster`). Deterministic from `?seed=`. Dev knobs:
+ * Playable Core Breaker dev route — one of two entry paths to the *same* Core Breaker run
+ * (`startCoreBreaker`); the other is the in-game mining phase. This route just owns its own Pixi
+ * app + scaling and feeds the run from URL knobs. Deterministic from `?seed=`. Dev knobs:
  * `?seed=`, `?modules=mining-laser,missile-pod`, `?difficulty=3`.
  */
 
@@ -41,18 +38,10 @@ export default function CoreBreakerPage() {
     const modules = parseModules(params.get('modules'));
 
     const planet = planetForNode(seed, 'cb');
-    const cfg = portraitConfig();
-    const pegs = generateField(seed, cfg, { difficulty });
-    const roster = projectMiningRoster(modules);
-    const landRamp = surfaceRampFor(planet);
-
-    // Logical stage: sim-width, but grown to the device's portrait aspect so the renderer fills
-    // the full screen height instead of letterboxing a fixed 360×640 column.
-    const stageW = cfg.width;
-    const stageH = Math.max(
-      cfg.height,
-      Math.round(stageW * (window.innerHeight / Math.max(1, window.innerWidth))),
-    );
+    // Portrait stage sized to fill the device (shared with the in-game path via coreBreakerViewport).
+    const view = coreBreakerViewport(window.innerWidth, window.innerHeight, portraitConfig().width);
+    const stageW = view.width;
+    const stageH = view.height;
 
     let cancelled = false;
     let app: Application | null = null;
@@ -95,13 +84,12 @@ export default function CoreBreakerPage() {
       window.addEventListener('resize', applyScale);
       resize = applyScale;
 
-      handle = createCoreBreakerRenderer(created, {
-        pegs,
-        roster: roster.balls,
-        landRamp,
-        cfg,
-        viewport: { width: stageW, height: stageH },
-        biome: PLANET_TYPES[planet.type].name,
+      handle = startCoreBreaker(created, {
+        fieldSeed: seed,
+        difficulty,
+        modules,
+        planet,
+        viewport: view,
       });
     })();
 

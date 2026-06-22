@@ -25,3 +25,22 @@ export function fitTransform(
     y: (outer.height - inner.height * scale) / 2,
   };
 }
+
+/** height:width used for the portrait canvas on a non-portrait (desktop) host. */
+const DESKTOP_PORTRAIT_ASPECT = 2;
+
+/**
+ * The portrait viewport for a Core Breaker run — used identically by the standalone route and the
+ * in-game mining phase so both fill the same way: match a portrait host's aspect exactly (so the
+ * run fills the whole screen, no letterbox), and fall back to a phone-shaped portrait canvas on a
+ * landscape host (desktop). Width is always the sim width.
+ */
+export function coreBreakerViewport(
+  hostWidth: number,
+  hostHeight: number,
+  simWidth: number,
+): { width: number; height: number } {
+  const aspect = hostHeight / Math.max(1, hostWidth);
+  const useAspect = aspect >= 1 ? aspect : DESKTOP_PORTRAIT_ASPECT;
+  return { width: simWidth, height: Math.round(simWidth * useAspect) };
+}

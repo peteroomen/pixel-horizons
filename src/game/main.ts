@@ -2,8 +2,9 @@ import { Application, TextureSource } from 'pixi.js';
 
 import { ROCKY_TEST_LEVEL } from '@/game/data/levels';
 import { POD_WINDOW_MS } from '@/game/data/surface';
-import { createCoreBreakerRenderer } from '@/renderer/core-breaker-renderer';
 import type { CoreBreakerHandle } from '@/renderer/core-breaker-renderer';
+import { coreBreakerViewport } from '@/renderer/core-breaker/layout';
+import { startCoreBreaker } from '@/renderer/core-breaker/session';
 import { skyRampFor, surfaceRampFor } from '@/renderer/palette';
 import { computeScale, VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from '@/renderer/pixel-scale';
 import { playTransition } from '@/renderer/transition';
@@ -50,8 +51,6 @@ import type { ShipView } from './ship-view';
 import { buildMerchantView, buildEngineerView } from './station-view';
 import type { StationView } from './station-view';
 import { projectLoadout } from './surface/items';
-import { projectMiningRoster } from './surface/ball-projection';
-import { generateField } from './surface/field-gen';
 import { portraitConfig as miningPortraitConfig } from './surface/core-breaker';
 import type { SurfaceView } from './surface-view';
 import { REPRINT_SCRAP_COST } from './data/surface';
@@ -424,12 +423,10 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     applyScale();
   };
 
-  /** Portrait virtual space that fills the host; falls back to a centered column on a wide host. */
+  /** Portrait virtual space that fills the host (shared with the /core-breaker route). */
   const portraitStageView = (): { width: number; height: number } => {
     const rect = host.getBoundingClientRect();
-    const aspect = rect.height / Math.max(1, rect.width);
-    const width = miningPortraitConfig().width;
-    return { width, height: aspect >= 1 ? Math.round(width * aspect) : VIRTUAL_HEIGHT * 2 };
+    return coreBreakerViewport(rect.width, rect.height, miningPortraitConfig().width);
   };
 
   applyScale();
@@ -550,22 +547,17 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const enterMining = (): void => {
     const descriptor =
       currentPlanet ?? planetForNode(run.seed, run.position.nodeId ?? 'dev-mining');
-    const cfg = miningPortraitConfig();
-    const pegs = generateField(`${run.seed}:${run.position.nodeId ?? 'dev'}`, cfg, {
-      difficulty: Math.min(run.position.sector, 4),
-    });
-    const roster = projectMiningRoster(run.modules);
-    const landRamp = surfaceRampFor(descriptor);
     // The mining run is portrait and fills the screen; flip the stage and restore it on exit.
     const view = portraitStageView();
     setStageView(view.width, view.height);
-    miningHandle = createCoreBreakerRenderer(app, {
-      pegs,
-      roster: roster.balls,
-      landRamp,
-      cfg,
+    // Same Core Breaker run as the standalone /core-breaker route — only the inputs and what
+    // happens on completion differ (here: bank the haul, return to the map).
+    miningHandle = startCoreBreaker(app, {
+      fieldSeed: `${run.seed}:${run.position.nodeId ?? 'dev'}`,
+      difficulty: Math.min(run.position.sector, 4),
+      modules: run.modules,
+      planet: descriptor,
       viewport: view,
-      biome: PLANET_TYPES[descriptor.type].name,
       onComplete: (banked) => {
         addResources(run.resources, banked);
         miningHandle?.destroy();
