@@ -132,3 +132,12 @@ export function buildBallSprites(): Record<BallType, Texture> {
   }
   return out;
 }
+
+/** Ball sprites as PNG data URLs for `<img>` previews in the React HUD (image-rendering: pixelated). */
+export function ballSpriteDataUrls(): Record<BallType, string> {
+  const out = {} as Record<BallType, string>;
+  for (const type of Object.keys(BALL_COLORS) as BallType[]) {
+    out[type] = makeBall(type).toDataURL();
+  }
+  return out;
+}

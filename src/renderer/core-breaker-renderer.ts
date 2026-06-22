@@ -18,6 +18,7 @@ import {
   type CoreBreakerConfig,
   type Peg,
   type Ball,
+  type BallType,
   type MineralDrop,
   defaultConfig,
   spawnBall,
@@ -32,7 +33,6 @@ import { buildPegSprites } from './core-breaker/peg-sprites';
 import { buildBallSprites, ballColors } from './core-breaker/ball-sprites';
 import { buildBackground } from './core-breaker/background';
 import { fitTransform } from './core-breaker/layout';
-import { createHud, type HudHandle } from './core-breaker/hud';
 
 export interface CoreBreakerOptions {
   pegs: Peg[];
@@ -44,10 +44,33 @@ export interface CoreBreakerOptions {
   /** Biome label shown in the HUD header. */
   biome?: string;
   onComplete?: (banked: Resources) => void;
+  /** HUD state stream — fired once per discrete change (never per frame) for the React HUD. */
+  onHud?: (state: CoreBreakerHudState) => void;
+}
+
+/** The React HUD reads everything it draws from this — emitted by the renderer on change. */
+export interface CoreBreakerHudState {
+  biome: string;
+  /** Whole seconds remaining. */
+  timerSecs: number;
+  haul: Resources;
+  armed: BallType | null;
+  queue: BallType[];
+  remaining: number;
+  /** null ⇒ reprint maxed out. */
+  reprint: { cost: number; enabled: boolean } | null;
+  /** Header / tray heights as a fraction of the portrait column, so the overlay aligns with the
+   *  field band the renderer reserves. */
+  headerFrac: number;
+  trayFrac: number;
 }
 
 export interface CoreBreakerHandle {
   destroy(): void;
+  /** Spend escalating Scrap to add a Standard probe to the roster (tray REPRINT button). */
+  reprint(): void;
+  /** End the run early, banking the haul (tray RETURN button). */
+  endRun(): void;
 }
 
 const MAX_FRAME = 0.05;
@@ -160,17 +183,11 @@ export function createCoreBreakerRenderer(
   // Ball sprite pool.
   const ballPool: Sprite[] = [];
 
-  // ── HUD ────────────────────────────────────────────────────────────────────
-  const hud: HudHandle = createHud({
-    columnWidth: column.width,
-    columnHeight: column.height,
-    headerH: HEADER_H,
-    trayH: TRAY_H,
-    ballTextures,
-    onReprint: () => reprint(),
-    onReturn: () => endRun(),
-  });
-  scene.addChild(hud.container);
+  // HUD is React DOM (ADR 001) — the renderer reserves the header/tray bands (so the field never
+  // sits under them) and streams state out via opts.onHud; it draws no HUD itself.
+  const headerFrac = HEADER_H / column.height;
+  const trayFrac = TRAY_H / column.height;
+  let lastHudJson = '';
 
   // ── Input ────────────────────────────────────────────────────────────────────
   app.stage.eventMode = 'static';
@@ -379,21 +396,29 @@ export function createCoreBreakerRenderer(
   }
 
   function syncHud(): void {
-    const armed = rosterIdx < roster.length ? roster[rosterIdx] : null;
-    const queue = roster.slice(rosterIdx + 1);
+    if (opts.onHud === undefined) return;
+    const armed = rosterIdx < roster.length ? roster[rosterIdx].type : null;
     const reprintState =
       reprints >= MAX_REPRINTS
         ? null
         : { cost: REPRINT_COSTS[reprints], enabled: haul.scrap >= REPRINT_COSTS[reprints] };
-    hud.update({
+    const state: CoreBreakerHudState = {
       biome: opts.biome ?? 'MINING',
-      timerSecs: timer,
-      haul,
+      timerSecs: Math.max(0, Math.ceil(timer)),
+      haul: { ...haul },
       armed,
-      queue,
+      queue: roster.slice(rosterIdx + 1).map((b) => b.type),
       remaining: Math.max(0, roster.length - rosterIdx),
       reprint: reprintState,
-    });
+      headerFrac,
+      trayFrac,
+    };
+    // Event-driven, not per-frame: only emit when the displayed state actually changes
+    // (per-second timer tick, haul change, roster advance, reprint, completion).
+    const json = JSON.stringify(state);
+    if (json === lastHudJson) return;
+    lastHudJson = json;
+    opts.onHud(state);
   }
 
   // ── Tick ─────────────────────────────────────────────────────────────────────
@@ -452,13 +477,14 @@ export function createCoreBreakerRenderer(
   syncHud();
 
   return {
+    reprint,
+    endRun,
     destroy(): void {
       app.ticker.remove(tick);
       app.stage.off('pointerdown', onDown);
       app.stage.off('pointermove', onMove);
       app.stage.off('pointerup', onUp);
       app.stage.off('pointerupoutside', onUp);
-      hud.destroy();
       scene.destroy({ children: true });
       bgTexture.destroy(true);
       for (const stages of Object.values(pegTextures)) for (const t of stages) t.destroy(true);

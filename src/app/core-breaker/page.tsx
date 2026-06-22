@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Application, TextureSource } from 'pixi.js';
 
+import CoreBreakerHud from '@/components/CoreBreakerHud';
 import { getModule } from '@/game/data';
 import type { ModuleInstance } from '@/game/data';
 import { planetForNode } from '@/game/sim/planet';
 import { portraitConfig } from '@/game/surface/core-breaker';
+import type { CoreBreakerHandle, CoreBreakerHudState } from '@/renderer/core-breaker-renderer';
 import { coreBreakerViewport } from '@/renderer/core-breaker/layout';
 import { startCoreBreaker } from '@/renderer/core-breaker/session';
 
@@ -27,6 +29,8 @@ const DEFAULT_MODULES = [
 
 export default function CoreBreakerPage() {
   const hostRef = useRef<HTMLDivElement>(null);
+  const handleRef = useRef<CoreBreakerHandle | null>(null);
+  const [hudState, setHudState] = useState<CoreBreakerHudState | null>(null);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -46,7 +50,7 @@ export default function CoreBreakerPage() {
     let cancelled = false;
     let app: Application | null = null;
     let resize: (() => void) | null = null;
-    let handle: { destroy(): void } | null = null;
+    let handle: CoreBreakerHandle | null = null;
 
     void (async () => {
       TextureSource.defaultOptions.scaleMode = 'nearest';
@@ -90,29 +94,31 @@ export default function CoreBreakerPage() {
         modules,
         planet,
         viewport: view,
+        onHud: setHudState,
       });
+      handleRef.current = handle;
     })();
 
     return () => {
       cancelled = true;
       if (resize !== null) window.removeEventListener('resize', resize);
       handle?.destroy();
+      handleRef.current = null;
       app?.destroy(true);
     };
   }, []);
 
   return (
-    <div
-      ref={hostRef}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'grid',
-        placeItems: 'center',
-        background: '#06060c',
-        touchAction: 'none',
-      }}
-    />
+    <div style={{ position: 'fixed', inset: 0, background: '#06060c', touchAction: 'none' }}>
+      <div ref={hostRef} className="grid h-full w-full place-items-center" />
+      {hudState !== null && (
+        <CoreBreakerHud
+          state={hudState}
+          onReprint={() => handleRef.current?.reprint()}
+          onReturn={() => handleRef.current?.endRun()}
+        />
+      )}
+    </div>
   );
 }
 

@@ -2,7 +2,7 @@ import { Application, TextureSource } from 'pixi.js';
 
 import { ROCKY_TEST_LEVEL } from '@/game/data/levels';
 import { POD_WINDOW_MS } from '@/game/data/surface';
-import type { CoreBreakerHandle } from '@/renderer/core-breaker-renderer';
+import type { CoreBreakerHandle, CoreBreakerHudState } from '@/renderer/core-breaker-renderer';
 import { coreBreakerViewport } from '@/renderer/core-breaker/layout';
 import { startCoreBreaker } from '@/renderer/core-breaker/session';
 import { skyRampFor, surfaceRampFor } from '@/renderer/palette';
@@ -94,6 +94,7 @@ export type {
   ShieldLayerView,
 } from './combat-view';
 export type { SurfaceItemView, SurfaceView } from './surface-view';
+export type { CoreBreakerHudState } from '@/renderer/core-breaker-renderer';
 export type { MapEdgeView, MapNodeView, MapView } from './map-view';
 export type { EventChoiceView, EventView } from './event-view';
 export type { ShipModuleView, CargoModuleView, ShipView } from './ship-view';
@@ -141,6 +142,11 @@ export interface GameCallbacks {
    * mining, deposit, launch) — never per frame.
    */
   onSurfaceUpdate?(view: SurfaceView): void;
+  /**
+   * Mining phase only (Core Breaker): the React HUD reads timer/haul/roster from this — fired
+   * once per discrete change (per-second timer tick, haul, roster advance), never per frame.
+   */
+  onMiningUpdate?(view: CoreBreakerHudState): void;
   /** Fired on orbit phase entry — the orbit screen reads the planet's name/type from it (6.1). */
   onOrbitUpdate?(view: OrbitView): void;
   /** Fired on map entry and at run end states (the end screens read run totals from it). */
@@ -175,6 +181,10 @@ export interface GameHandle {
   selectNode(nodeId: string): void;
   /** Orbit phase: drop the clone to the planet surface (6.1). */
   dropToSurface(): void;
+  /** Mining phase: spend Scrap to add a Standard probe to the roster (tray REPRINT button). */
+  miningReprint(): void;
+  /** Mining phase: end the run early, banking the haul (tray RETURN button). */
+  miningReturn(): void;
   /** Surface phase: launch the pod early — no-op unless the clone is on the pod. */
   launchPod(): void;
   /** Surface phase: recall the clone to orbit (backpack lost, deposits safe). */
@@ -558,6 +568,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       modules: run.modules,
       planet: descriptor,
       viewport: view,
+      onHud: (state) => callbacks.onMiningUpdate?.(state),
       onComplete: (banked) => {
         addResources(run.resources, banked);
         miningHandle?.destroy();
@@ -772,6 +783,14 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
         },
         () => enterMining(),
       );
+    },
+    miningReprint(): void {
+      if (phase !== 'mining') return;
+      miningHandle?.reprint();
+    },
+    miningReturn(): void {
+      if (phase !== 'mining') return;
+      miningHandle?.endRun();
     },
     launchPod(): void {
       surfaceMode?.launchPod();

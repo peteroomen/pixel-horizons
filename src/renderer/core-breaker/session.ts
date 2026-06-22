@@ -17,7 +17,11 @@ import { projectMiningRoster } from '@/game/surface/ball-projection';
 import { generateField } from '@/game/surface/field-gen';
 
 import { surfaceRampFor } from '../palette';
-import { createCoreBreakerRenderer, type CoreBreakerHandle } from '../core-breaker-renderer';
+import {
+  createCoreBreakerRenderer,
+  type CoreBreakerHandle,
+  type CoreBreakerHudState,
+} from '../core-breaker-renderer';
 
 export interface CoreBreakerSessionOptions {
   /** Seed string for the deterministic field. */
@@ -32,6 +36,8 @@ export interface CoreBreakerSessionOptions {
   viewport: { width: number; height: number };
   /** Fired when the run ends with the banked haul (omit for the sandbox route). */
   onComplete?: (banked: Resources) => void;
+  /** HUD state stream for the React HUD. */
+  onHud?: (state: CoreBreakerHudState) => void;
 }
 
 /** Assemble field + roster + ramp and mount the Core Breaker renderer. */
@@ -51,5 +57,8 @@ export function startCoreBreaker(
     viewport: opts.viewport,
     biome: PLANET_TYPES[opts.planet.type].name,
     onComplete: opts.onComplete,
+    onHud: opts.onHud,
   });
 }
+
+export type { CoreBreakerHudState } from '../core-breaker-renderer';
