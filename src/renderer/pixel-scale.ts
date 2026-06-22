@@ -26,13 +26,15 @@ export function computeScale(
   availCssWidth: number,
   availCssHeight: number,
   dpr: number,
+  virtualWidth: number = VIRTUAL_WIDTH,
+  virtualHeight: number = VIRTUAL_HEIGHT,
 ): ScaleResult {
   const availW = availCssWidth * dpr;
   const availH = availCssHeight * dpr;
-  const raw = Math.min(availW / VIRTUAL_WIDTH, availH / VIRTUAL_HEIGHT);
+  const raw = Math.min(availW / virtualWidth, availH / virtualHeight);
   const zoom = Math.max(raw, 0.1);
-  const backingWidth = Math.round(VIRTUAL_WIDTH * zoom);
-  const backingHeight = Math.round(VIRTUAL_HEIGHT * zoom);
+  const backingWidth = Math.round(virtualWidth * zoom);
+  const backingHeight = Math.round(virtualHeight * zoom);
   return {
     zoom,
     cssWidth: backingWidth / dpr,

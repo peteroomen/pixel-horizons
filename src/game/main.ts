@@ -314,6 +314,15 @@ function resolveDevOrbit(): boolean {
 }
 
 /**
+ * Dev/test knob: `?mode=mining` skips the run loop and drops straight into the Core Breaker
+ * mining run (portrait, full-screen) with the resolved loadout — for feel-tuning the mining
+ * loop without the orbit → drop → transition dance. No save interaction.
+ */
+function resolveDevMining(): boolean {
+  return new URLSearchParams(window.location.search).get('mode') === 'mining';
+}
+
+/**
  * Dev/test knob: `?transition=lane-drop` (or `lane-launch`) loops that scene transition
  * in isolation so its feel can be checked/tuned without traversing a lane (6.9).
  */
@@ -371,6 +380,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const podWindowMs = resolvePodWindowMs();
   const devSurface = resolveDevSurface();
   const devOrbit = resolveDevOrbit();
+  const devMining = resolveDevMining();
   const devTransition = resolveDevTransition();
   const moduleOverride = resolveModuleOverride();
   const reactorOverride = resolveReactorOverride();
@@ -388,15 +398,40 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   });
   host.appendChild(app.canvas);
 
+  // The stage is landscape for every phase except the Core Breaker mining run, which is portrait
+  // and fills the screen (Mining v2). `stageView` is the active virtual coordinate space.
+  let stageView = { width: VIRTUAL_WIDTH, height: VIRTUAL_HEIGHT };
+
   const applyScale = (): void => {
     const rect = host.getBoundingClientRect();
-    const scale = computeScale(rect.width, rect.height, window.devicePixelRatio);
+    const scale = computeScale(
+      rect.width,
+      rect.height,
+      window.devicePixelRatio,
+      stageView.width,
+      stageView.height,
+    );
     app.renderer.resize(scale.backingWidth, scale.backingHeight);
     app.stage.scale.set(scale.zoom);
     app.canvas.style.width = `${scale.cssWidth}px`;
     app.canvas.style.height = `${scale.cssHeight}px`;
     callbacks.onScaleChange?.(scale.zoom);
   };
+
+  /** Switch the stage's virtual coordinate space (landscape ↔ portrait) and rescale. */
+  const setStageView = (width: number, height: number): void => {
+    stageView = { width, height };
+    applyScale();
+  };
+
+  /** Portrait virtual space that fills the host; falls back to a centered column on a wide host. */
+  const portraitStageView = (): { width: number; height: number } => {
+    const rect = host.getBoundingClientRect();
+    const aspect = rect.height / Math.max(1, rect.width);
+    const width = miningPortraitConfig().width;
+    return { width, height: aspect >= 1 ? Math.round(width * aspect) : VIRTUAL_HEIGHT * 2 };
+  };
+
   applyScale();
   const observer = new ResizeObserver(applyScale);
   observer.observe(host);
@@ -515,24 +550,27 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const enterMining = (): void => {
     const descriptor =
       currentPlanet ?? planetForNode(run.seed, run.position.nodeId ?? 'dev-mining');
-    // Portrait sim space; the renderer fits it into the landscape stage as a centered column.
     const cfg = miningPortraitConfig();
     const pegs = generateField(`${run.seed}:${run.position.nodeId ?? 'dev'}`, cfg, {
       difficulty: Math.min(run.position.sector, 4),
     });
     const roster = projectMiningRoster(run.modules);
     const landRamp = surfaceRampFor(descriptor);
+    // The mining run is portrait and fills the screen; flip the stage and restore it on exit.
+    const view = portraitStageView();
+    setStageView(view.width, view.height);
     miningHandle = createCoreBreakerRenderer(app, {
       pegs,
       roster: roster.balls,
       landRamp,
       cfg,
-      viewport: { width: VIRTUAL_WIDTH, height: VIRTUAL_HEIGHT },
+      viewport: view,
       biome: PLANET_TYPES[descriptor.type].name,
       onComplete: (banked) => {
         addResources(run.resources, banked);
         miningHandle?.destroy();
         miningHandle = null;
+        setStageView(VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
         store.save(run);
         enterMap();
       },
@@ -683,6 +721,8 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     enterSurface();
   } else if (devOrbit) {
     enterOrbit('dev-orbit');
+  } else if (devMining) {
+    enterMining();
   } else {
     const saved = store.load();
     if (saved !== null && saved.position.nodeId !== null) {
