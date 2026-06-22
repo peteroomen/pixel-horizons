@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from 'react';
 
 import BossReward from '@/components/BossReward';
 import CombatHand from '@/components/CombatHand';
+import CoreBreakerHud from '@/components/CoreBreakerHud';
 import EventScreen from '@/components/EventScreen';
 import GameCanvas from '@/components/GameCanvas';
 import HUD from '@/components/HUD';
@@ -16,6 +17,7 @@ import Workbench from '@/components/Workbench';
 import FoundryButton from '@/components/foundry/FoundryButton';
 import type {
   CombatView,
+  CoreBreakerHudState,
   EventView,
   GameHandle,
   GamePhase,
@@ -77,6 +79,7 @@ export default function Home() {
   const [innateArmed, setInnateArmed] = useState(false);
   const [phase, setPhase] = useState<GamePhase | null>(null);
   const [surfaceView, setSurfaceView] = useState<SurfaceView | null>(null);
+  const [miningView, setMiningView] = useState<CoreBreakerHudState | null>(null);
   const [orbitView, setOrbitView] = useState<OrbitView | null>(null);
   const [mapView, setMapView] = useState<MapView | null>(null);
   const [shipView, setShipView] = useState<ShipView | null>(null);
@@ -123,6 +126,10 @@ export default function Home() {
 
   const onSurfaceUpdate = useCallback((next: SurfaceView) => {
     setSurfaceView(next);
+  }, []);
+
+  const onMiningUpdate = useCallback((next: CoreBreakerHudState) => {
+    setMiningView(next);
   }, []);
 
   const onOrbitUpdate = useCallback((next: OrbitView) => {
@@ -182,6 +189,7 @@ export default function Home() {
         onReady={onReady}
         onPhaseChange={onPhaseChange}
         onSurfaceUpdate={onSurfaceUpdate}
+        onMiningUpdate={onMiningUpdate}
         onOrbitUpdate={onOrbitUpdate}
         onMapUpdate={onMapUpdate}
         onShipUpdate={onShipUpdate}
@@ -269,6 +277,15 @@ export default function Home() {
             Drop to Surface
           </FoundryButton>
         </div>
+      )}
+
+      {/* Mining (Core Breaker): React HUD over the portrait canvas (ADR 001) */}
+      {phase === 'mining' && miningView !== null && (
+        <CoreBreakerHud
+          state={miningView}
+          onReprint={() => handleRef.current?.miningReprint()}
+          onReturn={() => handleRef.current?.miningReturn()}
+        />
       )}
 
       {/* Surface: HUD + touch controls + launch/abandon + launch result */}

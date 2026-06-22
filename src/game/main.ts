@@ -2,8 +2,9 @@ import { Application, TextureSource } from 'pixi.js';
 
 import { ROCKY_TEST_LEVEL } from '@/game/data/levels';
 import { POD_WINDOW_MS } from '@/game/data/surface';
-import { createCoreBreakerRenderer } from '@/renderer/core-breaker-renderer';
-import type { CoreBreakerHandle } from '@/renderer/core-breaker-renderer';
+import type { CoreBreakerHandle, CoreBreakerHudState } from '@/renderer/core-breaker-renderer';
+import { coreBreakerViewport } from '@/renderer/core-breaker/layout';
+import { startCoreBreaker } from '@/renderer/core-breaker/session';
 import { skyRampFor, surfaceRampFor } from '@/renderer/palette';
 import { computeScale, VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from '@/renderer/pixel-scale';
 import { playTransition } from '@/renderer/transition';
@@ -50,9 +51,7 @@ import type { ShipView } from './ship-view';
 import { buildMerchantView, buildEngineerView } from './station-view';
 import type { StationView } from './station-view';
 import { projectLoadout } from './surface/items';
-import { projectMiningRoster } from './surface/ball-projection';
-import { generateField } from './surface/field-gen';
-import { defaultConfig as miningDefaultConfig } from './surface/core-breaker';
+import { portraitConfig as miningPortraitConfig } from './surface/core-breaker';
 import type { SurfaceView } from './surface-view';
 import { REPRINT_SCRAP_COST } from './data/surface';
 
@@ -95,6 +94,7 @@ export type {
   ShieldLayerView,
 } from './combat-view';
 export type { SurfaceItemView, SurfaceView } from './surface-view';
+export type { CoreBreakerHudState } from '@/renderer/core-breaker-renderer';
 export type { MapEdgeView, MapNodeView, MapView } from './map-view';
 export type { EventChoiceView, EventView } from './event-view';
 export type { ShipModuleView, CargoModuleView, ShipView } from './ship-view';
@@ -142,6 +142,11 @@ export interface GameCallbacks {
    * mining, deposit, launch) — never per frame.
    */
   onSurfaceUpdate?(view: SurfaceView): void;
+  /**
+   * Mining phase only (Core Breaker): the React HUD reads timer/haul/roster from this — fired
+   * once per discrete change (per-second timer tick, haul, roster advance), never per frame.
+   */
+  onMiningUpdate?(view: CoreBreakerHudState): void;
   /** Fired on orbit phase entry — the orbit screen reads the planet's name/type from it (6.1). */
   onOrbitUpdate?(view: OrbitView): void;
   /** Fired on map entry and at run end states (the end screens read run totals from it). */
@@ -176,6 +181,10 @@ export interface GameHandle {
   selectNode(nodeId: string): void;
   /** Orbit phase: drop the clone to the planet surface (6.1). */
   dropToSurface(): void;
+  /** Mining phase: spend Scrap to add a Standard probe to the roster (tray REPRINT button). */
+  miningReprint(): void;
+  /** Mining phase: end the run early, banking the haul (tray RETURN button). */
+  miningReturn(): void;
   /** Surface phase: launch the pod early — no-op unless the clone is on the pod. */
   launchPod(): void;
   /** Surface phase: recall the clone to orbit (backpack lost, deposits safe). */
@@ -314,6 +323,15 @@ function resolveDevOrbit(): boolean {
 }
 
 /**
+ * Dev/test knob: `?mode=mining` skips the run loop and drops straight into the Core Breaker
+ * mining run (portrait, full-screen) with the resolved loadout — for feel-tuning the mining
+ * loop without the orbit → drop → transition dance. No save interaction.
+ */
+function resolveDevMining(): boolean {
+  return new URLSearchParams(window.location.search).get('mode') === 'mining';
+}
+
+/**
  * Dev/test knob: `?transition=lane-drop` (or `lane-launch`) loops that scene transition
  * in isolation so its feel can be checked/tuned without traversing a lane (6.9).
  */
@@ -371,6 +389,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const podWindowMs = resolvePodWindowMs();
   const devSurface = resolveDevSurface();
   const devOrbit = resolveDevOrbit();
+  const devMining = resolveDevMining();
   const devTransition = resolveDevTransition();
   const moduleOverride = resolveModuleOverride();
   const reactorOverride = resolveReactorOverride();
@@ -388,15 +407,38 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   });
   host.appendChild(app.canvas);
 
+  // The stage is landscape for every phase except the Core Breaker mining run, which is portrait
+  // and fills the screen (Mining v2). `stageView` is the active virtual coordinate space.
+  let stageView = { width: VIRTUAL_WIDTH, height: VIRTUAL_HEIGHT };
+
   const applyScale = (): void => {
     const rect = host.getBoundingClientRect();
-    const scale = computeScale(rect.width, rect.height, window.devicePixelRatio);
+    const scale = computeScale(
+      rect.width,
+      rect.height,
+      window.devicePixelRatio,
+      stageView.width,
+      stageView.height,
+    );
     app.renderer.resize(scale.backingWidth, scale.backingHeight);
     app.stage.scale.set(scale.zoom);
     app.canvas.style.width = `${scale.cssWidth}px`;
     app.canvas.style.height = `${scale.cssHeight}px`;
     callbacks.onScaleChange?.(scale.zoom);
   };
+
+  /** Switch the stage's virtual coordinate space (landscape ↔ portrait) and rescale. */
+  const setStageView = (width: number, height: number): void => {
+    stageView = { width, height };
+    applyScale();
+  };
+
+  /** Portrait virtual space that fills the host (shared with the /core-breaker route). */
+  const portraitStageView = (): { width: number; height: number } => {
+    const rect = host.getBoundingClientRect();
+    return coreBreakerViewport(rect.width, rect.height, miningPortraitConfig().width);
+  };
+
   applyScale();
   const observer = new ResizeObserver(applyScale);
   observer.observe(host);
@@ -515,21 +557,23 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const enterMining = (): void => {
     const descriptor =
       currentPlanet ?? planetForNode(run.seed, run.position.nodeId ?? 'dev-mining');
-    const cfg = miningDefaultConfig();
-    const pegs = generateField(`${run.seed}:${run.position.nodeId ?? 'dev'}`, cfg, {
+    // The mining run is portrait and fills the screen; flip the stage and restore it on exit.
+    const view = portraitStageView();
+    setStageView(view.width, view.height);
+    // Same Core Breaker run as the standalone /core-breaker route — only the inputs and what
+    // happens on completion differ (here: bank the haul, return to the map).
+    miningHandle = startCoreBreaker(app, {
+      fieldSeed: `${run.seed}:${run.position.nodeId ?? 'dev'}`,
       difficulty: Math.min(run.position.sector, 4),
-    });
-    const roster = projectMiningRoster(run.modules);
-    const landRamp = surfaceRampFor(descriptor);
-    miningHandle = createCoreBreakerRenderer(app, {
-      pegs,
-      roster: roster.balls,
-      landRamp,
-      cfg,
+      modules: run.modules,
+      planet: descriptor,
+      viewport: view,
+      onHud: (state) => callbacks.onMiningUpdate?.(state),
       onComplete: (banked) => {
         addResources(run.resources, banked);
         miningHandle?.destroy();
         miningHandle = null;
+        setStageView(VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
         store.save(run);
         enterMap();
       },
@@ -680,6 +724,8 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     enterSurface();
   } else if (devOrbit) {
     enterOrbit('dev-orbit');
+  } else if (devMining) {
+    enterMining();
   } else {
     const saved = store.load();
     if (saved !== null && saved.position.nodeId !== null) {
@@ -737,6 +783,14 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
         },
         () => enterMining(),
       );
+    },
+    miningReprint(): void {
+      if (phase !== 'mining') return;
+      miningHandle?.reprint();
+    },
+    miningReturn(): void {
+      if (phase !== 'mining') return;
+      miningHandle?.endRun();
     },
     launchPod(): void {
       surfaceMode?.launchPod();

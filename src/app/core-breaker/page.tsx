@@ -1,23 +1,22 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Application, TextureSource } from 'pixi.js';
 
+import CoreBreakerHud from '@/components/CoreBreakerHud';
 import { getModule } from '@/game/data';
 import type { ModuleInstance } from '@/game/data';
 import { planetForNode } from '@/game/sim/planet';
-import { projectMiningRoster } from '@/game/surface/ball-projection';
-import { defaultConfig } from '@/game/surface/core-breaker';
-import { generateField } from '@/game/surface/field-gen';
-import { createCoreBreakerRenderer } from '@/renderer/core-breaker-renderer';
-import { surfaceRampFor } from '@/renderer/palette';
-import { VIRTUAL_HEIGHT, VIRTUAL_WIDTH, computeScale } from '@/renderer/pixel-scale';
+import { portraitConfig } from '@/game/surface/core-breaker';
+import type { CoreBreakerHandle, CoreBreakerHudState } from '@/renderer/core-breaker-renderer';
+import { coreBreakerViewport } from '@/renderer/core-breaker/layout';
+import { startCoreBreaker } from '@/renderer/core-breaker/session';
 
 /**
- * Playable Core Breaker dev route — composes the real deterministic pieces: a runtime planet
- * (`planetForNode`, recoloured via `surfaceRampFor`), a seeded field (`generateField`), and a roster
- * projected from the loadout (`projectMiningRoster`). Deterministic from `?seed=`. Dev knobs:
+ * Playable Core Breaker dev route — one of two entry paths to the *same* Core Breaker run
+ * (`startCoreBreaker`); the other is the in-game mining phase. This route just owns its own Pixi
+ * app + scaling and feeds the run from URL knobs. Deterministic from `?seed=`. Dev knobs:
  * `?seed=`, `?modules=mining-laser,missile-pod`, `?difficulty=3`.
  */
 
@@ -30,6 +29,8 @@ const DEFAULT_MODULES = [
 
 export default function CoreBreakerPage() {
   const hostRef = useRef<HTMLDivElement>(null);
+  const handleRef = useRef<CoreBreakerHandle | null>(null);
+  const [hudState, setHudState] = useState<CoreBreakerHudState | null>(null);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -41,22 +42,22 @@ export default function CoreBreakerPage() {
     const modules = parseModules(params.get('modules'));
 
     const planet = planetForNode(seed, 'cb');
-    const cfg = defaultConfig();
-    const pegs = generateField(seed, cfg, { difficulty });
-    const roster = projectMiningRoster(modules);
-    const landRamp = surfaceRampFor(planet);
+    // Portrait stage sized to fill the device (shared with the in-game path via coreBreakerViewport).
+    const view = coreBreakerViewport(window.innerWidth, window.innerHeight, portraitConfig().width);
+    const stageW = view.width;
+    const stageH = view.height;
 
     let cancelled = false;
     let app: Application | null = null;
     let resize: (() => void) | null = null;
-    let handle: { destroy(): void } | null = null;
+    let handle: CoreBreakerHandle | null = null;
 
     void (async () => {
       TextureSource.defaultOptions.scaleMode = 'nearest';
       const created = new Application();
       await created.init({
-        width: VIRTUAL_WIDTH,
-        height: VIRTUAL_HEIGHT,
+        width: stageW,
+        height: stageH,
         background: 0x06060c,
         antialias: false,
         roundPixels: true,
@@ -73,44 +74,51 @@ export default function CoreBreakerPage() {
 
       const applyScale = (): void => {
         const dpr = window.devicePixelRatio || 1;
-        const scale = computeScale(window.innerWidth, window.innerHeight, dpr);
-        created.renderer.resize(scale.backingWidth, scale.backingHeight);
-        created.stage.scale.set(scale.zoom);
-        created.canvas.style.width = `${scale.cssWidth}px`;
-        created.canvas.style.height = `${scale.cssHeight}px`;
+        const availW = window.innerWidth * dpr;
+        const availH = window.innerHeight * dpr;
+        const zoom = Math.max(Math.min(availW / stageW, availH / stageH), 0.1);
+        const backingWidth = Math.round(stageW * zoom);
+        const backingHeight = Math.round(stageH * zoom);
+        created.renderer.resize(backingWidth, backingHeight);
+        created.stage.scale.set(zoom);
+        created.canvas.style.width = `${backingWidth / dpr}px`;
+        created.canvas.style.height = `${backingHeight / dpr}px`;
       };
       applyScale();
       window.addEventListener('resize', applyScale);
       resize = applyScale;
 
-      handle = createCoreBreakerRenderer(created, {
-        pegs,
-        roster: roster.balls,
-        landRamp,
-        cfg,
+      handle = startCoreBreaker(created, {
+        fieldSeed: seed,
+        difficulty,
+        modules,
+        planet,
+        viewport: view,
+        onHud: setHudState,
       });
+      handleRef.current = handle;
     })();
 
     return () => {
       cancelled = true;
       if (resize !== null) window.removeEventListener('resize', resize);
       handle?.destroy();
+      handleRef.current = null;
       app?.destroy(true);
     };
   }, []);
 
   return (
-    <div
-      ref={hostRef}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'grid',
-        placeItems: 'center',
-        background: '#06060c',
-        touchAction: 'none',
-      }}
-    />
+    <div style={{ position: 'fixed', inset: 0, background: '#06060c', touchAction: 'none' }}>
+      <div ref={hostRef} className="grid h-full w-full place-items-center" />
+      {hudState !== null && (
+        <CoreBreakerHud
+          state={hudState}
+          onReprint={() => handleRef.current?.reprint()}
+          onReturn={() => handleRef.current?.endRun()}
+        />
+      )}
+    </div>
   );
 }
 

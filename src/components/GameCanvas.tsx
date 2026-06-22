@@ -5,6 +5,7 @@ import { useEffect, useRef } from 'react';
 import { initGame } from '@/game/main';
 import type {
   CombatView,
+  CoreBreakerHudState,
   EventView,
   GameHandle,
   GamePhase,
@@ -21,6 +22,7 @@ interface GameCanvasProps {
   onScaleChange?: (zoom: number) => void;
   onPhaseChange?: (phase: GamePhase) => void;
   onSurfaceUpdate?: (view: SurfaceView) => void;
+  onMiningUpdate?: (view: CoreBreakerHudState) => void;
   onOrbitUpdate?: (view: OrbitView) => void;
   onMapUpdate?: (view: MapView) => void;
   onShipUpdate?: (view: ShipView) => void;
@@ -40,6 +42,7 @@ export default function GameCanvas({
   onScaleChange,
   onPhaseChange,
   onSurfaceUpdate,
+  onMiningUpdate,
   onOrbitUpdate,
   onMapUpdate,
   onShipUpdate,
@@ -53,6 +56,7 @@ export default function GameCanvas({
     onScaleChange,
     onPhaseChange,
     onSurfaceUpdate,
+    onMiningUpdate,
     onOrbitUpdate,
     onMapUpdate,
     onShipUpdate,
@@ -67,6 +71,7 @@ export default function GameCanvas({
       onScaleChange,
       onPhaseChange,
       onSurfaceUpdate,
+      onMiningUpdate,
       onOrbitUpdate,
       onMapUpdate,
       onShipUpdate,
@@ -79,6 +84,7 @@ export default function GameCanvas({
     onScaleChange,
     onPhaseChange,
     onSurfaceUpdate,
+    onMiningUpdate,
     onOrbitUpdate,
     onMapUpdate,
     onShipUpdate,
@@ -99,6 +105,7 @@ export default function GameCanvas({
         onScaleChange: (zoom) => callbacksRef.current.onScaleChange?.(zoom),
         onPhaseChange: (phase) => callbacksRef.current.onPhaseChange?.(phase),
         onSurfaceUpdate: (view) => callbacksRef.current.onSurfaceUpdate?.(view),
+        onMiningUpdate: (view) => callbacksRef.current.onMiningUpdate?.(view),
         onOrbitUpdate: (view) => callbacksRef.current.onOrbitUpdate?.(view),
         onMapUpdate: (view) => callbacksRef.current.onMapUpdate?.(view),
         onShipUpdate: (view) => callbacksRef.current.onShipUpdate?.(view),

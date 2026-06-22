@@ -4,7 +4,7 @@
  * Fixed-timestep circle-vs-formation sim. Determinism contract: same field + same shots ⇒
  * identical break/drop streams. No bounce budget — a ball runs until it falls past the floor
  * (fellOut) or is consumed by a Bloom (consumed). The settle path acts as a safety valve only.
- * Mineral drops are first-class physics objects that must be caught by the pod.
+ * Mineral drops are first-class physics objects that auto-magnet back to the pod at the top.
  *
  * Pure sim: no React, Pixi, or DOM.
  */
@@ -68,10 +68,11 @@ export interface CoreBreakerConfig {
   step: number;
   launch: { x: number; y: number };
   maxSteps: number;
-  /** Y coordinate of the pod (catcher). */
+  /**
+   * Y coordinate of the pod — now at the TOP of the screen, embedded in the planet surface.
+   * Balls fire downward from here; mineral drops float back up and are collected here.
+   */
   podY: number;
-  /** Half-width of the pod catch bay. */
-  bayWidth: number;
 }
 
 export interface Drop {
@@ -86,8 +87,6 @@ export interface StepEvents {
   drops: Drop[];
   /** New balls to add to the sim (spawned by split fork). */
   spawned: Ball[];
-  /** True if the ball entered the pod bay this step (ball.live is now false). */
-  caught: boolean;
   /** New mineral drops emitted by shattering formations this step. */
   newMinerals: MineralDrop[];
 }
@@ -97,7 +96,7 @@ export interface MineralStepResult {
   lost: number[];
 }
 
-export type ShotEnd = 'settled' | 'fellOut' | 'consumed' | 'maxSteps' | 'caught';
+export type ShotEnd = 'settled' | 'fellOut' | 'consumed' | 'maxSteps';
 
 export interface ShotResult {
   brokenPegIds: number[];
@@ -138,6 +137,7 @@ let _nextMineralId = 0;
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
+/** Landscape 640×360 config — used by the main game (`enterMining()` in main.ts). */
 export function defaultConfig(): CoreBreakerConfig {
   return {
     gravity: 900,
@@ -148,8 +148,22 @@ export function defaultConfig(): CoreBreakerConfig {
     step: 1 / 240,
     launch: { x: 320, y: 22 },
     maxSteps: 10_000,
-    podY: 325,
-    bayWidth: 40,
+    podY: 22,
+  };
+}
+
+/** Portrait 360×640 config — used by the standalone /core-breaker route. */
+export function portraitConfig(): CoreBreakerConfig {
+  return {
+    gravity: 900,
+    restitution: 0.72,
+    width: 360,
+    height: 640,
+    floorY: 628,
+    step: 1 / 240,
+    launch: { x: 180, y: 30 },
+    maxSteps: 10_000,
+    podY: 30,
   };
 }
 
@@ -179,19 +193,12 @@ export function spawnBall(shot: ShotInput, cfg: CoreBreakerConfig): Ball {
 
 /**
  * Advance one fixed sub-step. Mutates ball and pegs; returns events for this step.
- * `podX` is the current pod position — pass NaN to disable pod-catch (headless sim).
  */
-export function step(
-  ball: Ball,
-  pegs: Peg[],
-  cfg: CoreBreakerConfig,
-  podX: number = NaN,
-): StepEvents {
+export function step(ball: Ball, pegs: Peg[], cfg: CoreBreakerConfig): StepEvents {
   const events: StepEvents = {
     broken: [],
     drops: [],
     spawned: [],
-    caught: false,
     newMinerals: [],
   };
   if (!ball.live) return events;
@@ -215,16 +222,6 @@ export function step(
   } else if (ball.x > cfg.width - ball.r) {
     ball.x = cfg.width - ball.r;
     ball.vx = -Math.abs(ball.vx) * cfg.restitution;
-  }
-
-  // Pod catch — before floor check so the pod at podY doesn't instantly lose balls.
-  if (!Number.isNaN(podX) && ball.vy > 0 && ball.y + ball.r >= cfg.podY) {
-    if (Math.abs(ball.x - podX) <= cfg.bayWidth) {
-      ball.live = false;
-      ball.end = 'caught';
-      events.caught = true;
-      return events;
-    }
   }
 
   // Floor / fell out.
@@ -346,10 +343,13 @@ export function step(
   return events;
 }
 
+const MINERAL_MAGNET = 700; // px/s² toward pod
+const MINERAL_MAX_SPEED = 320; // px/s cap
+
 /**
  * Advance mineral drops one sub-step.
- * Minerals caught by the pod are returned as Drop events; minerals that fell past the
- * floor are marked live=false.
+ * Drops are pulled toward the pod at the top of the screen (podY ≈ 30).
+ * Auto-collected when close enough to the pod; never fall past the floor.
  */
 export function stepMinerals(
   minerals: MineralDrop[],
@@ -359,15 +359,25 @@ export function stepMinerals(
   const result: MineralStepResult = { caught: [], lost: [] };
   for (const m of minerals) {
     if (!m.live) continue;
-    m.vy += cfg.gravity * cfg.step;
+    const dx = podX - m.x;
+    const dy = cfg.podY - m.y; // negative ⇒ upward
+    const dist = Math.hypot(dx, dy) + 1;
+    m.vx += (dx / dist) * MINERAL_MAGNET * cfg.step;
+    m.vy += (dy / dist) * MINERAL_MAGNET * cfg.step;
+    const spd = Math.hypot(m.vx, m.vy);
+    if (spd > MINERAL_MAX_SPEED) {
+      m.vx = (m.vx / spd) * MINERAL_MAX_SPEED;
+      m.vy = (m.vy / spd) * MINERAL_MAX_SPEED;
+    }
     m.x += m.vx * cfg.step;
     m.y += m.vy * cfg.step;
 
-    if (m.vy > 0 && m.y >= cfg.podY && Math.abs(m.x - podX) <= cfg.bayWidth) {
+    if (m.y <= cfg.podY + 15) {
       m.live = false;
       result.caught.push({ pegId: -1, kind: 'mineral', resource: m.resource, amount: m.amount });
       continue;
     }
+    // Safety — should not happen with magnet active, but guards against edge cases.
     if (m.y > cfg.floorY + 12) {
       m.live = false;
       result.lost.push(m.id);
@@ -377,8 +387,7 @@ export function stepMinerals(
 }
 
 /**
- * Headless full-shot resolver — runs `step` until the ball settles/falls/is caught/maxSteps.
- * `podX = NaN` disables pod-catch so the deterministic surface is reproducible.
+ * Headless full-shot resolver — runs `step` until the ball settles/falls/maxSteps.
  */
 export function simulateShot(pegs: Peg[], shot: ShotInput, cfg: CoreBreakerConfig): ShotResult {
   const ball = spawnBall(shot, cfg);
@@ -387,7 +396,7 @@ export function simulateShot(pegs: Peg[], shot: ShotInput, cfg: CoreBreakerConfi
   let steps = 0;
 
   while (ball.live && steps < cfg.maxSteps) {
-    const ev = step(ball, pegs, cfg, NaN);
+    const ev = step(ball, pegs, cfg);
     for (const id of ev.broken) brokenPegIds.push(id);
     for (const d of ev.drops) drops.push(d);
     steps++;
