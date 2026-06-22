@@ -92,3 +92,28 @@ export const RUN_DURATION = 180;
 export const BALL_CATCH_BONUS = 2;
 /** Scrap bonus for catching a spent ball (fell out but pod was there). */
 export const SPENT_CATCH_BONUS = 1;
+
+/**
+ * Bloom interference (§6.5 / §6.10): after this many shots fired while at least one
+ * bloom peg is still alive, the growth starts eating banked yield each shot.
+ */
+export const BLOOM_DRAIN_THRESHOLD = 3;
+/** Scrap drained per shot once the threshold is passed (clamped to banked.scrap ≥ 0). */
+export const BLOOM_DRAIN_PER_SHOT = 1;
+
+/**
+ * Pure bloom drain step — call once per shot fired.
+ * Returns the new `bloomShotsActive` counter and the scrap amount to subtract.
+ * When no bloom pegs are alive the counter resets to 0 and drain is 0.
+ */
+export function calcBloomDrain(
+  bloomAlive: boolean,
+  bloomShotsActive: number,
+  currentScrap: number,
+): { bloomShotsActive: number; scrapDrained: number } {
+  if (!bloomAlive) return { bloomShotsActive: 0, scrapDrained: 0 };
+  const next = bloomShotsActive + 1;
+  const scrapDrained =
+    next > BLOOM_DRAIN_THRESHOLD ? Math.min(currentScrap, BLOOM_DRAIN_PER_SHOT) : 0;
+  return { bloomShotsActive: next, scrapDrained };
+}

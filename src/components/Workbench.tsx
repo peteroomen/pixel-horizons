@@ -2,10 +2,13 @@
 
 import { useState } from 'react';
 
+import BallGlyphIcon from '@/components/foundry/BallGlyphIcon';
 import ModuleCardList from '@/components/foundry/ModuleCardList';
 import FoundryButton from '@/components/foundry/FoundryButton';
 import { InfoChipProvider } from '@/components/foundry/InfoChip';
 import { SLOT_LABELS, SLOT_ORDER } from '@/components/slot-labels';
+import type { BallGlyph } from '@/game/ship-view';
+import type { BallType } from '@/game/surface/core-breaker';
 import type { GameHandle, ModuleCardView, ShipView } from '@/game/main';
 
 interface WorkbenchProps {
@@ -14,11 +17,20 @@ interface WorkbenchProps {
   onClose: () => void;
 }
 
-/** A module row that expands to reveal the cards it adds to the deck. */
+const BALL_LABEL: Record<BallType, string> = {
+  standard: 'Standard',
+  heavy: 'Heavy',
+  split: 'Split',
+  drill: 'Drill',
+  ghost: 'Ghost',
+};
+
+/** A module row that expands to reveal the cards it adds to the deck. Shows both combat + surface faces (§6.4). */
 function ModuleRow({
   name,
   tier,
   cards,
+  ballFace,
   expanded,
   onToggle,
   action,
@@ -26,6 +38,7 @@ function ModuleRow({
   name: string;
   tier: 1 | 2;
   cards: ModuleCardView[];
+  ballFace: { type: BallType; glyph: BallGlyph } | null;
   expanded: boolean;
   onToggle: () => void;
   action?: React.ReactNode;
@@ -46,6 +59,13 @@ function ModuleRow({
             <span className="font-readout text-[7px] text-fd-orange sm:text-[9px]">Mk II</span>
           )}
         </button>
+        {/* Surface face chip (§6.4 UI law) */}
+        {ballFace !== null && (
+          <span className="flex items-center gap-1 px-1.5 py-0.5 text-fd-cyan">
+            <BallGlyphIcon glyph={ballFace.glyph} size={10} />
+            <span className="font-readout text-[7px] uppercase">{BALL_LABEL[ballFace.type]}</span>
+          </span>
+        )}
         {action}
       </div>
       {expanded && (
@@ -122,6 +142,7 @@ export default function Workbench({ view, handle, onClose }: WorkbenchProps) {
                           name={mod.name}
                           tier={mod.tier}
                           cards={mod.cards}
+                          ballFace={mod.ballFace}
                           expanded={expanded.has(key)}
                           onToggle={() => toggle(key)}
                           action={
@@ -160,6 +181,7 @@ export default function Workbench({ view, handle, onClose }: WorkbenchProps) {
                       name={mod.name}
                       tier={mod.tier}
                       cards={mod.cards}
+                      ballFace={mod.ballFace}
                       expanded={expanded.has(key)}
                       onToggle={() => toggle(key)}
                       action={

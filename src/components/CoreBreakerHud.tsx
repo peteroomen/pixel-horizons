@@ -2,7 +2,9 @@
 
 import { useMemo } from 'react';
 
+import BallGlyphIcon from '@/components/foundry/BallGlyphIcon';
 import type { BallType } from '@/game/surface/core-breaker';
+import { BALL_GLYPH } from '@/game/data/core-breaker';
 import { ballSpriteDataUrls } from '@/renderer/core-breaker/ball-sprites';
 import type { CoreBreakerHudState } from '@/renderer/core-breaker-renderer';
 
@@ -49,6 +51,13 @@ export default function CoreBreakerHud({ state, onReprint, onReturn }: CoreBreak
   const queuePreview = state.queue.slice(0, 3);
   const overflow = Math.max(0, state.queue.length - 3);
 
+  // Count each ball type remaining in the full queue (not just the preview slice).
+  const queueCounts = useMemo(() => {
+    const counts = new Map<BallType, number>();
+    for (const t of state.queue) counts.set(t, (counts.get(t) ?? 0) + 1);
+    return counts;
+  }, [state.queue]);
+
   return (
     <div className="retro pointer-events-none absolute inset-0 flex flex-col justify-between">
       {/* ── Header: biome + timer | haul ─────────────────────────────────── */}
@@ -57,8 +66,15 @@ export default function CoreBreakerHud({ state, onReprint, onReturn }: CoreBreak
         style={{ height: `${state.headerFrac * 100}%` }}
       >
         <Plate fillClassName="bg-fd-plate flex flex-col justify-center px-3" className="flex-1">
-          <div className="font-label text-[7px] uppercase tracking-wider text-fd-muted">
-            {state.biome}
+          <div className="flex items-center gap-2">
+            <div className="font-label text-[7px] uppercase tracking-wider text-fd-muted">
+              {state.biome}
+            </div>
+            {state.bloomThreat > 0 && (
+              <div className="font-label animate-pulse text-[7px] uppercase tracking-wider text-[#e94560]">
+                BLOOM ▲{state.bloomThreat}
+              </div>
+            )}
           </div>
           <div className="font-readout text-lg leading-none text-fd-ink">
             {formatTimer(state.timerSecs)}
@@ -85,8 +101,17 @@ export default function CoreBreakerHud({ state, onReprint, onReturn }: CoreBreak
                 <div className="font-label text-[7px] uppercase tracking-wider text-fd-orange">
                   Armed
                 </div>
-                <div className="font-label text-[10px] uppercase text-fd-ink">
-                  {state.armed ? BALL_LABEL[state.armed] : 'RUN COMPLETE'}
+                <div className="flex items-center gap-1">
+                  <div className="font-label text-[10px] uppercase text-fd-ink">
+                    {state.armed ? BALL_LABEL[state.armed] : 'RUN COMPLETE'}
+                  </div>
+                  {state.armed && (
+                    <BallGlyphIcon
+                      glyph={BALL_GLYPH[state.armed]}
+                      size={10}
+                      className="text-fd-cyan"
+                    />
+                  )}
                 </div>
                 {state.armed && <Pips count={BALL_PIPS[state.armed]} />}
               </div>
@@ -100,8 +125,9 @@ export default function CoreBreakerHud({ state, onReprint, onReturn }: CoreBreak
               </div>
               <div className="flex items-center gap-1">
                 {queuePreview.map((type, i) => (
-                  <div key={i} className="bg-fd-strip p-0.5">
+                  <div key={i} className="relative bg-fd-strip p-0.5">
                     <BallPreview url={ballUrls[type]} size={26} />
+                    <CountBadge count={queueCounts.get(type) ?? 1} />
                   </div>
                 ))}
                 {overflow > 0 && (
@@ -158,6 +184,15 @@ function Pips({ count }: { count: number }) {
         <span key={i} className="h-[7px] w-[3px] bg-fd-orange" />
       ))}
     </div>
+  );
+}
+
+function CountBadge({ count }: { count: number }) {
+  if (count <= 1) return null;
+  return (
+    <span className="font-readout absolute right-0 top-0 bg-fd-orange px-[2px] text-[6px] leading-tight text-fd-ink-dark">
+      ×{count}
+    </span>
   );
 }
 

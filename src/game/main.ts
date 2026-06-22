@@ -1,11 +1,8 @@
 import { Application, TextureSource } from 'pixi.js';
 
-import { ROCKY_TEST_LEVEL } from '@/game/data/levels';
-import { POD_WINDOW_MS } from '@/game/data/surface';
 import type { CoreBreakerHandle, CoreBreakerHudState } from '@/renderer/core-breaker-renderer';
 import { coreBreakerViewport } from '@/renderer/core-breaker/layout';
 import { startCoreBreaker } from '@/renderer/core-breaker/session';
-import { skyRampFor, surfaceRampFor } from '@/renderer/palette';
 import { computeScale, VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from '@/renderer/pixel-scale';
 import { playTransition } from '@/renderer/transition';
 import type { Transition, TransitionAssets, TransitionKind } from '@/renderer/transition';
@@ -22,8 +19,6 @@ import { startCombatMode } from './modes/combat-mode';
 import type { CombatMode } from './modes/combat-mode';
 import { startOrbitMode } from './modes/orbit-mode';
 import type { OrbitMode } from './modes/orbit-mode';
-import { startSurfaceMode } from './modes/surface-mode';
-import type { SurfaceAction, SurfaceMode } from './modes/surface-mode';
 import { PLANET_TYPES } from './data/planets';
 import { planetForNode } from './sim/planet';
 import type { PlanetDescriptor } from './sim/planet';
@@ -50,10 +45,7 @@ import { buildShipView } from './ship-view';
 import type { ShipView } from './ship-view';
 import { buildMerchantView, buildEngineerView } from './station-view';
 import type { StationView } from './station-view';
-import { projectLoadout } from './surface/items';
 import { portraitConfig as miningPortraitConfig } from './surface/core-breaker';
-import type { SurfaceView } from './surface-view';
-import { REPRINT_SCRAP_COST } from './data/surface';
 
 /**
  * The React↔game boundary (ADR 001) and the run-loop orchestrator (ADR 005).
@@ -93,7 +85,6 @@ export type {
   ModuleView,
   ShieldLayerView,
 } from './combat-view';
-export type { SurfaceItemView, SurfaceView } from './surface-view';
 export type { CoreBreakerHudState } from '@/renderer/core-breaker-renderer';
 export type { MapEdgeView, MapNodeView, MapView } from './map-view';
 export type { EventChoiceView, EventView } from './event-view';
@@ -117,7 +108,6 @@ export type GamePhase =
   | 'lane'
   | 'transition'
   | 'orbit'
-  | 'surface'
   | 'mining'
   | 'shop'
   | 'engineer'
@@ -137,11 +127,6 @@ export interface GameCallbacks {
   onScaleChange?(zoom: number): void;
   /** Fired on every phase transition, after the phase's data callbacks. */
   onPhaseChange?(phase: GamePhase): void;
-  /**
-   * Surface phase only: fired once per discrete change (pod second tick,
-   * mining, deposit, launch) — never per frame.
-   */
-  onSurfaceUpdate?(view: SurfaceView): void;
   /**
    * Mining phase only (Core Breaker): the React HUD reads timer/haul/roster from this — fired
    * once per discrete change (per-second timer tick, haul, roster advance), never per frame.
@@ -185,20 +170,10 @@ export interface GameHandle {
   miningReprint(): void;
   /** Mining phase: end the run early, banking the haul (tray RETURN button). */
   miningReturn(): void;
-  /** Surface phase: launch the pod early — no-op unless the clone is on the pod. */
-  launchPod(): void;
-  /** Surface phase: recall the clone to orbit (backpack lost, deposits safe). */
-  abandonSurface(): void;
-  /** Cloning Bay: re-print a dead clone (first per visit free, then costs Scrap). */
-  reprintClone(): void;
-  /** Surface result screen: bank pod deposits into the run and return to the map. */
-  continueFromNode(): void;
   /** Title screen: continue the saved run. */
   resumeRun(): void;
   /** Title/run-over/sector-complete: discard any save and start fresh from the URL seed. */
   newRun(): void;
-  /** Surface phase input: called by TouchControls on pointer events. */
-  surfaceInput(action: SurfaceAction, pressed: boolean): void;
   /** Map phase: open the workbench overlay. */
   openWorkbench(): void;
   /** Map phase: close the workbench overlay. */
@@ -305,15 +280,6 @@ function resolveEnemyPool(): readonly EnemyId[] | undefined {
 }
 
 /**
- * Dev/test knob: `?mode=surface` skips the run loop and drops straight onto the
- * test planet with the resolved hull's loadout — per-hull item checks shouldn't
- * require traversing a map first. No save interaction.
- */
-function resolveDevSurface(): boolean {
-  return new URLSearchParams(window.location.search).get('mode') === 'surface';
-}
-
-/**
  * Dev/test knob: `?mode=orbit` skips the run loop and drops straight into the orbit screen
  * for a representative planet (6.1) — checking the generated planet + DROP without traversing
  * a lane first. DROP then proceeds into the normal surface flow.
@@ -323,12 +289,12 @@ function resolveDevOrbit(): boolean {
 }
 
 /**
- * Dev/test knob: `?mode=mining` skips the run loop and drops straight into the Core Breaker
- * mining run (portrait, full-screen) with the resolved loadout — for feel-tuning the mining
- * loop without the orbit → drop → transition dance. No save interaction.
+ * Dev/test knob: `?mode=mining` (or the retired `?mode=surface` alias) skips the run loop
+ * and drops straight into the Core Breaker mining run with the resolved loadout.
  */
 function resolveDevMining(): boolean {
-  return new URLSearchParams(window.location.search).get('mode') === 'mining';
+  const v = new URLSearchParams(window.location.search).get('mode');
+  return v === 'mining' || v === 'surface';
 }
 
 /**
@@ -338,18 +304,6 @@ function resolveDevMining(): boolean {
 function resolveDevTransition(): TransitionKind | null {
   const v = new URLSearchParams(window.location.search).get('transition');
   return v === 'lane-drop' || v === 'lane-launch' || v === 'pod-deploy' ? v : null;
-}
-
-/**
- * Dev/test knob: `?pod=20` sets the base launch window in seconds — manual
- * testing shouldn't take 5 real minutes. Engine bonuses still apply on top.
- * Invalid values fall back to POD_WINDOW_MS.
- */
-function resolvePodWindowMs(): number {
-  const param = new URLSearchParams(window.location.search).get('pod');
-  if (param === null) return POD_WINDOW_MS;
-  const seconds = Number.parseInt(param, 10);
-  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : POD_WINDOW_MS;
 }
 
 /**
@@ -386,8 +340,6 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const urlSeed = resolveSeed();
   const hullId = resolveHull();
   const enemyPool = resolveEnemyPool();
-  const podWindowMs = resolvePodWindowMs();
-  const devSurface = resolveDevSurface();
   const devOrbit = resolveDevOrbit();
   const devMining = resolveDevMining();
   const devTransition = resolveDevTransition();
@@ -464,7 +416,6 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
 
   let phase: GamePhase = 'map';
   let combatMode: CombatMode | null = null;
-  let surfaceMode: SurfaceMode | null = null;
   let orbitMode: OrbitMode | null = null;
   let miningHandle: CoreBreakerHandle | null = null;
   /** A hyperspace transition in flight (6.9) — held so teardown can cancel it cleanly. */
@@ -512,8 +463,6 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const destroyModes = (): void => {
     combatMode?.destroy();
     combatMode = null;
-    surfaceMode?.destroy();
-    surfaceMode = null;
     orbitMode?.destroy();
     orbitMode = null;
     miningHandle?.destroy();
@@ -525,33 +474,6 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     store.save(run);
     emitMap();
     setPhase('map');
-  };
-
-  // Re-print affordability depends on the run's banked Scrap, which the surface
-  // sim is deliberately blind to (3.2 invariant) — fill it in on the way out.
-  const enrichSurfaceView = (view: SurfaceView): SurfaceView => {
-    if (!view.cloneDead) return view;
-    const canReprint = view.reprintScrapCost === 0 || run.resources.scrap >= view.reprintScrapCost;
-    return { ...view, canReprint };
-  };
-
-  const enterSurface = (): void => {
-    // Use the orbit's planet so ground and orbit agree; the `?mode=surface` dev path has no
-    // orbit, so fall back to a descriptor derived from the current node (or a dev default).
-    const descriptor =
-      currentPlanet ?? planetForNode(run.seed, run.position.nodeId ?? 'dev-surface');
-    surfaceMode = startSurfaceMode(
-      app,
-      {
-        level: ROCKY_TEST_LEVEL,
-        podWindowMs,
-        loadout: projectLoadout(run.modules, run.reactorLevel),
-        terrainRamp: surfaceRampFor(descriptor),
-        skyRamp: skyRampFor(descriptor),
-      },
-      { onUpdate: (view) => callbacks.onSurfaceUpdate?.(enrichSurfaceView(view)) },
-    );
-    setPhase('surface');
   };
 
   const enterMining = (): void => {
@@ -720,8 +642,6 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       runTransition(devTransition, assets, loop);
     };
     loop();
-  } else if (devSurface) {
-    enterSurface();
   } else if (devOrbit) {
     enterOrbit('dev-orbit');
   } else if (devMining) {
@@ -792,39 +712,6 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       if (phase !== 'mining') return;
       miningHandle?.endRun();
     },
-    launchPod(): void {
-      surfaceMode?.launchPod();
-    },
-    abandonSurface(): void {
-      surfaceMode?.abandon();
-    },
-    reprintClone(): void {
-      if (phase !== 'surface' || surfaceMode === null) return;
-      const state = surfaceMode.state();
-      if (!state.clone.dead) return;
-      // First re-print per visit is free; subsequent ones cost Scrap (GDD §6.4).
-      if (state.reprintsUsed > 0) {
-        if (run.resources.scrap < REPRINT_SCRAP_COST) return;
-        run.resources.scrap -= REPRINT_SCRAP_COST;
-      }
-      surfaceMode.reprint();
-    },
-    continueFromNode(): void {
-      if (phase !== 'surface' || surfaceMode === null) return;
-      const state = surfaceMode.state();
-      if (state.outcome === 'ongoing') return;
-      if (devSurface) {
-        // Dev knob has no run loop — Drop Again instead
-        destroyModes();
-        enterSurface();
-        return;
-      }
-      if (state.pod !== null) {
-        addResources(run.resources, state.pod.deposited);
-      }
-      destroyModes();
-      enterMap();
-    },
     resumeRun(): void {
       if (phase !== 'title' || savedRun === null) return;
       run = savedRun;
@@ -843,9 +730,6 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       map = generateSectorMap(urlSeed, run.position.sector);
       run.position.nodeId = map.startId;
       enterMap();
-    },
-    surfaceInput(action: SurfaceAction, pressed: boolean): void {
-      surfaceMode?.input(action, pressed);
     },
     openWorkbench(): void {
       // Reachable from the map and from station nodes (4.8) — install/uninstall
