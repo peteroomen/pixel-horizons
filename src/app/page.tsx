@@ -197,33 +197,23 @@ export default function Home() {
         onEventUpdate={onEventUpdate}
       />
 
-      {/* World framing (World Art Direction §6): the canvas runs full-bleed under the
-          FOUNDRY plates; a vignette sinks it into the void and a 1px scanline lives on
-          the world only. Both are pointer-events-none and paint under every overlay. */}
-      {(phase === 'lane' ||
-        phase === 'transition' ||
-        phase === 'orbit' ||
-        phase === 'surface' ||
-        phase === 'mining') && (
-        <>
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                'radial-gradient(120% 90% at 50% 45%, rgba(11,13,24,0) 55%, rgba(11,13,24,0.55) 82%, rgba(11,13,24,0.9) 100%)',
-            }}
-          />
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                'repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0, rgba(0,0,0,0.18) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 3px)',
-            }}
-          />
-        </>
-      )}
+      {/* World framing: vignette + scanline always on — space is always the backdrop. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(120% 90% at 50% 45%, rgba(11,13,24,0) 55%, rgba(11,13,24,0.55) 82%, rgba(11,13,24,0.9) 100%)',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0, rgba(0,0,0,0.18) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 3px)',
+        }}
+      />
 
       {/* Title: a saved expedition exists */}
       {phase === 'title' && mapView !== null && (
@@ -472,30 +462,34 @@ export default function Home() {
 
       {/* Run over: ship destroyed (GDD §6.4 — space risks are fatal) */}
       {phase === 'run-over' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-black/80">
-          <span className="font-label text-3xl uppercase text-fd-red sm:text-5xl">
-            Ship Destroyed
-          </span>
-          {mapView !== null && <RunSummary view={mapView} />}
-          <FoundryButton variant="primary" onClick={() => handleRef.current?.newRun()}>
-            New Run
-          </FoundryButton>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <div className="flex flex-col items-center gap-6 border-2 border-fd-steel/40 bg-fd-void px-10 py-8">
+            <span className="font-label text-3xl uppercase text-fd-red sm:text-5xl">
+              Ship Destroyed
+            </span>
+            {mapView !== null && <RunSummary view={mapView} />}
+            <FoundryButton variant="primary" onClick={() => handleRef.current?.newRun()}>
+              New Run
+            </FoundryButton>
+          </div>
         </div>
       )}
 
       {/* Sector complete: gate guardian defeated */}
       {phase === 'sector-complete' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-black/80">
-          <span className="font-label text-3xl uppercase text-fd-orange sm:text-5xl">
-            Sector Clear
-          </span>
-          <span className="retro text-[10px] text-white/60 sm:text-xs">
-            SECTOR {mapView?.sector ?? 1} — BLOOM GATE DESTROYED
-          </span>
-          {mapView !== null && <RunSummary view={mapView} />}
-          <FoundryButton variant="primary" onClick={() => handleRef.current?.newRun()}>
-            New Run
-          </FoundryButton>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <div className="flex flex-col items-center gap-6 border-2 border-fd-steel/40 bg-fd-void px-10 py-8">
+            <span className="font-label text-3xl uppercase text-fd-orange sm:text-5xl">
+              Sector Clear
+            </span>
+            <span className="retro text-[10px] text-white/60 sm:text-xs">
+              SECTOR {mapView?.sector ?? 1} — BLOOM GATE DESTROYED
+            </span>
+            {mapView !== null && <RunSummary view={mapView} />}
+            <FoundryButton variant="primary" onClick={() => handleRef.current?.newRun()}>
+              New Run
+            </FoundryButton>
+          </div>
         </div>
       )}
     </main>

@@ -51,6 +51,9 @@ export interface CombatModeOptions {
   /** Null for no-lane combat (boss fights) — no travel, one forced encounter. */
   lane: LaneParams | null;
   enemyPool?: readonly EnemyId[];
+  /** Virtual canvas dimensions — space-renderer sizes itself to match the portrait stage. */
+  virtW: number;
+  virtH: number;
 }
 
 export interface CombatMode {
@@ -68,8 +71,8 @@ export function startCombatMode(
   options: CombatModeOptions,
   callbacks: CombatModeCallbacks,
 ): CombatMode {
-  const { run, enemyPool } = options;
-  const renderer: SpaceRenderer = createSpaceRenderer(app);
+  const { run, enemyPool, virtW, virtH } = options;
+  const renderer: SpaceRenderer = createSpaceRenderer(app, virtW, virtH);
 
   // No-lane combat (boss fights): a single forced encounter with no travel.
   const lane: LaneState | null =
