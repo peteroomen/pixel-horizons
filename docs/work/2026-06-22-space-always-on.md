@@ -69,12 +69,43 @@ Fixes:
 
 ## What actually happened
 
+Implemented exactly as planned with two adjustments:
+
+1. **Ships are offset, not stacked**: User clarified "foundry is metal, solid" (no frosted glass) and "offset" for ship positions — player at 38%/71% (lower-left), enemy at 62%/29% (upper-right). Creates a diagonal dogfight angle.
+
+2. **Panels are solid, not glass**: Outer overlay containers are fully transparent (space shows around them); inner content panels are solid `bg-fd-void` with `border-fd-steel/40` borders. No `backdrop-blur` — hard Foundry metal aesthetic.
+
+3. **`FLOATER_SPAWN_Y` module-level constant removed**: Was computing `CENTER_Y - 42` at module level, but `CENTER_Y` no longer exists. Fixed by passing `spawnY` as a parameter to `spawnFloater`.
+
+4. **`setStageView()` / `portraitStageView()` removed entirely** from main.ts — `stageView` is a `const` computed once at boot via `coreBreakerViewport()`. Mining no longer needs to set or reset dimensions.
+
+562 tests green, type-check clean, lint clean.
+
 ## Files created / modified
 
+- `src/renderer/starfield.ts` — NEW: 3-layer parallax starfield, seeded LCG, `addChildAt(0)`, ticker-driven
+- `src/renderer/pixel-scale.ts` — added `PORTRAIT_WIDTH = 360`, `PORTRAIT_HEIGHT = 720`
+- `src/renderer/space-renderer.ts` — accepts `virtW`/`virtH`; portrait offset ship positions; `spawnFloater` accepts `spawnY`
+- `src/renderer/orbit-renderer.ts` — accepts `virtW`/`virtH`; removes own static stars; portrait planet/ship layout
+- `src/renderer/transition.ts` — accepts `virtW`/`virtH`; all layout constants computed inside function
+- `src/game/main.ts` — portrait `stageView` const at boot; starfield created immediately; threads dims to all modes
+- `src/game/modes/combat-mode.ts` — `CombatModeOptions` adds `virtW`/`virtH`; passes to `createSpaceRenderer`
+- `src/game/modes/orbit-mode.ts` — `startOrbitMode` accepts and threads `virtW`/`virtH`
+- `src/components/TitleOverlay.tsx` — transparent outer, solid inner panel
+- `src/components/EventScreen.tsx` — transparent outer, solid inner panel
+- `src/components/SectorMap.tsx` — transparent map area, solid header strip
+- `src/components/StationScreen.tsx` — fully opaque `bg-fd-void` (already close; minor polish)
+- `src/app/page.tsx` — vignette/scanline always-on; run-over/sector-complete as centered solid panels
+
 ## Deferred to next session
+
+- Browser verification (can't test UI in headless environment — manual check needed on phone/desktop)
+- FTL-style map as Pixi layer (Slice C — roadmapped)
+- Map generation rules / per-path guarantees (Slice A — roadmapped)
+- Animated nebula / bloom in starfield
 
 ## Status
 
 - [ ] In progress
-- [ ] Complete
+- [x] Complete
 - [ ] Partial — see deferred
