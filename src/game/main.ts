@@ -52,7 +52,7 @@ import type { StationView } from './station-view';
 import { projectLoadout } from './surface/items';
 import { projectMiningRoster } from './surface/ball-projection';
 import { generateField } from './surface/field-gen';
-import { defaultConfig as miningDefaultConfig } from './surface/core-breaker';
+import { portraitConfig as miningPortraitConfig } from './surface/core-breaker';
 import type { SurfaceView } from './surface-view';
 import { REPRINT_SCRAP_COST } from './data/surface';
 
@@ -515,7 +515,8 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const enterMining = (): void => {
     const descriptor =
       currentPlanet ?? planetForNode(run.seed, run.position.nodeId ?? 'dev-mining');
-    const cfg = miningDefaultConfig();
+    // Portrait sim space; the renderer fits it into the landscape stage as a centered column.
+    const cfg = miningPortraitConfig();
     const pegs = generateField(`${run.seed}:${run.position.nodeId ?? 'dev'}`, cfg, {
       difficulty: Math.min(run.position.sector, 4),
     });
@@ -526,6 +527,8 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       roster: roster.balls,
       landRamp,
       cfg,
+      viewport: { width: VIRTUAL_WIDTH, height: VIRTUAL_HEIGHT },
+      biome: PLANET_TYPES[descriptor.type].name,
       onComplete: (banked) => {
         addResources(run.resources, banked);
         miningHandle?.destroy();

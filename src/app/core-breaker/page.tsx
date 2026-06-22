@@ -6,6 +6,7 @@ import { Application, TextureSource } from 'pixi.js';
 
 import { getModule } from '@/game/data';
 import type { ModuleInstance } from '@/game/data';
+import { PLANET_TYPES } from '@/game/data/planets';
 import { planetForNode } from '@/game/sim/planet';
 import { projectMiningRoster } from '@/game/surface/ball-projection';
 import { portraitConfig } from '@/game/surface/core-breaker';
@@ -91,6 +92,7 @@ export default function CoreBreakerPage() {
         roster: roster.balls,
         landRamp,
         cfg,
+        biome: PLANET_TYPES[planet.type].name,
       });
     })();
 
