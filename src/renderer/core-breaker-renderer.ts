@@ -27,6 +27,7 @@ import {
 } from '@/game/surface/core-breaker';
 import type { ModuleId } from '@/game/data';
 import type { RosterBall } from '@/game/surface/ball-projection';
+import { BLOOM_DRAIN_THRESHOLD, calcBloomDrain } from '@/game/data/mining-run';
 
 import { type Ramp } from './palette';
 import { buildPegSprites } from './core-breaker/peg-sprites';
@@ -63,6 +64,11 @@ export interface CoreBreakerHudState {
    *  field band the renderer reserves. */
   headerFrac: number;
   trayFrac: number;
+  /**
+   * Bloom interference level (§6.5 / §6.10): how many shots over the drain threshold the
+   * field has been under active bloom threat. 0 = no threat; >0 = yield is being drained.
+   */
+  bloomThreat: number;
 }
 
 export interface CoreBreakerHandle {
@@ -125,6 +131,9 @@ export function createCoreBreakerRenderer(
   let timer = RUN_DURATION;
   let acc = 0;
   let completed = false;
+  // Bloom interference (§6.5): counts consecutive shots fired while bloom pegs are alive.
+  // Resets to 0 when no bloom pegs remain. Drives yield drain and HUD threat indicator.
+  let bloomShotsActive = 0;
 
   let aiming = false;
   let aimDragging = false;
@@ -239,7 +248,15 @@ export function createCoreBreakerRenderer(
     flash.alpha = 1;
   }
 
+  function applyBloomDrain(): void {
+    const bloomAlive = pegs.some((p) => p.kind === 'bloom' && p.hits > 0);
+    const result = calcBloomDrain(bloomAlive, bloomShotsActive, haul.scrap);
+    bloomShotsActive = result.bloomShotsActive;
+    haul.scrap -= result.scrapDrained;
+  }
+
   function advanceTurn(): void {
+    applyBloomDrain();
     rosterIdx++;
     if (rosterIdx >= roster.length) endRun();
     else {
@@ -289,6 +306,7 @@ export function createCoreBreakerRenderer(
     phase = 'aim';
     completed = false;
     acc = 0;
+    bloomShotsActive = 0;
     flash.alpha = 0;
   }
 
@@ -412,6 +430,7 @@ export function createCoreBreakerRenderer(
       reprint: reprintState,
       headerFrac,
       trayFrac,
+      bloomThreat: Math.max(0, bloomShotsActive - BLOOM_DRAIN_THRESHOLD),
     };
     // Event-driven, not per-frame: only emit when the displayed state actually changes
     // (per-second timer tick, haul change, roster advance, reprint, completion).

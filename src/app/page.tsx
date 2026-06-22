@@ -10,9 +10,7 @@ import GameCanvas from '@/components/GameCanvas';
 import HUD from '@/components/HUD';
 import SectorMap from '@/components/SectorMap';
 import StationScreen from '@/components/StationScreen';
-import SurfaceHUD from '@/components/SurfaceHUD';
 import TitleOverlay from '@/components/TitleOverlay';
-import TouchControls from '@/components/TouchControls';
 import Workbench from '@/components/Workbench';
 import FoundryButton from '@/components/foundry/FoundryButton';
 import type {
@@ -25,7 +23,6 @@ import type {
   OrbitView,
   ShipView,
   StationView,
-  SurfaceView,
 } from '@/game/main';
 
 const OUTCOME_COLOR: Record<string, string> = {
@@ -38,7 +35,7 @@ function outcomeLabel(view: CombatView): string {
   return 'ARRIVED';
 }
 
-const RESOURCE_LABELS: ReadonlyArray<[keyof SurfaceView['backpack'], string]> = [
+const RESOURCE_LABELS: ReadonlyArray<[keyof MapView['resources'], string]> = [
   ['scrap', 'SCRAP'],
   ['biominerals', 'BIO'],
   ['coreCrystals', 'CRYSTAL'],
@@ -46,7 +43,7 @@ const RESOURCE_LABELS: ReadonlyArray<[keyof SurfaceView['backpack'], string]> = 
 ];
 
 /** One "LABEL n" line per non-zero resource, or a dash when there is nothing. */
-function ResourceLines({ resources }: { resources: SurfaceView['backpack'] }) {
+function ResourceLines({ resources }: { resources: MapView['resources'] }) {
   const lines = RESOURCE_LABELS.filter(([key]) => resources[key] > 0);
   if (lines.length === 0) {
     return <div className="text-white/40">—</div>;
@@ -78,7 +75,6 @@ export default function Home() {
   const [view, setView] = useState<CombatView | null>(null);
   const [innateArmed, setInnateArmed] = useState(false);
   const [phase, setPhase] = useState<GamePhase | null>(null);
-  const [surfaceView, setSurfaceView] = useState<SurfaceView | null>(null);
   const [miningView, setMiningView] = useState<CoreBreakerHudState | null>(null);
   const [orbitView, setOrbitView] = useState<OrbitView | null>(null);
   const [mapView, setMapView] = useState<MapView | null>(null);
@@ -86,25 +82,8 @@ export default function Home() {
   const [stationView, setStationView] = useState<StationView | null>(null);
   const [eventView, setEventView] = useState<EventView | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
-  const [abandonArmed, setAbandonArmed] = useState(false);
   const [handle, setHandle] = useState<GameHandle | null>(null);
   const handleRef = useRef<GameHandle | null>(null);
-  const abandonTimerRef = useRef<number | null>(null);
-
-  // Abandon costs the backpack — a misclick shouldn't. First tap arms, second confirms.
-  const onAbandon = () => {
-    if (abandonTimerRef.current !== null) {
-      window.clearTimeout(abandonTimerRef.current);
-      abandonTimerRef.current = null;
-    }
-    if (!abandonArmed) {
-      setAbandonArmed(true);
-      abandonTimerRef.current = window.setTimeout(() => setAbandonArmed(false), 2500);
-      return;
-    }
-    setAbandonArmed(false);
-    handleRef.current?.abandonSurface();
-  };
 
   const onCombatUpdate = useCallback((next: CombatView) => {
     setView(next);
@@ -118,14 +97,9 @@ export default function Home() {
 
   const onPhaseChange = useCallback((next: GamePhase) => {
     setPhase(next);
-    setAbandonArmed(false);
     // The workbench is an explicit per-screen open (map "Ship" / station "Workbench"),
     // so it should never carry across a phase change.
     setWorkbenchOpen(false);
-  }, []);
-
-  const onSurfaceUpdate = useCallback((next: SurfaceView) => {
-    setSurfaceView(next);
   }, []);
 
   const onMiningUpdate = useCallback((next: CoreBreakerHudState) => {
@@ -180,15 +154,12 @@ export default function Home() {
     setInnateArmed((armed) => !armed);
   };
 
-  const hasDash = surfaceView !== null && surfaceView.dashCooldownSeconds !== null;
-
   return (
     <main className="fixed inset-0 select-none bg-fd-void">
       <GameCanvas
         onCombatUpdate={onCombatUpdate}
         onReady={onReady}
         onPhaseChange={onPhaseChange}
-        onSurfaceUpdate={onSurfaceUpdate}
         onMiningUpdate={onMiningUpdate}
         onOrbitUpdate={onOrbitUpdate}
         onMapUpdate={onMapUpdate}
@@ -200,11 +171,7 @@ export default function Home() {
       {/* World framing (World Art Direction §6): the canvas runs full-bleed under the
           FOUNDRY plates; a vignette sinks it into the void and a 1px scanline lives on
           the world only. Both are pointer-events-none and paint under every overlay. */}
-      {(phase === 'lane' ||
-        phase === 'transition' ||
-        phase === 'orbit' ||
-        phase === 'surface' ||
-        phase === 'mining') && (
+      {(phase === 'lane' || phase === 'transition' || phase === 'orbit' || phase === 'mining') && (
         <>
           <div
             aria-hidden
@@ -286,113 +253,6 @@ export default function Home() {
           onReprint={() => handleRef.current?.miningReprint()}
           onReturn={() => handleRef.current?.miningReturn()}
         />
-      )}
-
-      {/* Surface: HUD + touch controls + launch/abandon + launch result */}
-      {phase === 'surface' && (
-        <>
-          {surfaceView !== null && <SurfaceHUD view={surfaceView} />}
-          <TouchControls
-            hasDash={hasDash}
-            onInput={(action, pressed) => handleRef.current?.surfaceInput(action, pressed)}
-          />
-
-          {surfaceView !== null && surfaceView.outcome === 'ongoing' && !surfaceView.cloneDead && (
-            <div className="pointer-events-none absolute inset-x-0 top-2 flex flex-col items-center gap-2 sm:top-4">
-              {/* Early return (GDD §6.2): mined out? Walk to the pod and leave. */}
-              {surfaceView.canLaunch && (
-                <FoundryButton variant="primary" onClick={() => handleRef.current?.launchPod()}>
-                  Launch Pod
-                </FoundryButton>
-              )}
-              {/* Escape valve for soft-locks — always available, two-tap confirm */}
-              <button
-                type="button"
-                onClick={onAbandon}
-                className={`retro pointer-events-auto border-2 px-2 py-1 text-[8px] sm:text-[10px] ${
-                  abandonArmed
-                    ? 'border-[#e94560] bg-[#e94560]/20 text-[#e94560]'
-                    : 'border-[#4a4a6a] bg-[#1a1a2e]/80 text-white/60'
-                }`}
-              >
-                {abandonArmed ? 'CONFIRM ABANDON?' : 'ABANDON'}
-              </button>
-            </div>
-          )}
-
-          {/* Cloning Bay (GDD §6.10): the clone died — re-print or give up. */}
-          {surfaceView !== null && surfaceView.outcome === 'ongoing' && surfaceView.cloneDead && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-black/75">
-              <span className="retro text-2xl text-[#e94560] sm:text-4xl">CLONE LOST</span>
-              <span className="retro max-w-[18rem] text-center text-[10px] text-white/70 sm:text-xs">
-                Backpack dropped at the death point. Re-print and corpse-run to recover it before
-                the pod launches.
-              </span>
-              <div className="flex flex-col items-center gap-2">
-                <FoundryButton
-                  variant="primary"
-                  disabled={!surfaceView.canReprint}
-                  onClick={() => handleRef.current?.reprintClone()}
-                >
-                  {surfaceView.reprintScrapCost === 0
-                    ? 'Re-print (Free)'
-                    : `Re-print (${surfaceView.reprintScrapCost} Scrap)`}
-                </FoundryButton>
-                {!surfaceView.canReprint && surfaceView.reprintScrapCost > 0 && (
-                  <span className="retro text-[8px] text-[#e94560] sm:text-[10px]">
-                    Not enough Scrap
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={onAbandon}
-                  className={`retro pointer-events-auto border-2 px-2 py-1 text-[8px] sm:text-[10px] ${
-                    abandonArmed
-                      ? 'border-[#e94560] bg-[#e94560]/20 text-[#e94560]'
-                      : 'border-[#4a4a6a] bg-[#1a1a2e]/80 text-white/60'
-                  }`}
-                >
-                  {abandonArmed ? 'CONFIRM ABANDON?' : 'ABANDON RUN'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {surfaceView !== null && surfaceView.outcome !== 'ongoing' && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-black/70">
-              <span className="retro text-3xl text-white sm:text-5xl">
-                {surfaceView.outcome === 'abandoned' ? 'PLANET ABANDONED' : 'POD LAUNCHED'}
-              </span>
-              {surfaceView.outcome === 'aboard' ? (
-                <span className="retro text-sm text-[#4fc3f7] sm:text-base">CLONE ABOARD</span>
-              ) : (
-                <span className="retro text-sm text-[#e94560] sm:text-base">
-                  {surfaceView.outcome === 'abandoned'
-                    ? 'CLONE RECALLED — BACKPACK LOST'
-                    : 'CLONE STRANDED — CONSCIOUSNESS RECALLED'}
-                </span>
-              )}
-              <div className="retro flex gap-10 text-[10px] text-white sm:text-xs">
-                <div className="space-y-1 text-center">
-                  <div className="text-[#4fc3f7]">BANKED</div>
-                  <ResourceLines resources={surfaceView.deposited} />
-                </div>
-                {surfaceView.lostBackpack !== null && (
-                  <div className="space-y-1 text-center">
-                    <div className="text-[#e94560]">LOST</div>
-                    <ResourceLines resources={surfaceView.lostBackpack} />
-                  </div>
-                )}
-              </div>
-              <FoundryButton
-                variant="primary"
-                onClick={() => handleRef.current?.continueFromNode()}
-              >
-                Continue
-              </FoundryButton>
-            </div>
-          )}
-        </>
       )}
 
       {/* Lane: combat HUD + hand + between-encounter overlay */}
