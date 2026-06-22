@@ -69,8 +69,16 @@ export function createCoreBreakerRenderer(
   const ramp = opts.landRamp.map(hexNum);
 
   // ── Layout: column → viewport, cfg → playfield band ──────────────────────────
-  const column = { width: cfg.width, height: cfg.height };
-  const band = { width: cfg.width, height: cfg.height - HEADER_H - TRAY_H };
+  // The "column" (header + playfield + tray) is fixed-width (= sim width) but grows taller to
+  // fill a portrait viewport so there is no top/bottom letterbox — the header pins to the very
+  // top, the tray to the very bottom, and the playfield band takes everything between. A
+  // landscape viewport (the main game's shared stage) keeps the natural portrait column and is
+  // centered instead (fitTransform letterboxes it on the sides).
+  const vpAspect = viewport.height / viewport.width;
+  const cfgAspect = cfg.height / cfg.width;
+  const columnHeight = vpAspect > cfgAspect ? Math.round(cfg.width * vpAspect) : cfg.height;
+  const column = { width: cfg.width, height: columnHeight };
+  const band = { width: column.width, height: column.height - HEADER_H - TRAY_H };
   const sceneFit = fitTransform(column, viewport);
   const playFit = fitTransform(cfg, band);
 

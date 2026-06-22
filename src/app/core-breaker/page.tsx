@@ -46,6 +46,14 @@ export default function CoreBreakerPage() {
     const roster = projectMiningRoster(modules);
     const landRamp = surfaceRampFor(planet);
 
+    // Logical stage: sim-width, but grown to the device's portrait aspect so the renderer fills
+    // the full screen height instead of letterboxing a fixed 360×640 column.
+    const stageW = cfg.width;
+    const stageH = Math.max(
+      cfg.height,
+      Math.round(stageW * (window.innerHeight / Math.max(1, window.innerWidth))),
+    );
+
     let cancelled = false;
     let app: Application | null = null;
     let resize: (() => void) | null = null;
@@ -55,8 +63,8 @@ export default function CoreBreakerPage() {
       TextureSource.defaultOptions.scaleMode = 'nearest';
       const created = new Application();
       await created.init({
-        width: cfg.width,
-        height: cfg.height,
+        width: stageW,
+        height: stageH,
         background: 0x06060c,
         antialias: false,
         roundPixels: true,
@@ -75,9 +83,9 @@ export default function CoreBreakerPage() {
         const dpr = window.devicePixelRatio || 1;
         const availW = window.innerWidth * dpr;
         const availH = window.innerHeight * dpr;
-        const zoom = Math.max(Math.min(availW / cfg.width, availH / cfg.height), 0.1);
-        const backingWidth = Math.round(cfg.width * zoom);
-        const backingHeight = Math.round(cfg.height * zoom);
+        const zoom = Math.max(Math.min(availW / stageW, availH / stageH), 0.1);
+        const backingWidth = Math.round(stageW * zoom);
+        const backingHeight = Math.round(stageH * zoom);
         created.renderer.resize(backingWidth, backingHeight);
         created.stage.scale.set(zoom);
         created.canvas.style.width = `${backingWidth / dpr}px`;
@@ -92,6 +100,7 @@ export default function CoreBreakerPage() {
         roster: roster.balls,
         landRamp,
         cfg,
+        viewport: { width: stageW, height: stageH },
         biome: PLANET_TYPES[planet.type].name,
       });
     })();
