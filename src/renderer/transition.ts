@@ -2,7 +2,6 @@ import { Application, Container, Graphics, Sprite, type Ticker } from 'pixi.js';
 
 import type { PlanetDescriptor } from '@/game/sim/planet';
 import { type AnimatedPlanet, createAnimatedPlanet } from './planet';
-import { VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from './pixel-scale';
 import { nearestTexture } from './textures';
 
 /**
@@ -40,10 +39,6 @@ export interface Transition {
   cancel(): void;
 }
 
-const CX = VIRTUAL_WIDTH / 2;
-const CY = VIRTUAL_HEIGHT / 2;
-const REACH = Math.max(VIRTUAL_WIDTH, VIRTUAL_HEIGHT) * 0.8;
-
 // Chunky pixel grid — the spiral is drawn as CHUNK-snapped squares so it reads pixel-art.
 const CHUNK = 7;
 const SHIP_PX = 3;
@@ -51,10 +46,6 @@ const SHIP_PX = 3;
 const SPIRAL_POINTS = 140;
 const D_THETA = 0.22;
 const PLANET_SIZE = 200; // matches orbit-renderer so the Drop hands off seamlessly
-
-// Orbit-screen ship/planet poses (mirror orbit-renderer) — the Drop and Pod Deploy settle here.
-const ORBIT_SHIP_X = 128;
-const ORBIT_SHIP_Y = VIRTUAL_HEIGHT - 86;
 
 const DROP_MS = 2400;
 const LAUNCH_MS = 2500;
@@ -100,14 +91,24 @@ export function playTransition(
   kind: TransitionKind,
   assets: TransitionAssets,
   onComplete: () => void,
+  virtW: number,
+  virtH: number,
 ): Transition {
+  // Compute layout constants from the portrait virtual dimensions.
+  const CX = virtW / 2;
+  const CY = virtH / 2;
+  const REACH = Math.max(virtW, virtH) * 0.8;
+  // Orbit-screen ship/planet poses — mirror orbit-renderer so the Drop hands off seamlessly.
+  const ORBIT_SHIP_X = Math.round(virtW * 0.22);
+  const ORBIT_SHIP_Y = Math.round(virtH * 0.82);
+
   const isDrop = kind === 'lane-drop';
   const isPodDeploy = kind === 'pod-deploy';
 
   const layer = new Container();
   app.stage.addChild(layer);
 
-  const bg = new Graphics().rect(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT).fill({ color: VOID });
+  const bg = new Graphics().rect(0, 0, virtW, virtH).fill({ color: VOID });
   layer.addChild(bg);
 
   // `world` carries the camera push (scale around screen centre) and the impact shake
@@ -133,7 +134,7 @@ export function playTransition(
     planetSprite.anchor.set(0.5);
     planetSprite.position.set(
       CX,
-      isDrop ? VIRTUAL_HEIGHT + PLANET_SIZE : CY, // Lane Drop: below frame; Pod Deploy: orbit centre
+      isDrop ? virtH + PLANET_SIZE : CY, // Lane Drop: below frame; Pod Deploy: orbit centre
     );
     world.addChild(planetSprite);
   }
@@ -158,21 +159,17 @@ export function playTransition(
   world.addChild(ship);
 
   // Amber wipe — pod-deploy A→B heat-glow (above world, below cyan/red flashes).
-  const amberLayer = new Graphics()
-    .rect(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT)
-    .fill({ color: AMBER });
+  const amberLayer = new Graphics().rect(0, 0, virtW, virtH).fill({ color: AMBER });
   amberLayer.alpha = 0;
   layer.addChild(amberLayer);
 
   // Cyan punch flash — lane Drop/Launch beat.
-  const flash = new Graphics().rect(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT).fill({ color: FLASH });
+  const flash = new Graphics().rect(0, 0, virtW, virtH).fill({ color: FLASH });
   flash.alpha = 0;
   layer.addChild(flash);
 
   // Red impact flash — pod-deploy touchdown beat.
-  const impactFlash = new Graphics()
-    .rect(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT)
-    .fill({ color: IMPACT_RED });
+  const impactFlash = new Graphics().rect(0, 0, virtW, virtH).fill({ color: IMPACT_RED });
   impactFlash.alpha = 0;
   layer.addChild(impactFlash);
 
@@ -307,7 +304,7 @@ export function playTransition(
         wash.clear();
         for (let ring = 3; ring >= 1; ring--) {
           wash
-            .circle(CX, CY, VIRTUAL_HEIGHT * eWipe * 0.85 * ring * 0.45)
+            .circle(CX, CY, virtH * eWipe * 0.85 * ring * 0.45)
             .fill({ color: AMBER, alpha: (eWipe * 0.18) / ring });
         }
 
@@ -430,7 +427,7 @@ export function playTransition(
       const settle = easeInOut(clamp01((t - 0.62) / 0.38));
       ship.position.set(lerp(CX, ORBIT_SHIP_X, settle), lerp(CY, ORBIT_SHIP_Y, settle));
       if (planetSprite !== null) {
-        planetSprite.position.set(CX, lerp(VIRTUAL_HEIGHT + PLANET_SIZE, CY, easeOutCubic(settle)));
+        planetSprite.position.set(CX, lerp(virtH + PLANET_SIZE, CY, easeOutCubic(settle)));
       }
     } else {
       // Calm spool-up (~0.6s), jump-flash, then bloom outward and accelerate into the lane.

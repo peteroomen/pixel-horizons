@@ -19,8 +19,17 @@ export function startOrbitMode(
   descriptor: PlanetDescriptor,
   hullId: string,
   shipModules: readonly string[],
+  virtW: number,
+  virtH: number,
 ): OrbitMode {
-  const renderer: OrbitRenderer = createOrbitRenderer(app, descriptor, hullId, shipModules);
+  const renderer: OrbitRenderer = createOrbitRenderer(
+    app,
+    descriptor,
+    hullId,
+    shipModules,
+    virtW,
+    virtH,
+  );
   return {
     destroy(): void {
       renderer.destroy();

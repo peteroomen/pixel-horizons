@@ -112,8 +112,8 @@ function OfferRow({
 function MerchantScreen({ view, handle }: { view: MerchantView; handle: GameHandle }) {
   const [expanded, setExpanded] = useState<number | null>(null);
   return (
-    <div className="absolute inset-0 flex flex-col bg-fd-void/95">
-      <div className="flex items-center justify-between px-3 py-2 sm:px-6 sm:py-3">
+    <div className="absolute inset-0 flex flex-col bg-fd-void">
+      <div className="flex items-center justify-between border-b border-fd-steel/30 px-3 py-2 sm:px-6 sm:py-3">
         <div className="font-label text-[10px] uppercase text-fd-orange sm:text-sm">Merchant</div>
         <div className="font-readout text-[10px] text-fd-amber sm:text-xs">
           SCRAP {view.resources.scrap} · BIO {view.resources.biominerals}
@@ -169,8 +169,8 @@ function MerchantScreen({ view, handle }: { view: MerchantView; handle: GameHand
 
 function EngineerScreen({ view, handle }: { view: EngineerView; handle: GameHandle }) {
   return (
-    <div className="absolute inset-0 flex flex-col bg-fd-void/95">
-      <div className="flex items-center justify-between px-3 py-2 sm:px-6 sm:py-3">
+    <div className="absolute inset-0 flex flex-col bg-fd-void">
+      <div className="flex items-center justify-between border-b border-fd-steel/30 px-3 py-2 sm:px-6 sm:py-3">
         <div className="font-label text-[10px] uppercase text-fd-orange sm:text-sm">Engineer</div>
         <div className="font-readout text-[10px] text-fd-amber sm:text-xs">
           SCRAP {view.resources.scrap} · BIO {view.resources.biominerals}
