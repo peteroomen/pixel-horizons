@@ -2,6 +2,9 @@
 
 import { useCallback, useRef, useState } from 'react';
 
+import { useCombatSfx } from '@/audio/useCombatSfx';
+import { cardPlay, turnEnd } from '@/audio/sounds';
+
 import BossReward from '@/components/BossReward';
 import CombatHand from '@/components/CombatHand';
 import CoreBreakerHud from '@/components/CoreBreakerHud';
@@ -152,11 +155,15 @@ export default function Home() {
     setEventView(next);
   }, []);
 
+  // Fire combat sound effects by diffing each incoming CombatView against the last.
+  useCombatSfx(view);
+
   // Discard-keyword cards auto-pay with the rightmost other cards (GDD §5.9); the rest
   // play straight. Rightmost-first keeps freshly-drawn cards as the fodder, not the hand
   // you've been holding.
   const onPlayCard = (index: number) => {
     if (view === null || handleRef.current === null) return;
+    cardPlay();
     const card = view.hand[index];
     if (card === undefined) return;
     if (card.discardCost > 0) {
@@ -390,7 +397,10 @@ export default function Home() {
         <>
           <HUD
             view={view}
-            onEndTurn={() => handleRef.current?.endTurn()}
+            onEndTurn={() => {
+              turnEnd();
+              handleRef.current?.endTurn();
+            }}
             onInnate={onInnate}
             innateArmed={innateArmed}
             onSelectTarget={(target) => handleRef.current?.selectTarget(target)}

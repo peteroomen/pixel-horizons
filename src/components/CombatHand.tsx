@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 
 import type { CardView } from '@/game/main';
 import CombatCard from '@/components/CombatCard';
+import { cardDiscard } from '@/audio/sounds';
 
 interface CombatHandProps {
   cards: CardView[];
@@ -61,7 +62,12 @@ export default function CombatHand({
                 card={card}
                 state={state}
                 disabled={disabled}
-                onClick={() => (discardMode ? onDiscard?.(index) : onPlay(index))}
+                onClick={() => {
+                  if (discardMode) {
+                    cardDiscard();
+                    onDiscard?.(index);
+                  } else onPlay(index);
+                }}
               />
               {showJettison && (
                 <button
