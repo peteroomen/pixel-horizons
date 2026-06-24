@@ -119,6 +119,10 @@ export function zzfx(
   const source = ctx.createBufferSource();
   source.buffer = buffer;
   source.connect(ctx.destination);
-  source.start();
-  ctx.close();
+  // Close the context only after the sound finishes — closing immediately
+  // tears down the audio graph before the buffer has a chance to play.
+  source.onended = () => {
+    ctx.close();
+  };
+  void ctx.resume().then(() => source.start());
 }
