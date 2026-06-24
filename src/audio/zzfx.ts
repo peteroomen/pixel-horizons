@@ -24,6 +24,8 @@ export function zzfx(
   sustain = 0,
   release = 0.1,
   shape = 0,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _shapeCurve = 1,
   slide = 0,
   deltaSlide = 0,
   pitchJump = 0,
