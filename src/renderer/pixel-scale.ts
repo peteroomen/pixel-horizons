@@ -1,6 +1,10 @@
 export const VIRTUAL_WIDTH = 640;
 export const VIRTUAL_HEIGHT = 360;
 
+/** Portrait virtual space — the universal canvas orientation for all non-mining phases. */
+export const PORTRAIT_WIDTH = 360;
+export const PORTRAIT_HEIGHT = 720;
+
 export interface ScaleResult {
   /** Stage scale: canvas backing pixels per virtual pixel. */
   zoom: number;

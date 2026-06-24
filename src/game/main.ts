@@ -6,7 +6,14 @@ import type { CoreBreakerHandle, CoreBreakerHudState } from '@/renderer/core-bre
 import { coreBreakerViewport } from '@/renderer/core-breaker/layout';
 import { startCoreBreaker } from '@/renderer/core-breaker/session';
 import { skyRampFor, surfaceRampFor } from '@/renderer/palette';
-import { computeScale, VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from '@/renderer/pixel-scale';
+import {
+  computeScale,
+  PORTRAIT_WIDTH,
+  VIRTUAL_HEIGHT,
+  VIRTUAL_WIDTH,
+} from '@/renderer/pixel-scale';
+import { createStarfield } from '@/renderer/starfield';
+import type { Starfield } from '@/renderer/starfield';
 import { playTransition } from '@/renderer/transition';
 import type { Transition, TransitionAssets, TransitionKind } from '@/renderer/transition';
 import { compositeShipFromModules } from '@/renderer/sprites';
@@ -51,7 +58,6 @@ import type { ShipView } from './ship-view';
 import { buildMerchantView, buildEngineerView } from './station-view';
 import type { StationView } from './station-view';
 import { projectLoadout } from './surface/items';
-import { portraitConfig as miningPortraitConfig } from './surface/core-breaker';
 import type { SurfaceView } from './surface-view';
 import { REPRINT_SCRAP_COST } from './data/surface';
 
@@ -399,7 +405,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   await app.init({
     width: VIRTUAL_WIDTH,
     height: VIRTUAL_HEIGHT,
-    background: 0x0f0f1a,
+    background: 0x050610,
     antialias: false,
     roundPixels: true,
     resolution: 1,
@@ -407,9 +413,10 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   });
   host.appendChild(app.canvas);
 
-  // The stage is landscape for every phase except the Core Breaker mining run, which is portrait
-  // and fills the screen (Mining v2). `stageView` is the active virtual coordinate space.
-  let stageView = { width: VIRTUAL_WIDTH, height: VIRTUAL_HEIGHT };
+  // Portrait is the universal canvas orientation. Computed once from the host at boot.
+  // Mining already uses portrait; all other phases now join it — the starfield is always on.
+  const hostRect = host.getBoundingClientRect();
+  const stageView = coreBreakerViewport(hostRect.width, hostRect.height, PORTRAIT_WIDTH);
 
   const applyScale = (): void => {
     const rect = host.getBoundingClientRect();
@@ -427,21 +434,12 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     callbacks.onScaleChange?.(scale.zoom);
   };
 
-  /** Switch the stage's virtual coordinate space (landscape ↔ portrait) and rescale. */
-  const setStageView = (width: number, height: number): void => {
-    stageView = { width, height };
-    applyScale();
-  };
-
-  /** Portrait virtual space that fills the host (shared with the /core-breaker route). */
-  const portraitStageView = (): { width: number; height: number } => {
-    const rect = host.getBoundingClientRect();
-    return coreBreakerViewport(rect.width, rect.height, miningPortraitConfig().width);
-  };
-
   applyScale();
   const observer = new ResizeObserver(applyScale);
   observer.observe(host);
+
+  // Starfield is the persistent base layer — created once, never destroyed per-mode.
+  const starfield: Starfield = createStarfield(app, stageView.width, stageView.height);
 
   const store = createSaveStore(window.localStorage);
 
@@ -499,10 +497,17 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     onComplete: () => void,
   ): void => {
     setPhase('transition');
-    activeTransition = playTransition(app, kind, assets, () => {
-      activeTransition = null;
-      onComplete();
-    });
+    activeTransition = playTransition(
+      app,
+      kind,
+      assets,
+      () => {
+        activeTransition = null;
+        onComplete();
+      },
+      stageView.width,
+      stageView.height,
+    );
   };
 
   const emitMap = (): void => {
@@ -557,23 +562,18 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const enterMining = (): void => {
     const descriptor =
       currentPlanet ?? planetForNode(run.seed, run.position.nodeId ?? 'dev-mining');
-    // The mining run is portrait and fills the screen; flip the stage and restore it on exit.
-    const view = portraitStageView();
-    setStageView(view.width, view.height);
-    // Same Core Breaker run as the standalone /core-breaker route — only the inputs and what
-    // happens on completion differ (here: bank the haul, return to the map).
+    // Stage is already portrait — no stageView switch needed. Mining uses the same viewport.
     miningHandle = startCoreBreaker(app, {
       fieldSeed: `${run.seed}:${run.position.nodeId ?? 'dev'}`,
       difficulty: Math.min(run.position.sector, 4),
       modules: run.modules,
       planet: descriptor,
-      viewport: view,
+      viewport: stageView,
       onHud: (state) => callbacks.onMiningUpdate?.(state),
       onComplete: (banked) => {
         addResources(run.resources, banked);
         miningHandle?.destroy();
         miningHandle = null;
-        setStageView(VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
         store.save(run);
         enterMap();
       },
@@ -587,7 +587,14 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
     const descriptor = planetForNode(run.seed, nodeId);
     currentPlanet = descriptor;
     const shipModules = run.modules.map((m) => getModule(m.id).name);
-    orbitMode = startOrbitMode(app, descriptor, run.hullId, shipModules);
+    orbitMode = startOrbitMode(
+      app,
+      descriptor,
+      run.hullId,
+      shipModules,
+      stageView.width,
+      stageView.height,
+    );
     callbacks.onOrbitUpdate?.({ name: PLANET_TYPES[descriptor.type].name, type: descriptor.type });
     setPhase('orbit');
   };
@@ -595,7 +602,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const startLane = (params: LaneParams): void => {
     combatMode = startCombatMode(
       app,
-      { run, lane: params, enemyPool },
+      { run, lane: params, enemyPool, virtW: stageView.width, virtH: stageView.height },
       {
         onUpdate: (view) => callbacks.onCombatUpdate(view),
         onArrival: (): void => {
@@ -650,7 +657,13 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
   const startBossFight = (): void => {
     combatMode = startCombatMode(
       app,
-      { run, lane: null, enemyPool: ['enemy-gatemaw'] },
+      {
+        run,
+        lane: null,
+        enemyPool: ['enemy-gatemaw'],
+        virtW: stageView.width,
+        virtH: stageView.height,
+      },
       {
         onUpdate: (view) => callbacks.onCombatUpdate(view),
         onArrival: (): void => {
@@ -981,6 +994,7 @@ export async function initGame(host: HTMLElement, callbacks: GameCallbacks): Pro
       activeTransition?.cancel();
       activeTransition = null;
       destroyModes();
+      starfield.destroy();
       observer.disconnect();
       app.destroy(true, { children: true, texture: true });
     },

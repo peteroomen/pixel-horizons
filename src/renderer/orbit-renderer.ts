@@ -1,8 +1,7 @@
-import { Application, Container, Graphics, Sprite, type Ticker } from 'pixi.js';
+import { Application, Container, Sprite, type Ticker } from 'pixi.js';
 
 import type { PlanetDescriptor } from '@/game/sim/planet';
 import { type AnimatedPlanet, createAnimatedPlanet } from './planet';
-import { VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from './pixel-scale';
 import { compositeShipFromModules } from './sprites';
 import { nearestTexture } from './textures';
 
@@ -12,6 +11,8 @@ import { nearestTexture } from './textures';
  * arrives at a planet node before the clone drops to the surface (6.1). The DROP control +
  * planet name live in the DOM overlay. Mounted on the shared app stage and torn down
  * symmetrically by main.ts, same as the combat/surface modes.
+ *
+ * The persistent starfield (starfield.ts) provides the star background — no static stars here.
  */
 export interface OrbitRenderer {
   destroy(): void;
@@ -19,39 +20,29 @@ export interface OrbitRenderer {
 
 const PLANET_SIZE = 200;
 const SHIP_PX = 3; // integer so the composited ship stays pixel-crisp, matching combat
-const SHIP_X = 128;
-const SHIP_Y = VIRTUAL_HEIGHT - 86;
 
 export function createOrbitRenderer(
   app: Application,
   descriptor: PlanetDescriptor,
   hullId: string,
   shipModules: readonly string[],
+  virtW: number,
+  virtH: number,
 ): OrbitRenderer {
   const scene = new Container();
   app.stage.addChild(scene);
 
-  // A few static stars so the void doesn't read as empty (placeholder until the 6.1
-  // space-background generator slice). Deterministic from the planet seed.
-  const stars = new Graphics();
-  let s = descriptor.seed >>> 0;
-  const rand = (): number => {
-    s = (s * 1103515245 + 12345) & 0x7fffffff;
-    return s / 0x7fffffff;
-  };
-  for (let i = 0; i < 70; i++) {
-    const a = 0.25 + rand() * 0.5;
-    stars
-      .rect(Math.floor(rand() * VIRTUAL_WIDTH), Math.floor(rand() * VIRTUAL_HEIGHT), 1, 1)
-      .fill({ color: 0xc7dcd0, alpha: a });
-  }
-  scene.addChild(stars);
+  // Portrait positions: planet in the upper half, ship lower-left facing into frame.
+  const PLANET_X = virtW / 2;
+  const PLANET_Y = Math.round(virtH * 0.4);
+  const SHIP_X = Math.round(virtW * 0.22);
+  const SHIP_Y = Math.round(virtH * 0.82);
 
   // The planet, rotating (re-baked each tick).
   const planet: AnimatedPlanet = createAnimatedPlanet(app, descriptor, PLANET_SIZE);
   const planetSprite = new Sprite(planet.texture);
   planetSprite.anchor.set(0.5);
-  planetSprite.position.set(VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT / 2);
+  planetSprite.position.set(PLANET_X, PLANET_Y);
   scene.addChild(planetSprite);
 
   // The player's ship — real hull + components, the same composite combat uses — foreground.

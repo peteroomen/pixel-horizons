@@ -43,9 +43,9 @@ export default function SectorMap({ view, onSelect }: SectorMapProps) {
   const positions = new Map(view.nodes.map((n) => [n.id, nodePos(view, n)]));
 
   return (
-    <div className="absolute inset-0 flex flex-col bg-fd-void/95">
-      {/* Header strip: run identity + resources */}
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 py-2 sm:px-6 sm:py-3">
+    <div className="absolute inset-0 flex flex-col">
+      {/* Header strip: solid Foundry panel — space shows below it */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-fd-steel/30 bg-fd-void px-3 py-2 sm:px-6 sm:py-3">
         <div className="font-label text-[10px] uppercase text-fd-orange sm:text-sm">
           Sector {view.sector}
         </div>

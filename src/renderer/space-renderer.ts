@@ -2,7 +2,6 @@ import { Application, Container, Graphics, Sprite, Text, Ticker } from 'pixi.js'
 
 import type { CombatView } from '@/game/combat-view';
 import { MAX_SHAKE, shakeAmplitude } from '@/components/combat-fx-core';
-import { VIRTUAL_HEIGHT, VIRTUAL_WIDTH } from './pixel-scale';
 import {
   anchormawBoss,
   bloomGrunt,
@@ -19,16 +18,12 @@ const SHAKE_MS = 240; // viewport-kick duration on a hit — decays to zero over
 const PX = 3; // sprite pixel size in virtual units — integer so nearest-neighbor stays crisp
 // Extra backdrop tiles on every side so a viewport shake never slides the void into frame.
 const OVERSCAN_TILES = Math.ceil(MAX_SHAKE / PX);
-const PLAYER_X = 150;
-const ENEMY_X = VIRTUAL_WIDTH - 170;
-const CENTER_Y = VIRTUAL_HEIGHT / 2 + 24; // sit the ships below the top HUD plates
 
 // Floating damage numbers — they pop over the struck ship and climb as they fade, sharing
 // the world layer with the future weapon effects (lasers/explosions) rather than the HUD.
 const FLOATER_MS = 800;
 const FLOATER_RISE = 36; // virtual px a number climbs over its life
 const FLOATER_FONT = 30; // virtual px
-const FLOATER_SPAWN_Y = CENTER_Y - 42; // just above the ship sprites
 // Damage you deal reads white (legible over any ship/organ tint — the position over the
 // enemy already signals the side); damage you take reads red/danger. The heavy near-black
 // outline keeps both crisp over a red hit-flash or a green organ alike.
@@ -64,41 +59,51 @@ function shipCompositeKey(view: CombatView): string {
   return `${view.hullId}|w${c.weapon}e${c.engine}u${c.utility}`;
 }
 
-export function createSpaceRenderer(app: Application): SpaceRenderer {
+/**
+ * Portrait layout: enemy offset right near the top of canvas, player offset left near the
+ * bottom — a diagonal dogfight angle that reads naturally on a phone held upright.
+ */
+export function createSpaceRenderer(app: Application, virtW: number, virtH: number): SpaceRenderer {
+  // Portrait ship positions: offset horizontally to suggest opposing trajectories.
+  const PLAYER_X = Math.round(virtW * 0.38);
+  const PLAYER_Y = Math.round(virtH * 0.71);
+  const ENEMY_X = Math.round(virtW * 0.62);
+  const ENEMY_Y = Math.round(virtH * 0.29);
+
   const scene = new Container();
   app.stage.addChild(scene);
 
   // ── Infested lane backdrop (drawn chunky, scaled to fill the virtual scene) ──
   // Overscanned by OVERSCAN_TILES on each side and offset back by the same, so the scene
   // can shake up to MAX_SHAKE px in any direction without exposing the void at an edge.
-  const laneW = Math.ceil(VIRTUAL_WIDTH / PX) + OVERSCAN_TILES * 2;
-  const laneH = Math.ceil(VIRTUAL_HEIGHT / PX) + OVERSCAN_TILES * 2;
+  const laneW = Math.ceil(virtW / PX) + OVERSCAN_TILES * 2;
+  const laneH = Math.ceil(virtH / PX) + OVERSCAN_TILES * 2;
   const lane = new Sprite(nearestTexture(laneBackdrop(laneW, laneH, 1234)));
   lane.scale.set(PX);
   lane.position.set(-OVERSCAN_TILES * PX, -OVERSCAN_TILES * PX);
   scene.addChild(lane);
 
   const shieldRing = new Graphics().ellipse(0, 0, 70, 46).stroke({ width: 2, color: 0x6ad1e3 });
-  shieldRing.position.set(PLAYER_X, CENTER_Y);
+  shieldRing.position.set(PLAYER_X, PLAYER_Y);
   scene.addChild(shieldRing);
 
   // Player ship + muzzle share the composite frame, so the same anchor/scale aligns them.
   const playerShip = new Sprite();
   playerShip.anchor.set(0.5);
   playerShip.scale.set(PX);
-  playerShip.position.set(PLAYER_X, CENTER_Y);
+  playerShip.position.set(PLAYER_X, PLAYER_Y);
   scene.addChild(playerShip);
 
   const muzzle = new Sprite(nearestTexture(muzzleFlash()));
   muzzle.anchor.set(0.5);
   muzzle.scale.set(PX);
-  muzzle.position.set(PLAYER_X, CENTER_Y);
+  muzzle.position.set(PLAYER_X, PLAYER_Y);
   muzzle.visible = false;
   scene.addChild(muzzle);
 
   const enemyShip = new Sprite();
   enemyShip.anchor.set(0.5);
-  enemyShip.position.set(ENEMY_X, CENTER_Y);
+  enemyShip.position.set(ENEMY_X, ENEMY_Y);
   scene.addChild(enemyShip);
 
   // Floating damage numbers sit on top of the ships and inside `scene`, so they ride the
@@ -115,7 +120,7 @@ export function createSpaceRenderer(app: Application): SpaceRenderer {
   const floaters: Floater[] = [];
   let spawnCount = 0;
 
-  const spawnFloater = (x: number, color: number, amount: number): void => {
+  const spawnFloater = (x: number, spawnY: number, color: number, amount: number): void => {
     // Stagger rapid hits sideways so stacked numbers stay legible. Deterministic — no RNG
     // (it would consume the sim's stream), just a 3-step cycle off the spawn counter.
     const jitter = ((spawnCount % 3) - 1) * 10;
@@ -133,9 +138,9 @@ export function createSpaceRenderer(app: Application): SpaceRenderer {
     text.anchor.set(0.5);
     // Render the glyph at the on-screen size (stage zoom) so it stays crisp, not upscaled.
     text.resolution = Math.max(1, Math.ceil(app.stage.scale.x));
-    text.position.set(x + jitter, FLOATER_SPAWN_Y);
+    text.position.set(x + jitter, spawnY);
     floaterLayer.addChild(text);
-    floaters.push({ text, ageMs: 0, baseY: FLOATER_SPAWN_Y });
+    floaters.push({ text, ageMs: 0, baseY: spawnY });
   };
 
   let prevHullHp: number | null = null;
@@ -195,7 +200,7 @@ export function createSpaceRenderer(app: Application): SpaceRenderer {
     }
 
     // Collective: rigid idle bob. Bloom: slow breathing squash. (The "it lives" cue.)
-    playerShip.y = CENTER_Y + Math.round(Math.sin(elapsed / 900) * 1) * PX;
+    playerShip.y = PLAYER_Y + Math.round(Math.sin(elapsed / 900) * 1) * PX;
     const breathe = 1 + Math.sin(elapsed / 700) * 0.03;
     const baseScale = isBoss ? PX * 1.25 : PX;
     enemyShip.scale.set(baseScale, baseScale * breathe);
@@ -256,8 +261,8 @@ export function createSpaceRenderer(app: Application): SpaceRenderer {
           shakeMs = SHAKE_MS;
         }
       }
-      if (enemyDrop > 0) spawnFloater(ENEMY_X, DMG_ENEMY_COLOR, enemyDrop);
-      if (hullDrop > 0) spawnFloater(PLAYER_X, DMG_SHIP_COLOR, hullDrop);
+      if (enemyDrop > 0) spawnFloater(ENEMY_X, ENEMY_Y - 42, DMG_ENEMY_COLOR, enemyDrop);
+      if (hullDrop > 0) spawnFloater(PLAYER_X, PLAYER_Y - 42, DMG_SHIP_COLOR, hullDrop);
 
       prevHullHp = view.hullHp;
       prevEnemyHp = view.enemyHp;
